@@ -145,7 +145,10 @@ class Event(Base):
         Index("ix_events_site_ts", "site_id", "ts"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # BigInteger-PK autoincrement werkt niet op SQLite (tests); vandaar de variant.
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True
+    )
     site_id: Mapped[int] = mapped_column(ForeignKey("sites.id"))
     experiment_id: Mapped[int | None] = mapped_column(ForeignKey("experiments.id"))
     variant: Mapped[str | None] = mapped_column(CHAR(1))

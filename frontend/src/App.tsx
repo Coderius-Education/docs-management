@@ -6,6 +6,8 @@ import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 import { BuildsPage } from './routes/BuildsPage';
 import { Dashboard } from './routes/Dashboard';
+import { ExperimentDetail } from './routes/ExperimentDetail';
+import { ExperimentsPage } from './routes/ExperimentsPage';
 import { Login } from './routes/Login';
 
 const EditorPage = lazy(() =>
@@ -40,6 +42,8 @@ export default function App() {
           <Route path="/prs" element={<PrList />} />
           <Route path="/prs/:number" element={<PrDetail />} />
           <Route path="/builds" element={<BuildsPage />} />
+          <Route path="/experiments" element={<ExperimentsPage />} />
+          <Route path="/experiments/:id" element={<ExperimentDetail />} />
         </Route>
       </Route>
     </Routes>
