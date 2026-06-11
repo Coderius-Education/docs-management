@@ -1,0 +1,4 @@
+# Geen monorepo — dit bestand dient als pnpm-settingsbestand.
+# Supply-chain-beleid: alleen packages die minstens 24 uur op npm staan.
+# Houd dit gelijk aan het beleid op de buildserver/VPS.
+minimumReleaseAge: 1440

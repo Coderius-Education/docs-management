@@ -4,7 +4,9 @@
 FROM node:24-slim AS frontend
 WORKDIR /build
 RUN corepack enable
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# pnpm-workspace.yaml bevat het supply-chain-beleid (minimumReleaseAge);
+# package.json pint de pnpm-versie via packageManager (corepack).
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm build
