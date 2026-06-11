@@ -1,0 +1,78 @@
+# Productie-stack voor Portainer, achter de bestaande Traefik.
+# Vereist: extern Traefik-netwerk (naam via TRAEFIK_NETWORK, default "traefik"),
+# DNS voor de 12 site-domeinen + admin-domein + *.preview.coderius.nl,
+# en een stack.env met de secrets (zie .env.example).
+
+services:
+  api:
+    image: ghcr.io/coderius-education/docs-management:latest
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: uvicorn app.main_api:app --host 0.0.0.0 --port 8000
+    env_file: stack.env
+    volumes:
+      - builds:/data/builds
+    networks: [internal, traefik]
+    depends_on: [db]
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.docsadmin.rule=Host(`${ADMIN_DOMAIN:-beheer.coderius.nl}`)
+      - traefik.http.routers.docsadmin.entrypoints=websecure
+      - traefik.http.routers.docsadmin.tls.certresolver=letsencrypt
+      - traefik.http.routers.docsadmin.service=docsadmin
+      - traefik.http.services.docsadmin.loadbalancer.server.port=8000
+
+  delivery:
+    image: ghcr.io/coderius-education/docs-management:latest
+    command: uvicorn app.main_delivery:app --host 0.0.0.0 --port 8000 --workers 2
+    env_file: stack.env
+    volumes:
+      - builds:/data/builds:ro
+    networks: [internal, traefik]
+    depends_on: [db]
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      # Live sites (één router voor alle 12 domeinen)
+      - >-
+        traefik.http.routers.docsites.rule=Host(`python.coderius.nl`) ||
+        Host(`web.coderius.nl`) || Host(`fullstack.coderius.nl`) ||
+        Host(`robotica.coderius.nl`) || Host(`ctf.coderius.nl`) ||
+        Host(`embedded.coderius.nl`) || Host(`editor.coderius.nl`) ||
+        Host(`godot.coderius.nl`) || Host(`dvwa.coderius.nl`) ||
+        Host(`play.coderius.nl`) || Host(`algoritmes.coderius.nl`) ||
+        Host(`ide.coderius.nl`)
+      - traefik.http.routers.docsites.entrypoints=websecure
+      - traefik.http.routers.docsites.tls.certresolver=letsencrypt
+      - traefik.http.routers.docsites.service=docsdelivery
+      # Branch-previews op wildcard-subdomein (Traefik v3-syntax; DNS-01 voor wildcard-cert)
+      - traefik.http.routers.docspreview.rule=HostRegexp(`^.+\.preview\.coderius\.nl$`)
+      - traefik.http.routers.docspreview.entrypoints=websecure
+      - traefik.http.routers.docspreview.tls.certresolver=letsencrypt-dns
+      - traefik.http.routers.docspreview.tls.domains[0].main=preview.coderius.nl
+      - traefik.http.routers.docspreview.tls.domains[0].sans=*.preview.coderius.nl
+      - traefik.http.routers.docspreview.service=docsdelivery
+      - traefik.http.services.docsdelivery.loadbalancer.server.port=8000
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: docsmgmt
+      POSTGRES_USER: docsmgmt
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?zet POSTGRES_PASSWORD in stack.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    restart: unless-stopped
+
+volumes:
+  builds:
+  pgdata:
+
+networks:
+  internal: {}
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
