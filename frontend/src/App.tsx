@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router';
 
 import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
+import { BuildsPage } from './routes/BuildsPage';
 import { Dashboard } from './routes/Dashboard';
 import { Login } from './routes/Login';
 
@@ -38,6 +39,7 @@ export default function App() {
           />
           <Route path="/prs" element={<PrList />} />
           <Route path="/prs/:number" element={<PrDetail />} />
+          <Route path="/builds" element={<BuildsPage />} />
         </Route>
       </Route>
     </Routes>

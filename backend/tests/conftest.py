@@ -8,6 +8,7 @@ os.environ.setdefault("SECURE_COOKIES", "false")
 # urlsafe-base64 van 32 nul-bytes; alleen voor tests
 os.environ.setdefault("TOKEN_ENCRYPTION_KEY", "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=")
 os.environ.setdefault("GITHUB_WEBHOOK_SECRET", "test-webhook-secret")
+os.environ.setdefault("GITHUB_SERVER_TOKEN", "ghp_servertoken")
 
 import httpx
 import pytest
@@ -38,6 +39,22 @@ async def api_client():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
+
+
+@pytest.fixture
+def builds_dir(tmp_path, monkeypatch):
+    """Tijdelijk builds-volume + verse settings/host-caches."""
+    from app.delivery import experiments as delivery_experiments
+    from app.delivery import router as delivery_router
+
+    monkeypatch.setenv("BUILDS_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    delivery_router.reset_caches()
+    delivery_experiments.reset_cache()
+    yield tmp_path
+    get_settings.cache_clear()
+    delivery_router.reset_caches()
+    delivery_experiments.reset_cache()
 
 
 @pytest.fixture
