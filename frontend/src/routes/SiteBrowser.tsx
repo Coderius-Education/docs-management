@@ -11,11 +11,12 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { IconAlertCircle, IconPencil } from '@tabler/icons-react';
+import { IconAlertCircle, IconPencil, IconPlus } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { usePage, useSites, useTree } from '../api/hooks';
+import { NewPageModal } from '../components/NewPageModal';
 import { PageTree } from '../components/PageTree';
 
 export function SiteBrowser() {
@@ -23,6 +24,7 @@ export function SiteBrowser() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [ref, setRef] = useState(searchParams.get('ref') ?? 'main');
+  const [newPageOpen, setNewPageOpen] = useState(false);
 
   const selectedPath = searchParams.get('path');
   const { data: sites } = useSites();
@@ -40,14 +42,27 @@ export function SiteBrowser() {
             {siteInfo?.domain}
           </Text>
         </div>
-        <TextInput
-          label="Branch"
-          value={ref}
-          onChange={(e) => setRef(e.currentTarget.value)}
-          w={220}
-          size="xs"
-        />
+        <Group align="flex-end" gap="xs">
+          <TextInput
+            label="Branch"
+            value={ref}
+            onChange={(e) => setRef(e.currentTarget.value)}
+            w={220}
+            size="xs"
+          />
+          <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setNewPageOpen(true)}>
+            Nieuwe pagina
+          </Button>
+        </Group>
       </Group>
+
+      <NewPageModal
+        opened={newPageOpen}
+        onClose={() => setNewPageOpen(false)}
+        site={site}
+        tree={tree ?? []}
+        ref={ref}
+      />
 
       {treeError && (
         <Alert icon={<IconAlertCircle size={16} />} color="red" mb="md">

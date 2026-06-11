@@ -1,9 +1,17 @@
+import { Center, Loader } from '@mantine/core';
+import { Suspense, lazy } from 'react';
 import { Route, Routes } from 'react-router';
 
 import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 import { Dashboard } from './routes/Dashboard';
 import { Login } from './routes/Login';
+
+const EditorPage = lazy(() =>
+  import('./routes/EditorPage').then((m) => ({ default: m.EditorPage })),
+);
+import { PrDetail } from './routes/PrDetail';
+import { PrList } from './routes/PrList';
 import { SiteBrowser } from './routes/SiteBrowser';
 
 export default function App() {
@@ -14,6 +22,22 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/sites/:site" element={<SiteBrowser />} />
+          <Route
+            path="/sites/:site/edit"
+            element={
+              <Suspense
+                fallback={
+                  <Center h="50vh">
+                    <Loader />
+                  </Center>
+                }
+              >
+                <EditorPage />
+              </Suspense>
+            }
+          />
+          <Route path="/prs" element={<PrList />} />
+          <Route path="/prs/:number" element={<PrDetail />} />
         </Route>
       </Route>
     </Routes>
