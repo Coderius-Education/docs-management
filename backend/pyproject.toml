@@ -23,6 +23,7 @@ dev = [
     "aiosqlite>=0.20",
     "ruff>=0.9",
     "httpx>=0.28",
+    "respx>=0.22",
 ]
 
 [tool.pytest.ini_options]

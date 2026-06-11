@@ -5,7 +5,8 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("SECURE_COOKIES", "false")
-os.environ.setdefault("TOKEN_ENCRYPTION_KEY", "VGhpcy1pcy1lZW4tdGVzdC1rZXktMzItYnl0ZXMhIQ==")
+# urlsafe-base64 van 32 nul-bytes; alleen voor tests
+os.environ.setdefault("TOKEN_ENCRYPTION_KEY", "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=")
 os.environ.setdefault("GITHUB_WEBHOOK_SECRET", "test-webhook-secret")
 
 import httpx
