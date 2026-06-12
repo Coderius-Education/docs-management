@@ -29,16 +29,15 @@ function makeStub(name: string) {
 
 const stubCache = new Map<string, ReturnType<typeof makeStub>>();
 
-const componentProxy = new Proxy(
-  {},
-  {
-    get(_target, name: string) {
-      if (typeof name !== 'string' || !/^[A-Z]/.test(name)) return undefined;
-      if (!stubCache.has(name)) stubCache.set(name, makeStub(name));
-      return stubCache.get(name);
-    },
-  },
-);
+/** Builds an explicit components map for all PascalCase JSX tags found in the source. */
+function buildComponentStubs(body: string): Record<string, ReturnType<typeof makeStub>> {
+  const stubs: Record<string, ReturnType<typeof makeStub>> = {};
+  for (const [, name] of body.matchAll(/<([A-Z][a-zA-Z0-9]*)/g)) {
+    if (!stubCache.has(name)) stubCache.set(name, makeStub(name));
+    stubs[name] = stubCache.get(name)!;
+  }
+  return stubs;
+}
 
 class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -83,7 +82,7 @@ export function MdxPreview({ body }: { body: string }) {
           remarkPlugins: [remarkGfm, remarkDirective, remarkAdmonitions],
         });
         if (!cancelled) {
-          setContent(<MDXContent components={componentProxy} />);
+          setContent(<MDXContent components={buildComponentStubs(body)} />);
           setError(null);
         }
       } catch (err) {
