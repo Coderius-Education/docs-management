@@ -3,7 +3,7 @@
 
 FROM node:24-slim AS frontend
 WORKDIR /build
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
 # pnpm-workspace.yaml bevat het supply-chain-beleid (minimumReleaseAge);
 # package.json pint de pnpm-versie via packageManager (corepack).
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
