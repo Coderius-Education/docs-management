@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   AppShell,
   Avatar,
   Burger,
@@ -9,6 +10,7 @@ import {
   Text,
   Title,
   UnstyledButton,
+  useMantineColorScheme,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
@@ -17,7 +19,9 @@ import {
   IconGitPullRequest,
   IconHome,
   IconLogout,
+  IconMoon,
   IconPackages,
+  IconSun,
   IconWorldWww,
 } from '@tabler/icons-react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
@@ -31,6 +35,7 @@ export function Layout() {
   const { data: sites } = useSites();
   const navigate = useNavigate();
   const location = useLocation();
+  const { colorScheme, toggleColorScheme } = useMantineColorScheme();
 
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' });
@@ -49,7 +54,11 @@ export function Layout() {
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
             <Title order={4}>Coderius Docs Beheer</Title>
           </Group>
-          {me && (
+          <Group gap="xs">
+            <ActionIcon variant="subtle" onClick={toggleColorScheme} aria-label="Kleurschema wisselen">
+              {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+            </ActionIcon>
+            {me && (
             <Menu position="bottom-end">
               <Menu.Target>
                 <UnstyledButton>
@@ -66,7 +75,8 @@ export function Layout() {
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
-          )}
+            )}
+          </Group>
         </Group>
       </AppShell.Header>
 
