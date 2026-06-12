@@ -54,7 +54,7 @@ services:
       # Branch-previews op wildcard-subdomein (Traefik v3-syntax; DNS-01 voor wildcard-cert)
       - traefik.http.routers.docspreview.rule=HostRegexp(`^.+\.preview\.coderius\.nl$`)
       - traefik.http.routers.docspreview.entrypoints=websecure
-      - traefik.http.routers.docspreview.tls.certresolver=leresolver-dns
+      - traefik.http.routers.docspreview.tls.certresolver=leresolver
       - traefik.http.routers.docspreview.tls.domains[0].main=preview.coderius.nl
       - traefik.http.routers.docspreview.tls.domains[0].sans=*.preview.coderius.nl
       - traefik.http.routers.docspreview.service=docsdelivery
