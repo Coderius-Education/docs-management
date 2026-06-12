@@ -1,0 +1,19 @@
+:root[data-mantine-color-scheme='dark'] .milkdown {
+  --crepe-color-background: #1e1e1e;
+  --crepe-color-on-background: #d4d4d4;
+  --crepe-color-surface: #252526;
+  --crepe-color-surface-low: #2d2d30;
+  --crepe-color-on-surface: #cccccc;
+  --crepe-color-on-surface-variant: #9d9d9d;
+  --crepe-color-outline: #464646;
+  --crepe-color-primary: #cccccc;
+  --crepe-color-secondary: #3a3a3a;
+  --crepe-color-on-secondary: #d4d4d4;
+  --crepe-color-inverse: #252526;
+  --crepe-color-on-inverse: #d4d4d4;
+  --crepe-color-inline-code: #f48771;
+  --crepe-color-error: #f48771;
+  --crepe-color-hover: #2a2d2e;
+  --crepe-color-selected: #094771;
+  --crepe-color-inline-area: #3a3a3a;
+}
