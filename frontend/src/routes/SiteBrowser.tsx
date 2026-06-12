@@ -61,7 +61,7 @@ export function SiteBrowser() {
         onClose={() => setNewPageOpen(false)}
         site={site}
         tree={tree ?? []}
-        ref={ref}
+        branch={ref}
       />
 
       {treeError && (

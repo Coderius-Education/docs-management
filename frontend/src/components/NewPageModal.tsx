@@ -38,13 +38,13 @@ export function NewPageModal({
   onClose,
   site,
   tree,
-  ref,
+  branch,
 }: {
   opened: boolean;
   onClose: () => void;
   site: string;
   tree: TreeItem[];
-  ref: string;
+  branch: string;
 }) {
   const navigate = useNavigate();
   const [directory, setDirectory] = useState<string | null>('');
@@ -78,7 +78,7 @@ export function NewPageModal({
     );
     onClose();
     navigate(
-      `/sites/${site}/edit?path=${encodeURIComponent(fullPath)}&ref=${ref}&nieuw=1`,
+      `/sites/${site}/edit?path=${encodeURIComponent(fullPath)}&ref=${branch}&nieuw=1`,
     );
   }
 
