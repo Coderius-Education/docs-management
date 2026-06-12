@@ -22,7 +22,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.docsadmin.rule=Host(`${ADMIN_DOMAIN:-beheer.coderius.nl}`)
       - traefik.http.routers.docsadmin.entrypoints=websecure
-      - traefik.http.routers.docsadmin.tls.certresolver=letsencrypt
+      - traefik.http.routers.docsadmin.tls.certresolver=leresolver
       - traefik.http.routers.docsadmin.service=docsadmin
       - traefik.http.services.docsadmin.loadbalancer.server.port=8000
 
@@ -49,12 +49,12 @@ services:
         Host(`play.coderius.nl`) || Host(`algoritmes.coderius.nl`) ||
         Host(`ide.coderius.nl`)
       - traefik.http.routers.docsites.entrypoints=websecure
-      - traefik.http.routers.docsites.tls.certresolver=letsencrypt
+      - traefik.http.routers.docsites.tls.certresolver=leresolver
       - traefik.http.routers.docsites.service=docsdelivery
       # Branch-previews op wildcard-subdomein (Traefik v3-syntax; DNS-01 voor wildcard-cert)
       - traefik.http.routers.docspreview.rule=HostRegexp(`^.+\.preview\.coderius\.nl$`)
       - traefik.http.routers.docspreview.entrypoints=websecure
-      - traefik.http.routers.docspreview.tls.certresolver=letsencrypt-dns
+      - traefik.http.routers.docspreview.tls.certresolver=leresolver-dns
       - traefik.http.routers.docspreview.tls.domains[0].main=preview.coderius.nl
       - traefik.http.routers.docspreview.tls.domains[0].sans=*.preview.coderius.nl
       - traefik.http.routers.docspreview.service=docsdelivery
