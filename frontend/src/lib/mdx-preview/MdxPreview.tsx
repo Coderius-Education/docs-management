@@ -7,9 +7,65 @@ import remarkGfm from 'remark-gfm';
 
 import { remarkAdmonitions } from './remarkAdmonitions';
 
-// Stubs voor site-componenten (TryButton e.d.): tonen een herkenbare kaart,
-// maar voeren niets uit. De echte weergave zie je op de branch-preview.
-function makeStub(name: string) {
+type PreviewComponent = (props: Record<string, unknown>) => ReactNode;
+
+// Real preview implementations for known site components.
+const KNOWN_COMPONENTS: Record<string, PreviewComponent> = {
+  // @docusaurus/BrowserOnly: calls children() since we're always in a browser.
+  BrowserOnly: ({ children, fallback }) => {
+    if (typeof children === 'function') {
+      return (children as () => ReactNode)();
+    }
+    return (children as ReactNode) ?? (fallback as ReactNode) ?? null;
+  },
+
+  // play-docs / python-docs: CodeRunner button.
+  TryButton: () => (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        background: '#228be6',
+        color: '#fff',
+        borderRadius: 4,
+        padding: '3px 10px',
+        fontSize: 13,
+        marginBlock: 6,
+        cursor: 'default',
+        userSelect: 'none',
+      }}
+    >
+      ▶ Probeer in browser
+    </span>
+  ),
+
+  // DVWA-docs: simulated Linux terminal.
+  LinuxTerminal: () => (
+    <div
+      style={{
+        background: '#1e1e2e',
+        color: '#a6e3a1',
+        fontFamily: 'monospace',
+        fontSize: 13,
+        padding: '10px 14px',
+        borderRadius: 6,
+        marginBlock: 8,
+        minHeight: 80,
+        lineHeight: 1.6,
+      }}
+    >
+      <span style={{ color: '#89b4fa' }}>user@linux</span>
+      <span style={{ color: '#cdd6f4' }}>:~$ </span>
+      <span style={{ color: '#6c7086', fontSize: 12 }}>
+        [Interactieve terminal — zichtbaar op de gepubliceerde site]
+      </span>
+    </div>
+  ),
+};
+
+// Auto-generated stubs for any other PascalCase component.
+function makeStub(name: string): PreviewComponent {
   return function Stub(props: Record<string, unknown>) {
     return (
       <Paper withBorder p="xs" my="xs" bg="gray.0">
@@ -27,16 +83,20 @@ function makeStub(name: string) {
   };
 }
 
-const stubCache = new Map<string, ReturnType<typeof makeStub>>();
+const stubCache = new Map<string, PreviewComponent>();
 
 /** Builds an explicit components map for all PascalCase JSX tags found in the source. */
-function buildComponentStubs(body: string): Record<string, ReturnType<typeof makeStub>> {
-  const stubs: Record<string, ReturnType<typeof makeStub>> = {};
+function buildComponentStubs(body: string): Record<string, PreviewComponent> {
+  const result: Record<string, PreviewComponent> = {};
   for (const [, name] of body.matchAll(/<([A-Z][a-zA-Z0-9]*)/g)) {
-    if (!stubCache.has(name)) stubCache.set(name, makeStub(name));
-    stubs[name] = stubCache.get(name)!;
+    if (name in KNOWN_COMPONENTS) {
+      result[name] = KNOWN_COMPONENTS[name];
+    } else {
+      if (!stubCache.has(name)) stubCache.set(name, makeStub(name));
+      result[name] = stubCache.get(name)!;
+    }
   }
-  return stubs;
+  return result;
 }
 
 class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -64,7 +124,7 @@ class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error 
   }
 }
 
-/** Verwijdert import/export-regels: stubs komen uit de componentProxy. */
+/** Verwijdert import/export-regels: componenten komen uit buildComponentStubs. */
 function stripEsm(body: string): string {
   return body.replace(/^(import|export)\s.*$/gm, '');
 }

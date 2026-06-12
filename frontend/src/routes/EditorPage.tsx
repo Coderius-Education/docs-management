@@ -1,5 +1,4 @@
 import {
-  Alert,
   Badge,
   Button,
   Group,
@@ -11,7 +10,7 @@ import {
   Stack,
   Text,
 } from '@mantine/core';
-import { IconChevronDown, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons-react';
+import { IconChevronDown, IconDeviceFloppy } from '@tabler/icons-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 
@@ -129,13 +128,6 @@ export function EditorPage() {
           </Button>
         </Group>
       </Group>
-
-      {mdxLocked && mode === 'raw' && (
-        <Alert icon={<IconInfoCircle size={16} />} color="blue" p="xs">
-          Deze pagina bevat MDX (imports of componenten); de visuele editor is daarom
-          uitgeschakeld. Je bewerkt de bron rechtstreeks — rechts zie je de preview.
-        </Alert>
-      )}
 
       <Paper withBorder p="xs">
         <FrontmatterForm value={frontmatter} onChange={setFrontmatter} />
