@@ -79,9 +79,11 @@ class GitHubClient:
         return resp.content
 
 
-def repo_path(suffix: str) -> str:
+def repo_path(suffix: str, repo: str | None = None) -> str:
+    """Pad naar een repo onder /repos. Standaard het docs-repo; geef `repo`
+    (bijv. settings.management_repo_full) om het beheer-repo te targeten."""
     s = get_settings()
-    return f"/repos/{s.repo_full}{suffix}"
+    return f"/repos/{repo or s.repo_full}{suffix}"
 
 
 def server_client() -> GitHubClient:

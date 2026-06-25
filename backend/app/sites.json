@@ -1,0 +1,14 @@
+[
+  { "slug": "python", "domain": "python.coderius.nl", "display_name": "Python" },
+  { "slug": "web", "domain": "web.coderius.nl", "display_name": "Webdesign" },
+  { "slug": "fullstack", "domain": "fullstack.coderius.nl", "display_name": "Fullstack" },
+  { "slug": "robotica", "domain": "robotica.coderius.nl", "display_name": "Robotica" },
+  { "slug": "ctf", "domain": "ctf.coderius.nl", "display_name": "CTF" },
+  { "slug": "embedded", "domain": "embedded.coderius.nl", "display_name": "Embedded" },
+  { "slug": "editor", "domain": "editor.coderius.nl", "display_name": "Editor" },
+  { "slug": "godot", "domain": "godot.coderius.nl", "display_name": "Godot" },
+  { "slug": "dvwa", "domain": "dvwa.coderius.nl", "display_name": "DVWA" },
+  { "slug": "play", "domain": "play.coderius.nl", "display_name": "Play" },
+  { "slug": "algorithms", "domain": "algoritmes.coderius.nl", "display_name": "Algoritmes" },
+  { "slug": "ide", "domain": "ide.coderius.nl", "display_name": "IDE" }
+]

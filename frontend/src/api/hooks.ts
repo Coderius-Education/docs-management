@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, setCsrfToken } from './client';
-import type { Me, PageContent, SiteInfo, TreeItem } from './types';
+import type { CreateSiteResult, Me, PageContent, SiteCreate, SiteInfo, TreeItem } from './types';
 
 export function useMe() {
   return useQuery({
@@ -21,6 +21,15 @@ export function useSites() {
     queryKey: ['sites'],
     queryFn: () => api<SiteInfo[]>('/api/sites'),
     staleTime: 60 * 60 * 1000,
+  });
+}
+
+export function useCreateSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SiteCreate) =>
+      api<CreateSiteResult>('/api/sites', { method: 'POST', body: payload }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
   });
 }
 

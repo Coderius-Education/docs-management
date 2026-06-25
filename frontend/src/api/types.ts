@@ -12,6 +12,21 @@ export interface SiteInfo {
   display_name: string;
 }
 
+export interface SiteCreate {
+  slug: string;
+  display_name: string;
+  domain: string;
+  title: string;
+  tagline: string;
+}
+
+export interface CreateSiteResult {
+  slug: string;
+  docs_pr: string | null;
+  management_pr: string | null;
+  manual_steps: string[];
+}
+
 export interface TreeItem {
   path: string;
   type: 'blob' | 'tree';

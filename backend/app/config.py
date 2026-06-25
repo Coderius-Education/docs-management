@@ -1,39 +1,28 @@
 """Centrale configuratie via environment-variabelen (pydantic-settings)."""
 
+import json
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Sites in het docs-monorepo: map-slug onder sites/ -> productie-domein.
+# Het site-register is de bron van waarheid: het voedt de DB-seed (init_db) en
+# de live-routing (resolve_host). Het staat in een data-bestand zodat een nieuwe
+# site via een PR kan worden toegevoegd zonder Python-broncode te herschrijven.
 # Let op: de slug en het domein verschillen soms (algorithms -> algoritmes).
-SITES: dict[str, str] = {
-    "python": "python.coderius.nl",
-    "web": "web.coderius.nl",
-    "fullstack": "fullstack.coderius.nl",
-    "robotica": "robotica.coderius.nl",
-    "ctf": "ctf.coderius.nl",
-    "embedded": "embedded.coderius.nl",
-    "editor": "editor.coderius.nl",
-    "godot": "godot.coderius.nl",
-    "dvwa": "dvwa.coderius.nl",
-    "play": "play.coderius.nl",
-    "algorithms": "algoritmes.coderius.nl",
-    "ide": "ide.coderius.nl",
-}
+SITES_REGISTRY_PATH = Path(__file__).resolve().parent / "sites.json"
 
+
+def _load_registry() -> list[dict[str, str]]:
+    with SITES_REGISTRY_PATH.open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+# slug -> productie-domein, en slug -> weergavenaam. Afgeleid uit het register
+# zodat de rest van de code (die deze dicts importeert) ongewijzigd blijft.
+SITES: dict[str, str] = {s["slug"]: s["domain"] for s in _load_registry()}
 SITE_DISPLAY_NAMES: dict[str, str] = {
-    "python": "Python",
-    "web": "Webdesign",
-    "fullstack": "Fullstack",
-    "robotica": "Robotica",
-    "ctf": "CTF",
-    "embedded": "Embedded",
-    "editor": "Editor",
-    "godot": "Godot",
-    "dvwa": "DVWA",
-    "play": "Play",
-    "algorithms": "Algoritmes",
-    "ide": "IDE",
+    s["slug"]: s["display_name"] for s in _load_registry()
 }
 
 
@@ -53,6 +42,9 @@ class Settings(BaseSettings):
     # GitHub
     github_org: str = "Coderius-Education"
     github_repo: str = "docs"
+    # Repo met deze beheer-app zelf; nieuwe sites worden hier (sites.json +
+    # compose.yml) geregistreerd via een tweede PR.
+    github_management_repo: str = "docs-management"
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
     github_webhook_secret: str = ""
@@ -73,6 +65,10 @@ class Settings(BaseSettings):
     @property
     def repo_full(self) -> str:
         return f"{self.github_org}/{self.github_repo}"
+
+    @property
+    def management_repo_full(self) -> str:
+        return f"{self.github_org}/{self.github_management_repo}"
 
     def site_domains(self) -> dict[str, str]:
         """SITES met eventuele lokale overrides toegepast."""
