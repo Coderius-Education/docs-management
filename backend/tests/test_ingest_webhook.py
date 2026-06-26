@@ -86,19 +86,47 @@ async def test_webhook_enqueues_build_run(api_client, monkeypatch):
     assert jobs[0].branch == "docs/nieuwe-les"
 
 
-async def test_webhook_ignores_failed_runs(api_client, monkeypatch):
+async def test_webhook_enqueues_failed_run(api_client, monkeypatch):
+    """Eén kapotte site mag de rest niet blokkeren: ook `failure` ingest de
+    artifacts die wél gebouwd zijn."""
     jobs = []
     monkeypatch.setattr("app.api.webhooks.enqueue", jobs.append)
     payload = json.dumps(
         {
             "action": "completed",
-            "workflow_run": {"id": 1, "name": "Build sites", "conclusion": "failure"},
+            "workflow_run": {
+                "id": 7,
+                "name": "Build sites",
+                "conclusion": "failure",
+                "head_branch": "docs/les",
+                "head_sha": "e" * 40,
+                "head_commit": {"message": "Deels gebouwd"},
+            },
         }
     ).encode()
     resp = await api_client.post(
         "/api/webhooks/github",
         content=payload,
         headers=webhook_headers(payload, "workflow_run", "g3"),
+    )
+    assert resp.json()["status"] == "ok"
+    assert len(jobs) == 1
+    assert jobs[0].run_id == 7
+
+
+async def test_webhook_ignores_cancelled_runs(api_client, monkeypatch):
+    jobs = []
+    monkeypatch.setattr("app.api.webhooks.enqueue", jobs.append)
+    payload = json.dumps(
+        {
+            "action": "completed",
+            "workflow_run": {"id": 1, "name": "Build sites", "conclusion": "cancelled"},
+        }
+    ).encode()
+    resp = await api_client.post(
+        "/api/webhooks/github",
+        content=payload,
+        headers=webhook_headers(payload, "workflow_run", "g3b"),
     )
     assert resp.json()["status"] == "ignored"
     assert jobs == []

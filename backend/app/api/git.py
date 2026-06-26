@@ -96,6 +96,79 @@ async def get_pr(
     return pr
 
 
+@read_router.get("/prs/{number}/files")
+async def get_pr_files(number: int, user: CurrentUser) -> list[dict]:
+    client = GitHubClient(user_github_token(user))
+    return await pulls.list_pr_files(client, number)
+
+
+@read_router.get("/prs/{number}/commits")
+async def get_pr_commits(number: int, user: CurrentUser) -> list[dict]:
+    client = GitHubClient(user_github_token(user))
+    return await pulls.list_pr_commits(client, number)
+
+
+@read_router.get("/prs/{number}/activity")
+async def get_pr_activity(
+    number: int,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict]:
+    """Tijdlijn: commits (GitHub) + per-site builds (lokaal) + PR-levensloop, nieuwste eerst."""
+    client = GitHubClient(user_github_token(user))
+    pr = await pulls.get_pr(client, number)
+    commits = await pulls.list_pr_commits(client, number)
+
+    builds = (
+        await db.execute(
+            select(Build, Site.slug)
+            .join(Site, Site.id == Build.site_id)
+            .where(Build.branch_slug == pr["preview_branch_slug"])
+            .order_by(Build.created_at.desc())
+        )
+    ).all()
+
+    events: list[dict] = []
+    if pr.get("created_at"):
+        events.append(
+            {"type": "opened", "ts": pr["created_at"], "author": pr["author_login"]}
+        )
+    if pr.get("merged_at"):
+        events.append({"type": "merged", "ts": pr["merged_at"]})
+    elif pr.get("closed_at"):
+        events.append({"type": "closed", "ts": pr["closed_at"]})
+    for c in commits:
+        events.append(
+            {
+                "type": "commit",
+                "ts": c["date"],
+                "sha": (c["sha"] or "")[:12],
+                "message": (c["message"] or "").splitlines()[0],
+                "author": c["author_login"],
+            }
+        )
+    for build, site_slug in builds:
+        events.append(
+            {
+                "type": "build",
+                "ts": build.created_at.isoformat(),
+                "site": site_slug,
+                "status": build.status,
+                "head_sha": build.head_sha[:12],
+            }
+        )
+
+    events.sort(key=lambda e: _ts_key(e["ts"]), reverse=True)
+    return events
+
+
+def _ts_key(ts: str | None) -> str:
+    """Sorteersleutel die GitHub's '...Z' en Python's '...+00:00' gelijk behandelt."""
+    if not ts:
+        return ""
+    return ts.replace("Z", "+00:00")
+
+
 @router.post("/prs")
 async def create_pr(payload: PrCreate, user: CurrentUser) -> dict:
     client = GitHubClient(user_github_token(user))
