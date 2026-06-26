@@ -23,7 +23,11 @@ jobs:
       run: { working-directory: frontend }
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4  # versie komt uit packageManager in package.json
+      # `uses:` negeert working-directory, dus action-setup draait in de repo-root
+      # waar geen package.json staat → versie hier expliciet pinnen.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.2 # gelijk aan packageManager in frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
