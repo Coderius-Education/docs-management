@@ -52,9 +52,14 @@ async def github_webhook(
 async def _dispatch(db: AsyncSession, event: str, body: dict) -> bool:
     if event == "workflow_run":
         run = body.get("workflow_run", {})
+        # Ook bij `failure` ingesten: de build-matrix draait met fail-fast:false,
+        # dus één kapotte site mag de andere niet blokkeren. De ingest-worker pakt
+        # alleen de artifacts op die GitHub daadwerkelijk uploadde — en dat zijn
+        # precies de sites die wél groen bouwden. `cancelled`/`skipped`/None slaan
+        # we over (geen of onbetrouwbare artifacts).
         if (
             body.get("action") == "completed"
-            and run.get("conclusion") == "success"
+            and run.get("conclusion") in {"success", "failure"}
             and run.get("name") == BUILD_WORKFLOW_NAME
         ):
             enqueue(

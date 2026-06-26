@@ -27,6 +27,32 @@ export interface PrDetail extends PrSummary {
   expected_previews: { site: string; url: string }[];
 }
 
+export interface PrFile {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch: string | null;
+}
+
+export interface PrCommit {
+  sha: string;
+  message: string;
+  author_login: string | null;
+  date: string | null;
+}
+
+export interface PrActivityEvent {
+  type: 'commit' | 'build' | 'opened' | 'merged' | 'closed';
+  ts: string | null;
+  sha?: string;
+  message?: string;
+  author?: string;
+  site?: string;
+  status?: string;
+  head_sha?: string;
+}
+
 export function useBranches() {
   return useQuery({
     queryKey: ['branches'],
@@ -76,6 +102,28 @@ export function usePr(number: number) {
     queryKey: ['pr', number],
     queryFn: () => api<PrDetail>(`/api/prs/${number}`),
     refetchInterval: 30_000, // checks/builds veranderen terwijl je kijkt
+  });
+}
+
+export function usePrFiles(number: number) {
+  return useQuery({
+    queryKey: ['pr', number, 'files'],
+    queryFn: () => api<PrFile[]>(`/api/prs/${number}/files`),
+  });
+}
+
+export function usePrCommits(number: number) {
+  return useQuery({
+    queryKey: ['pr', number, 'commits'],
+    queryFn: () => api<PrCommit[]>(`/api/prs/${number}/commits`),
+  });
+}
+
+export function usePrActivity(number: number) {
+  return useQuery({
+    queryKey: ['pr', number, 'activity'],
+    queryFn: () => api<PrActivityEvent[]>(`/api/prs/${number}/activity`),
+    refetchInterval: 30_000, // builds verschijnen terwijl CI loopt
   });
 }
 

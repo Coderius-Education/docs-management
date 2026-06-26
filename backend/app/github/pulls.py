@@ -48,9 +48,59 @@ async def get_pr(client: GitHubClient, number: int) -> dict:
             "merged": pr.get("merged", False),
             "checks": runs,
             "preview_branch_slug": branch_slug(pr["head"]["ref"]),
+            "created_at": pr.get("created_at"),
+            "merged_at": pr.get("merged_at"),
+            "closed_at": pr.get("closed_at"),
         }
     )
     return summary
+
+
+async def list_pr_files(client: GitHubClient, number: int) -> list[dict]:
+    """Gewijzigde bestanden met unified-diff per bestand (GitHub levert de patch kant-en-klaar).
+
+    GitHub pagineert op 100; we lopen door tot een lege pagina (PR's met >100
+    bestanden zijn zeldzaam maar mogen niet stilletjes worden afgekapt).
+    """
+    files: list[dict] = []
+    page = 1
+    while True:
+        batch = await client.get(
+            repo_path(f"/pulls/{number}/files"),
+            params={"per_page": 100, "page": page},
+        )
+        if not batch:
+            break
+        files.extend(
+            {
+                "filename": f["filename"],
+                "status": f["status"],
+                "additions": f.get("additions", 0),
+                "deletions": f.get("deletions", 0),
+                "patch": f.get("patch"),  # None bij binair / te grote bestanden
+            }
+            for f in batch
+        )
+        if len(batch) < 100:
+            break
+        page += 1
+    return files
+
+
+async def list_pr_commits(client: GitHubClient, number: int) -> list[dict]:
+    commits = await client.get(
+        repo_path(f"/pulls/{number}/commits"), params={"per_page": 100}
+    )
+    return [
+        {
+            "sha": c["sha"],
+            "message": (c.get("commit") or {}).get("message", ""),
+            "author_login": (c.get("author") or {}).get("login")
+            or ((c.get("commit") or {}).get("author") or {}).get("name"),
+            "date": ((c.get("commit") or {}).get("author") or {}).get("date"),
+        }
+        for c in commits
+    ]
 
 
 async def create_pr(

@@ -137,6 +137,101 @@ async def test_pr_lifecycle(api_client):
     assert merged.json()["merged"] is True
 
 
+@respx.mock
+async def test_pr_files(api_client):
+    await make_logged_in_user(api_client)
+    respx.get(f"{REPO}/pulls/7/files").mock(
+        return_value=Response(
+            200,
+            json=[
+                {
+                    "filename": "sites/python/docs/a.mdx",
+                    "status": "modified",
+                    "additions": 3,
+                    "deletions": 1,
+                    "patch": "@@ -1 +1 @@\n-oud\n+nieuw",
+                }
+            ],
+        )
+    )
+    resp = await api_client.get("/api/prs/7/files")
+    assert resp.status_code == 200
+    f = resp.json()[0]
+    assert f["filename"] == "sites/python/docs/a.mdx"
+    assert f["additions"] == 3
+    assert f["patch"].startswith("@@")
+
+
+@respx.mock
+async def test_pr_commits(api_client):
+    await make_logged_in_user(api_client)
+    respx.get(f"{REPO}/pulls/7/commits").mock(
+        return_value=Response(
+            200,
+            json=[
+                {
+                    "sha": "abc123def4567",
+                    "commit": {
+                        "message": "Les toegevoegd\n\nmeer detail",
+                        "author": {"name": "Docent", "date": "2026-06-11T09:00:00Z"},
+                    },
+                    "author": {"login": "docent"},
+                }
+            ],
+        )
+    )
+    resp = await api_client.get("/api/prs/7/commits")
+    assert resp.status_code == 200
+    c = resp.json()[0]
+    assert c["sha"] == "abc123def4567"
+    assert c["author_login"] == "docent"
+    assert c["date"] == "2026-06-11T09:00:00Z"
+
+
+@respx.mock
+async def test_pr_activity_merges_commits_and_lifecycle(api_client):
+    await make_logged_in_user(api_client)
+    pr_json = {
+        "number": 7,
+        "title": "Nieuwe les",
+        "head": {"ref": "docs/nieuwe-les", "sha": "headsha"},
+        "user": {"login": "docent"},
+        "state": "open",
+        "html_url": "https://github.com/x/pull/7",
+        "updated_at": "2026-06-11T10:00:00Z",
+        "created_at": "2026-06-11T08:00:00Z",
+        "merged_at": None,
+        "closed_at": None,
+    }
+    respx.get(f"{REPO}/pulls/7").mock(return_value=Response(200, json=pr_json))
+    respx.get(f"{REPO}/commits/headsha/check-runs").mock(
+        return_value=Response(200, json={"check_runs": []})
+    )
+    respx.get(f"{REPO}/pulls/7/commits").mock(
+        return_value=Response(
+            200,
+            json=[
+                {
+                    "sha": "abc123def4567",
+                    "commit": {
+                        "message": "Les toegevoegd",
+                        "author": {"name": "Docent", "date": "2026-06-11T09:00:00Z"},
+                    },
+                    "author": {"login": "docent"},
+                }
+            ],
+        )
+    )
+    resp = await api_client.get("/api/prs/7/activity")
+    assert resp.status_code == 200
+    events = resp.json()
+    types = [e["type"] for e in events]
+    assert "commit" in types and "opened" in types
+    # Nieuwste eerst: de commit (09:00) staat vóór het openen (08:00).
+    assert events[0]["type"] == "commit"
+    assert events[-1]["type"] == "opened"
+
+
 def test_branch_slug():
     from app.github.pulls import branch_slug
 

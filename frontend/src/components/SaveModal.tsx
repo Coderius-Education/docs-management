@@ -4,7 +4,6 @@ import {
   Code,
   Group,
   Modal,
-  ScrollArea,
   Select,
   Stack,
   Tabs,
@@ -16,6 +15,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useBranches, useCreateBranch, useCreatePr, useSavePage } from '../api/git';
+import { DiffView } from './DiffView';
 
 export function SaveModal({
   opened,
@@ -102,11 +102,7 @@ export function SaveModal({
     <Modal opened={opened} onClose={onClose} title="Wijzigingen opslaan" size="xl">
       {savedToBranch === null ? (
         <Stack>
-          <ScrollArea h={260}>
-            <Code block style={{ fontSize: 12, whiteSpace: 'pre' }}>
-              {diff}
-            </Code>
-          </ScrollArea>
+          <DiffView patch={diff} maxHeight={260} />
 
           <Tabs
             value={branchMode}
