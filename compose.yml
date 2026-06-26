@@ -102,13 +102,17 @@ services:
       - traefik.http.routers.docsite-ide-coderius-nl.tls.certresolver=leresolver
       - traefik.http.routers.docsite-ide-coderius-nl.service=docsdelivery
 
-      # Branch-previews: per-host cert via HTTP-01 (Traefik vraagt on-demand een
-      # cert aan voor elke <branch>.preview.coderius.nl die binnenkomt).
-      # Uitgezet tot er een wildcard-DNS-record *.preview.coderius.nl -> Traefik-host is.
-      # - traefik.http.routers.docspreview.rule=HostRegexp(`^.+\.preview\.coderius\.nl$`)
-      # - traefik.http.routers.docspreview.entrypoints=websecure
-      # - traefik.http.routers.docspreview.tls.certresolver=leresolver
-      # - traefik.http.routers.docspreview.service=docsdelivery
+      # Branch-previews: één wildcard-cert (*.preview.coderius.nl) via DNS-01.
+      # Gebruikt de certresolver `lednsresolver` die op de EXTERNE Traefik moet
+      # bestaan (dnsChallenge.provider=hetzner + HETZNER_API_KEY in Traefik's env).
+      # Zie README §Hetzner DNS-01 voor de Traefik-config. DNS-01 heeft geen
+      # A-record nodig, maar wel een wildcard-DNS dat naar de Traefik-host wijst.
+      - traefik.http.routers.docspreview.rule=HostRegexp(`^.+\.preview\.coderius\.nl$`)
+      - traefik.http.routers.docspreview.entrypoints=websecure
+      - traefik.http.routers.docspreview.tls.certresolver=lednsresolver
+      - traefik.http.routers.docspreview.tls.domains[0].main=preview.coderius.nl
+      - traefik.http.routers.docspreview.tls.domains[0].sans=*.preview.coderius.nl
+      - traefik.http.routers.docspreview.service=docsdelivery
       - traefik.http.services.docsdelivery.loadbalancer.server.port=8000
 
   db:

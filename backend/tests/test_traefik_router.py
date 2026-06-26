@@ -27,6 +27,13 @@ def test_adds_separate_router_with_own_certresolver():
     assert f"traefik.http.routers.{name}.service=docsdelivery" in out
 
 
+def test_new_router_block_is_separated_by_a_blank_line():
+    out = add_domain_to_traefik(COMPOSE, "demo.coderius.nl")
+    # Volgt de compose-stijl: een lege regel vóór elke router-groep.
+    rule = "traefik.http.routers.docsite-demo-coderius-nl.rule=Host(`demo.coderius.nl`)"
+    assert f"\n\n      - {rule}" in out
+
+
 def test_new_router_is_standalone_not_merged_into_a_shared_rule():
     out = add_domain_to_traefik(COMPOSE, "demo.coderius.nl")
     # De nieuwe regel is een losse Host()-router, niet ge-OR'd in een bestaande rule.

@@ -240,6 +240,7 @@ def add_domain_to_traefik(compose_yml: str, domain: str) -> str:
     if f"traefik.http.routers.{name}." in compose_yml:
         raise ValueError(f"Router voor domein '{domain}' staat al in compose.yml")
     block = (
+        f"\n"
         f"      - traefik.http.routers.{name}.rule=Host(`{domain}`)\n"
         f"      - traefik.http.routers.{name}.entrypoints=websecure\n"
         f"      - traefik.http.routers.{name}.tls.certresolver=leresolver\n"
