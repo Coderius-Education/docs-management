@@ -102,6 +102,11 @@ services:
       - traefik.http.routers.docsite-ide-coderius-nl.tls.certresolver=leresolver
       - traefik.http.routers.docsite-ide-coderius-nl.service=docsdelivery
 
+      - traefik.http.routers.docsite-didactiek-coderius-nl.rule=Host(`didactiek.coderius.nl`)
+      - traefik.http.routers.docsite-didactiek-coderius-nl.entrypoints=websecure
+      - traefik.http.routers.docsite-didactiek-coderius-nl.tls.certresolver=leresolver
+      - traefik.http.routers.docsite-didactiek-coderius-nl.service=docsdelivery
+
       # Branch-previews: één wildcard-cert (*.preview.coderius.nl) via DNS-01.
       # Gebruikt de certresolver `lednsresolver` die op de EXTERNE Traefik moet
       # bestaan (dnsChallenge.provider=hetzner + HETZNER_API_KEY in Traefik's env).
