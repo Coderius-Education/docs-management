@@ -17,7 +17,8 @@ services:
         python=python.localtest.me,web=web.localtest.me,fullstack=fullstack.localtest.me,
         robotica=robotica.localtest.me,ctf=ctf.localtest.me,embedded=embedded.localtest.me,
         editor=editor.localtest.me,godot=godot.localtest.me,dvwa=dvwa.localtest.me,
-        play=play.localtest.me,algorithms=algoritmes.localtest.me,ide=ide.localtest.me
+        play=play.localtest.me,algorithms=algoritmes.localtest.me,ide=ide.localtest.me,
+        didactiek=didactiek.localtest.me
       PREVIEW_DOMAIN_SUFFIX: preview.localtest.me
       ADMIN_DOMAIN: localhost:8000
     env_file:
@@ -42,7 +43,8 @@ services:
         python=python.localtest.me,web=web.localtest.me,fullstack=fullstack.localtest.me,
         robotica=robotica.localtest.me,ctf=ctf.localtest.me,embedded=embedded.localtest.me,
         editor=editor.localtest.me,godot=godot.localtest.me,dvwa=dvwa.localtest.me,
-        play=play.localtest.me,algorithms=algoritmes.localtest.me,ide=ide.localtest.me
+        play=play.localtest.me,algorithms=algoritmes.localtest.me,ide=ide.localtest.me,
+        didactiek=didactiek.localtest.me
       PREVIEW_DOMAIN_SUFFIX: preview.localtest.me
     env_file:
       - path: .env
