@@ -19,7 +19,7 @@ async def test_list_sites(api_client):
     assert resp.status_code == 200
     slugs = [s["slug"] for s in resp.json()]
     assert "python" in slugs
-    assert len(slugs) == 12
+    assert len(slugs) == 13
 
 
 @respx.mock
