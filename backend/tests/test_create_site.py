@@ -131,8 +131,8 @@ async def test_create_site_rejects_duplicate_slug(api_client):
     assert resp.status_code == 409
 
 
-def test_registry_loads_twelve_sites():
+def test_registry_loads_all_sites():
     # Borgt de refactor van config-dicts naar sites.json.
-    assert len(SITES) == 12
+    assert len(SITES) == 13
     assert SITES["algorithms"] == "algoritmes.coderius.nl"
     assert SITE_DISPLAY_NAMES["web"] == "Webdesign"
