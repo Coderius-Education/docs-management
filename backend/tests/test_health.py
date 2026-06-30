@@ -20,5 +20,5 @@ async def test_sites_seeded(api_client):
     async with get_sessionmaker()() as session:
         sites = (await session.scalars(select(Site))).all()
     slugs = {s.slug for s in sites}
-    assert "python" in slugs and "algorithms" in slugs
-    assert len(slugs) == 13
+    assert "python" in slugs and "algorithms" in slugs and "home" in slugs
+    assert len(slugs) == 14

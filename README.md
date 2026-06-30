@@ -54,7 +54,7 @@ Previews lokaal: `*.localtest.me` wijst naar 127.0.0.1, dus `http://python.local
 
 ## Deploy (Portainer)
 
-1. Zet DNS: A-records voor de 12 site-domeinen, het admin-domein en `*.preview.coderius.nl` naar de VPS.
+1. Zet DNS: A-records voor de site-domeinen (de cursus-subdomeinen plus de apex `coderius.nl`), het admin-domein en `*.preview.coderius.nl` naar de VPS. Let op: de apex `coderius.nl` heeft een eigen A/AAAA-record nodig en valt niet onder een `*.coderius.nl`-wildcard.
 2. Maak in Portainer een stack van `compose.yml` met een `stack.env` op basis van `.env.example`.
 3. Controleer: naam van het externe Traefik-netwerk (`TRAEFIK_NETWORK`), Traefik **v3** (de `HostRegexp`-syntax), en een DNS-01 certresolver (`lednsresolver`) voor het wildcard-preview-certificaat — zie §Hetzner DNS-01 hieronder.
 4. Registreer de webhook op het docs-repo: `https://<admin-domein>/api/webhooks/github`, events `workflow_run`, `pull_request`, `delete`, `push`; secret = `GITHUB_WEBHOOK_SECRET`.

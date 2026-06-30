@@ -11,5 +11,6 @@
   { "slug": "play", "domain": "play.coderius.nl", "display_name": "Play" },
   { "slug": "algorithms", "domain": "algoritmes.coderius.nl", "display_name": "Algoritmes" },
   { "slug": "ide", "domain": "ide.coderius.nl", "display_name": "IDE" },
-  { "slug": "didactiek", "domain": "didactiek.coderius.nl", "display_name": "Didactiek" }
+  { "slug": "didactiek", "domain": "didactiek.coderius.nl", "display_name": "Didactiek" },
+  { "slug": "home", "domain": "coderius.nl", "display_name": "Home" }
 ]

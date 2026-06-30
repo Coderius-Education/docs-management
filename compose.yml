@@ -1,6 +1,6 @@
 # Productie-stack voor Portainer, achter de bestaande Traefik.
 # Vereist: extern Traefik-netwerk (naam via TRAEFIK_NETWORK, default "traefik"),
-# DNS voor de 12 site-domeinen + admin-domein + *.preview.coderius.nl,
+# DNS voor de 14 site-domeinen (incl. apex coderius.nl) + admin-domein + *.preview.coderius.nl,
 # en een stack.env met de secrets (zie .env.example).
 
 services:
@@ -106,6 +106,14 @@ services:
       - traefik.http.routers.docsite-didactiek-coderius-nl.entrypoints=websecure
       - traefik.http.routers.docsite-didactiek-coderius-nl.tls.certresolver=leresolver
       - traefik.http.routers.docsite-didactiek-coderius-nl.service=docsdelivery
+
+      # Apex-homepage. Anders dan de cursussen geen subdomein, en niet gedekt
+      # door enig *.coderius.nl-wildcard: een eigen router met eigen HTTP-01-cert.
+      # Vereist dat het A/AAAA-record van coderius.nl naar deze Traefik-host wijst.
+      - traefik.http.routers.docsite-coderius-nl.rule=Host(`coderius.nl`)
+      - traefik.http.routers.docsite-coderius-nl.entrypoints=websecure
+      - traefik.http.routers.docsite-coderius-nl.tls.certresolver=leresolver
+      - traefik.http.routers.docsite-coderius-nl.service=docsdelivery
 
       # Branch-previews: één wildcard-cert (*.preview.coderius.nl) via DNS-01.
       # Gebruikt de certresolver `lednsresolver` die op de EXTERNE Traefik moet
