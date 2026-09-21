@@ -1,6 +1,6 @@
 # Teacher authoring in docs-admin
 
-Date: 2026-09-21. Status: proposed for user review; implementation has not started.
+Date: 2026-09-21. Status: approved and implemented; verified locally with unit tests, a production build, and mocked-API Chromium flows. See the [execution record](../plans/2026-09-21-teacher-authoring.md).
 
 ## Intended outcome
 

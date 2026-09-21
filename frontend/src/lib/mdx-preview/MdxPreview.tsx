@@ -1,168 +1,279 @@
-import { Alert, Code, Paper, Text } from '@mantine/core';
-import { evaluate } from '@mdx-js/mdx';
-import { Component, type ReactNode, useEffect, useState } from 'react';
-import * as jsxRuntime from 'react/jsx-runtime';
-import remarkDirective from 'remark-directive';
-import remarkGfm from 'remark-gfm';
+import { Alert, Text } from '@mantine/core';
+import {
+  createElement,
+  useDeferredValue,
+  useMemo,
+  type ReactNode,
+} from 'react';
+import { parseLesson } from '../authoring/document';
+import { componentModel } from '../authoring/components';
+import { attributes } from '../authoring/components';
+import { resolveAsset, type AssetContext } from '../authoring/assets';
+import { textContent, type LessonNode } from '../authoring/syntax';
+import './MdxPreview.css';
 
-import { remarkAdmonitions } from './remarkAdmonitions';
-
-type PreviewComponent = (props: Record<string, unknown>) => ReactNode;
-
-// Real preview implementations for known site components.
-const KNOWN_COMPONENTS: Record<string, PreviewComponent> = {
-  // @docusaurus/BrowserOnly: calls children() since we're always in a browser.
-  BrowserOnly: ({ children, fallback }) => {
-    if (typeof children === 'function') {
-      return (children as () => ReactNode)();
-    }
-    return (children as ReactNode) ?? (fallback as ReactNode) ?? null;
-  },
-
-  // play-docs / python-docs: CodeRunner button.
-  TryButton: () => (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        background: '#228be6',
-        color: '#fff',
-        borderRadius: 4,
-        padding: '3px 10px',
-        fontSize: 13,
-        marginBlock: 6,
-        cursor: 'default',
-        userSelect: 'none',
-      }}
-    >
-      ▶ Probeer in browser
-    </span>
-  ),
-
-  // DVWA-docs: simulated Linux terminal.
-  LinuxTerminal: () => (
-    <div
-      style={{
-        background: '#1e1e2e',
-        color: '#a6e3a1',
-        fontFamily: 'monospace',
-        fontSize: 13,
-        padding: '10px 14px',
-        borderRadius: 6,
-        marginBlock: 8,
-        minHeight: 80,
-        lineHeight: 1.6,
-      }}
-    >
-      <span style={{ color: '#89b4fa' }}>user@linux</span>
-      <span style={{ color: '#cdd6f4' }}>:~$ </span>
-      <span style={{ color: '#6c7086', fontSize: 12 }}>
-        [Interactieve terminal — zichtbaar op de gepubliceerde site]
-      </span>
-    </div>
-  ),
-};
-
-// Auto-generated stubs for any other PascalCase component.
-function makeStub(name: string): PreviewComponent {
-  return function Stub(props: Record<string, unknown>) {
-    return (
-      <Paper withBorder p="xs" my="xs" bg="gray.0">
-        <Text size="xs" c="dimmed" ff="monospace">
-          &lt;{name}
-          {Object.keys(props)
-            .filter((k) => k !== 'children')
-            .map((k) => ` ${k}=…`)
-            .join('')}
-          {' />'}
-        </Text>
-        {props.children as ReactNode}
-      </Paper>
-    );
-  };
+export interface PreviewContext extends AssetContext {
+  site?: string;
+  title?: string;
+  description?: string;
 }
-
-const stubCache = new Map<string, PreviewComponent>();
-
-/** Builds an explicit components map for all PascalCase JSX tags found in the source. */
-function buildComponentStubs(body: string): Record<string, PreviewComponent> {
-  const result: Record<string, PreviewComponent> = {};
-  for (const [, name] of body.matchAll(/<([A-Z][a-zA-Z0-9]*)/g)) {
-    if (name in KNOWN_COMPONENTS) {
-      result[name] = KNOWN_COMPONENTS[name];
-    } else {
-      if (!stubCache.has(name)) stubCache.set(name, makeStub(name));
-      result[name] = stubCache.get(name)!;
-    }
-  }
-  return result;
-}
-
-class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null as Error | null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-
-  componentDidUpdate(prev: { children: ReactNode }) {
-    if (prev.children !== this.props.children && this.state.error) {
-      this.setState({ error: null });
-    }
-  }
-
-  render() {
-    if (this.state.error) {
-      return (
-        <Alert color="orange" title="Preview kon niet renderen">
-          <Code block>{String(this.state.error)}</Code>
-        </Alert>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-/** Verwijdert import/export-regels: componenten komen uit buildComponentStubs. */
-function stripEsm(body: string): string {
-  return body.replace(/^(import|export)\s.*$/gm, '');
-}
-
-export function MdxPreview({ body }: { body: string }) {
-  const [content, setContent] = useState<ReactNode>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      try {
-        const { default: MDXContent } = await evaluate(stripEsm(body), {
-          ...jsxRuntime,
-          remarkPlugins: [remarkGfm, remarkDirective, remarkAdmonitions],
-        });
-        if (!cancelled) {
-          setContent(<MDXContent components={buildComponentStubs(body)} />);
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled) setError(String(err));
+export function renderLesson(
+  source: string,
+  context: PreviewContext = {},
+): ReactNode {
+  const doc = parseLesson(source, context.site ?? '');
+  if (doc.error)
+    return <div role="alert">Voorbeeld niet beschikbaar: {doc.error}</div>;
+  const definitions = new Map(
+    (doc.tree.children ?? [])
+      .filter((n) => n.type === 'definition')
+      .map((n) => [n.identifier, n]),
+  );
+  function render(node: LessonNode, key: number): ReactNode {
+    const children = node.children?.map(render);
+    const tag = (name: string, props: Record<string, unknown> = {}) =>
+      createElement(name, { key, ...props }, children);
+    switch (node.type) {
+      case 'root':
+        return <div key={key}>{children}</div>;
+      case 'text':
+        return node.value;
+      case 'paragraph':
+        return tag('p');
+      case 'heading':
+        return tag(`h${Math.max(1, Math.min(node.depth ?? 2, 6))}`);
+      case 'strong':
+        return tag('strong');
+      case 'emphasis':
+        return tag('em');
+      case 'delete':
+        return tag('del');
+      case 'blockquote':
+        return tag('blockquote');
+      case 'break':
+        return <br key={key} />;
+      case 'thematicBreak':
+        return <hr key={key} />;
+      case 'inlineCode':
+        return <code key={key}>{node.value}</code>;
+      case 'code':
+        return (
+          <figure key={key} className="preview-code">
+            {node.meta && <figcaption>{node.meta}</figcaption>}
+            <pre>
+              <code className={node.lang ? `language-${node.lang}` : undefined}>
+                {node.value}
+              </code>
+            </pre>
+          </figure>
+        );
+      case 'list':
+        return tag(
+          node.ordered ? 'ol' : 'ul',
+          node.ordered ? { start: node.start } : {},
+        );
+      case 'listItem':
+        return (
+          <li key={key}>
+            {typeof node.checked === 'boolean' && (
+              <input
+                type="checkbox"
+                checked={node.checked}
+                readOnly
+                aria-label="Case de liste"
+              />
+            )}
+            {children}
+          </li>
+        );
+      case 'table':
+        return (
+          <div className="preview-table" key={key}>
+            <table>
+              <tbody>{children}</tbody>
+            </table>
+          </div>
+        );
+      case 'tableRow':
+        return tag('tr');
+      case 'tableCell':
+        return tag('td');
+      case 'linkReference':
+      case 'imageReference': {
+        const definition = definitions.get(node.identifier);
+        return definition ? (
+          render(
+            {
+              ...node,
+              type: node.type === 'linkReference' ? 'link' : 'image',
+              url: definition.url,
+            },
+            key,
+          )
+        ) : (
+          <span key={key}>{children ?? node.alt}</span>
+        );
       }
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [body]);
-
+      case 'link':
+        return (
+          <span key={key} className="preview-link" title={node.url}>
+            {children}
+          </span>
+        );
+      case 'image': {
+        const src = resolveAsset(node.url ?? '', context);
+        return src ? (
+          <img
+            key={key}
+            src={src}
+            alt={node.alt ?? ''}
+            title={node.title}
+            loading="lazy"
+          />
+        ) : (
+          <span key={key} className="preview-placeholder">
+            Afbeelding: {node.alt || node.url} — controleer in het
+            cursusvoorbeeld
+          </span>
+        );
+      }
+      case 'definition':
+      case 'mdxjsEsm':
+        return null;
+      case 'containerDirective': {
+        const label = node.children?.find((n) => n.data?.directiveLabel);
+        return (
+          <aside key={key} className={`admonition admonition-${node.name}`}>
+            <strong>{label ? textContent(label) : node.name}</strong>
+            {node.children?.filter((n) => !n.data?.directiveLabel).map(render)}
+          </aside>
+        );
+      }
+      case 'mdxJsxFlowElement':
+      case 'mdxJsxTextElement': {
+        const model = componentModel(node, context.site ?? '', doc.imports);
+        if (model)
+          return (
+            <div key={key} className="preview-component">
+              <strong>{model.label}</strong>
+              <pre>
+                {model.fields.code?.editable
+                  ? String(model.fields.code.value)
+                  : 'Code wordt bepaald door een expressie.'}
+              </pre>
+              <small>
+                Configuratievoorbeeld · uitvoeren in het cursusvoorbeeld
+              </small>
+            </div>
+          );
+        const safeTags = [
+          'details',
+          'summary',
+          'p',
+          'strong',
+          'em',
+          'b',
+          'i',
+          'u',
+          's',
+          'sub',
+          'sup',
+          'kbd',
+          'mark',
+          'div',
+          'span',
+          'ul',
+          'ol',
+          'li',
+          'table',
+          'thead',
+          'tbody',
+          'tr',
+          'td',
+          'th',
+        ];
+        if (node.name && safeTags.includes(node.name)) return tag(node.name);
+        if (node.name === 'br') return <br key={key} />;
+        if (node.name === 'hr') return <hr key={key} />;
+        if (node.name === 'img') {
+          const attrs = attributes(node);
+          const src = attrs.find((a) => a.name === 'src')?.value;
+          const alt = attrs.find((a) => a.name === 'alt')?.value;
+          return render(
+            {
+              type: 'image',
+              url: typeof src === 'string' ? src : '',
+              alt: typeof alt === 'string' ? alt : '',
+            },
+            key,
+          );
+        }
+        return (
+          <span key={key} className="preview-placeholder">
+            {node.name ?? 'MDX-fragment'} · bekijk dit onderdeel in het
+            cursusvoorbeeld
+          </span>
+        );
+      }
+      default:
+        return (
+          <span key={key} className="preview-placeholder">
+            {node.type.includes('Expression')
+              ? 'Dynamische inhoud'
+              : 'Brononderdeel'}{' '}
+            · bron behouden
+          </span>
+        );
+    }
+  }
   return (
-    <div className="mdx-preview">
-      {error && (
-        <Alert color="orange" mb="xs" title="MDX-fout">
-          <Code block>{error}</Code>
+    <>
+      {context.title &&
+        !doc.tree.children?.some(
+          (n) => n.type === 'heading' && n.depth === 1,
+        ) && <h1>{context.title}</h1>}
+      {render(doc.tree, 0)}
+    </>
+  );
+}
+export function MdxPreview({
+  body,
+  ...context
+}: { body: string } & PreviewContext) {
+  const deferred = useDeferredValue(body);
+  const { site, domain, path, branch, previewOrigin, title, description } =
+    context;
+  const parsed = useMemo(
+    () => parseLesson(deferred, site ?? ''),
+    [deferred, site],
+  );
+  const content = useMemo(
+    () =>
+      renderLesson(deferred, {
+        site,
+        domain,
+        path,
+        branch,
+        previewOrigin,
+        title,
+        description,
+      }),
+    [deferred, site, domain, path, branch, previewOrigin, title, description],
+  );
+  return (
+    <div className="mdx-preview" aria-busy={body !== deferred}>
+      <Text size="xs" c="dimmed" mb="sm" role="status">
+        {body !== deferred
+          ? 'Voorbeeld wordt bijgewerkt…'
+          : 'Inhoudsvoorbeeld · interactieve onderdelen controleer je na opslaan in het cursusvoorbeeld.'}
+      </Text>
+      {parsed.error ? (
+        <Alert color="orange" title="Broncode controleren">
+          {parsed.error}
         </Alert>
+      ) : (
+        content
       )}
-      <PreviewBoundary>{content}</PreviewBoundary>
     </div>
   );
 }

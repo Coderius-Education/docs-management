@@ -108,3 +108,54 @@ op; de previews zijn dan bereikbaar op `{branch}--{site}.preview.coderius.nl`.
 ## Database-migraties
 
 Het schema wordt bij het opstarten aangemaakt (idempotent). Voor schemawijzigingen ná de eerste release: `alembic revision --autogenerate` + `alembic upgrade head` (baseline staat in `backend/alembic/versions/0001_initial.py`).
+
+## Lesmateriaal maken en bewerken
+
+De editor opent lesmateriaal in **Bewerken**. Gewone Markdown, callouts en
+uitklapbare tips/oplossingen kunnen visueel worden aangepast. **Blok toevoegen**
+voegt een onderdeel bij het actieve tekstblok in. De velden voor menuvolgorde,
+menunaam en beschrijving bewaren onbekende pagina-instellingen.
+
+Ondersteunde interactieve onderdelen hebben formulieren:
+
+- Python: `CodeExercise` (startcode).
+- Algorithms: `PyRunner` (code, bewerkbaarheid, aantal regels en pakketten).
+- Play: `TryButton` (code en uitvoermodus).
+
+Imports worden bij invoegen automatisch gekoppeld. Andere MDX-componenten en
+expressies blijven als bronblokken behouden, ook wanneer je omliggende tekst
+bewerkt. **Bron bewerken** opent één blok; **Broncode** toont het volledige
+bestand inclusief pagina-instellingen. Ongeldige MDX of YAML blijft beschikbaar
+voor herstel in de bronweergave.
+
+**Voorbeeld** is een statisch inhoudsvoorbeeld: code wordt hier niet uitgevoerd.
+Het toont callouts, tips, tabellen en ondersteunde componentconfiguraties. Via
+**Cursusvoorbeeld** open je een bestaande branch-build in een apart tabblad.
+Afbeeldingen met openbare URLs of `/img/...` / `@site/static/...` worden waar
+mogelijk tegen de betreffende site of branch-preview opgelost. Relatieve
+bronbestanden die Docusaurus tijdens de build verwerkt krijgen een zichtbare
+placeholder. Lokale afbeeldingen uploaden is nog niet beschikbaar; tijdelijke
+`blob:`- en `data:`-afbeeldingen moeten worden vervangen voordat je opslaat.
+
+**Opslaan** bewaart een concept op een feature branch. **Controle aanvragen**
+opent daarna een pull request; opslaan publiceert dus niet automatisch. Je kunt
+na elke save verder bewerken. Conflicten behouden je lokale tekst. Een
+herstelkopie wordt per gebruiker, cursus, branch en bestand in deze browser
+bewaard; bij heropenen kun je haar herstellen of de serverversie gebruiken.
+
+Extra frontendchecks:
+
+```bash
+cd frontend
+npm test
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+Browserchecks gebruiken gemockte API-antwoorden en schrijven niet naar GitHub.
+Met `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/pad/naar/chromium` kun je een reeds
+geïnstalleerde browser gebruiken. De lesfixtures in `frontend/tests/fixtures`
+komen uit het Coderius-Education/docs-repo (Python hoofdstuk 1 en Algorithms,
+Vind maximum, stap 6) en vallen onder dezelfde CC BY-NC 4.0-licentie als het
+lesmateriaal.

@@ -28,8 +28,16 @@ export function SiteBrowser() {
 
   const selectedPath = searchParams.get('path');
   const { data: sites } = useSites();
-  const { data: tree, isLoading: treeLoading, error: treeError } = useTree(site, ref);
-  const { data: page, isLoading: pageLoading } = usePage(site, selectedPath, ref);
+  const {
+    data: tree,
+    isLoading: treeLoading,
+    error: treeError,
+  } = useTree(site, ref);
+  const { data: page, isLoading: pageLoading } = usePage(
+    site,
+    selectedPath,
+    ref,
+  );
 
   const siteInfo = sites?.find((s) => s.slug === site);
 
@@ -50,7 +58,12 @@ export function SiteBrowser() {
             w={220}
             size="xs"
           />
-          <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setNewPageOpen(true)}>
+          <Button
+            size="xs"
+            leftSection={<IconPlus size={14} />}
+            disabled={treeLoading || !!treeError || !tree}
+            onClick={() => setNewPageOpen(true)}
+          >
             Nieuwe pagina
           </Button>
         </Group>
@@ -99,7 +112,7 @@ export function SiteBrowser() {
                     leftSection={<IconPencil size={14} />}
                     onClick={() =>
                       navigate(
-                        `/sites/${site}/edit?path=${encodeURIComponent(page.path)}&ref=${ref}`,
+                        `/sites/${site}/edit?path=${encodeURIComponent(page.path)}&ref=${encodeURIComponent(ref)}`,
                       )
                     }
                   >

@@ -1,38 +1,18 @@
-import { Button, Group, Modal, Select, Stack, Text, TextInput } from '@mantine/core';
-import { useMemo, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Group,
+  Modal,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-
 import type { TreeItem } from '../api/types';
+import { newPageDetails } from '../lib/authoring/newPage';
 import { newPageTemplate } from './editor/snippets';
-
-function kebab(title: string): string {
-  return title
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-/** Volgend nummer-prefix en sidebar_position op basis van de bestaande broertjes. */
-function nextInDirectory(items: TreeItem[], directory: string) {
-  const prefix = directory ? `${directory}/` : '';
-  const siblings = items.filter(
-    (item) =>
-      item.type === 'blob' &&
-      item.path.startsWith(prefix) &&
-      !item.path.slice(prefix.length).includes('/') &&
-      /\.(md|mdx)$/.test(item.path),
-  );
-  let maxNum = 0;
-  for (const sibling of siblings) {
-    const name = sibling.path.slice(prefix.length);
-    const match = name.match(/^(\d+)-/);
-    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
-  }
-  return { fileNum: maxNum + 1, sidebarPosition: maxNum + 1 };
-}
-
 export function NewPageModal({
   opened,
   onClose,
@@ -49,63 +29,98 @@ export function NewPageModal({
   const navigate = useNavigate();
   const [directory, setDirectory] = useState<string | null>('');
   const [title, setTitle] = useState('');
-
+  const [template, setTemplate] = useState<string | null>('blank');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (opened) {
+      setTitle('');
+      setDirectory('');
+      setError('');
+      setTemplate('blank');
+    }
+  }, [opened, site]);
   const directories = useMemo(
     () => [
-      { value: '', label: '(hoofdmap)' },
+      { value: '', label: 'Hoofdmap' },
       ...tree
         .filter((item) => item.type === 'tree')
         .map((item) => ({ value: item.path, label: item.path })),
     ],
     [tree],
   );
-
-  const { fileNum, sidebarPosition } = useMemo(
-    () => nextInDirectory(tree, directory ?? ''),
-    [tree, directory],
-  );
-
-  const filename = title
-    ? `${String(fileNum).padStart(2, '0')}-${kebab(title)}.mdx`
-    : '';
-  const fullPath = directory ? `${directory}/${filename}` : filename;
-
-  function handleCreate() {
-    if (!filename) return;
-    sessionStorage.setItem(
-      `nieuw:${site}:${fullPath}`,
-      newPageTemplate(title, sidebarPosition),
-    );
+  const details = newPageDetails(title, directory ?? '', tree);
+  function create() {
+    if (details.error) return;
+    const safeTitle = title.trim().replace(/[\\*_[\]<>`{}]/g, '\\$&');
+    const exercise =
+      '\n## Leerdoel\n\nBeschrijf wat de leerling leert.\n\n## Opdracht\n\nBeschrijf wat de leerling maakt.\n\n<details>\n<summary>Klik hier voor een tip</summary>\n\nSchrijf hier je tip.\n\n</details>\n';
+    try {
+      sessionStorage.setItem(
+        `nieuw:${site}:${details.path}`,
+        newPageTemplate(safeTitle, details.position) +
+          (template === 'exercise' ? exercise : ''),
+      );
+    } catch {
+      setError(
+        'Je browser kan het concept niet bewaren. Maak opslagruimte vrij of sta browseropslag toe.',
+      );
+      return;
+    }
     onClose();
     navigate(
-      `/sites/${site}/edit?path=${encodeURIComponent(fullPath)}&ref=${branch}&nieuw=1`,
+      `/sites/${site}/edit?${new URLSearchParams({ path: details.path, ref: branch, nieuw: '1' })}`,
     );
   }
-
   return (
-    <Modal opened={opened} onClose={onClose} title="Nieuwe pagina">
-      <Stack>
-        <Select label="Map" data={directories} value={directory} onChange={setDirectory} searchable />
-        <TextInput
-          label="Titel"
-          placeholder="bijv. 3.2 Herhalen met for"
-          value={title}
-          onChange={(e) => setTitle(e.currentTarget.value)}
-        />
-        {filename && (
-          <Text size="xs" c="dimmed">
-            Bestand: <code>{fullPath}</code> · sidebar_position: {sidebarPosition}
-          </Text>
-        )}
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
-            Annuleren
-          </Button>
-          <Button onClick={handleCreate} disabled={!filename}>
-            Openen in editor
-          </Button>
-        </Group>
-      </Stack>
+    <Modal opened={opened} onClose={onClose} title="Nieuwe lespagina">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          create();
+        }}
+      >
+        <Stack>
+          {error && <Alert color="red">{error}</Alert>}
+          <TextInput
+            label="Titel van de les"
+            placeholder="Bijvoorbeeld: Herhalen met for"
+            value={title}
+            onChange={(e) => setTitle(e.currentTarget.value)}
+            autoFocus
+            required
+            error={title && details.error ? details.error : undefined}
+          />
+          <Select
+            label="Map in de cursus"
+            data={directories}
+            value={directory}
+            onChange={setDirectory}
+            searchable
+          />
+          <Select
+            label="Begin met"
+            value={template}
+            onChange={setTemplate}
+            data={[
+              { value: 'blank', label: 'Lege lespagina' },
+              { value: 'exercise', label: 'Opdracht met leerdoel en tip' },
+            ]}
+          />
+          {title && !details.error && (
+            <Text size="xs" c="dimmed">
+              Bestand: {details.path} · plek in menu: {details.position}
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={onClose}>
+              Annuleren
+            </Button>
+            <Button type="submit" disabled={!!details.error}>
+              Openen in editor
+            </Button>
+          </Group>
+        </Stack>
+      </form>
     </Modal>
   );
 }

@@ -1,0 +1,62 @@
+.lesson-editor {
+  min-width: 0;
+}
+.lesson-editor .milkdown {
+  --crepe-font-default: var(--mantine-font-family);
+  --crepe-font-title: var(--mantine-font-family);
+  background: transparent;
+}
+.lesson-editor .milkdown .ProseMirror {
+  padding: 14px 34px;
+  min-height: 80px;
+}
+.lesson-editor .milkdown .ProseMirror h1 {
+  font-size: 2rem;
+}
+.lesson-editor .milkdown .ProseMirror p {
+  margin: 0.65em 0;
+}
+.lesson-block {
+  border-left: 3px solid var(--mantine-color-blue-5);
+}
+.lesson-block-tip {
+  border-left-color: var(--mantine-color-green-6);
+}
+.lesson-editor-nested {
+  padding-top: 4px;
+}
+.editor-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.editor-pane {
+  min-width: 0;
+  padding: 16px;
+}
+.editor-page {
+  min-width: 0;
+}
+.editor-path {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 70em) {
+  .editor-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .editor-preview-secondary {
+    display: none;
+  }
+}
+@media (max-width: 36em) {
+  .editor-pane {
+    padding: 10px;
+  }
+  .lesson-editor .milkdown .ProseMirror {
+    padding: 10px 22px;
+  }
+  .editor-toolbar {
+    align-items: flex-start;
+  }
+}

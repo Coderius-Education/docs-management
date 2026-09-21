@@ -2,6 +2,8 @@
 
 Date: 2026-09-21. Audited application: `docs-management`, commit `f9f066a`.
 
+Implementation follow-up: the approved improvements are now implemented and locally verified. This document retains the original findings; see the [execution record](../superpowers/plans/2026-09-21-teacher-authoring.md) for changes, test results, and remaining limits.
+
 ## Verdict
 
 The portal has a useful Markdown editor foundation, but the current implementation is not ready for teachers to reliably create and maintain the repository's existing lesson materials visually. Content synchronization, MDX coverage, preview fidelity, and save continuity need attention before cosmetic polish.

@@ -15,3 +15,7 @@ stack.env
 
 # Lokale data
 data/
+
+# Browser test output
+frontend/test-results/
+frontend/playwright-report/

@@ -1,165 +1,411 @@
 import {
+  Alert,
   Badge,
   Button,
   Group,
   Loader,
-  Menu,
+  Modal,
   Paper,
-  ScrollArea,
   SegmentedControl,
   Stack,
   Text,
+  Title,
 } from '@mantine/core';
-import { IconChevronDown, IconDeviceFloppy } from '@tabler/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
-
-import { usePage } from '../api/hooks';
-import { FrontmatterForm } from '../components/editor/FrontmatterForm';
-import { RawEditor, type ReactCodeMirrorRef } from '../components/editor/RawEditor';
-import { siteSnippets } from '../components/editor/snippets';
-import { WysiwygEditor } from '../components/editor/WysiwygEditor';
-import { SaveModal } from '../components/SaveModal';
 import {
-  hasMdxConstructs,
-  joinFrontmatter,
-  type SplitDoc,
-  splitFrontmatter,
-} from '../lib/frontmatter';
+  useBlocker,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router';
+import { useMe, usePage, useSites, usePreviews } from '../api/hooks';
+import { FrontmatterForm } from '../components/editor/FrontmatterForm';
+import { LessonEditor } from '../components/editor/LessonEditor';
+import { RawEditor } from '../components/editor/RawEditor';
+import { SaveModal, type SavedPage } from '../components/SaveModal';
+import { joinFrontmatter, splitFrontmatter } from '../lib/frontmatter';
 import { MdxPreview } from '../lib/mdx-preview/MdxPreview';
+import {
+  readRecovery,
+  recoveryKey,
+  writeRecovery,
+  clearRecovery,
+} from '../lib/authoring/session';
+import { imageProblems } from '../lib/authoring/assets';
+import { parseLesson } from '../lib/authoring/document';
 
 export function EditorPage() {
   const { site = '' } = useParams();
-  const [searchParams] = useSearchParams();
-  const path = searchParams.get('path') ?? '';
-  const ref = searchParams.get('ref') ?? 'main';
-  const isNew = searchParams.get('nieuw') === '1';
-  const cmRef = useRef<ReactCodeMirrorRef>(null);
-
-  const { data: page, isLoading } = usePage(site, isNew ? null : path, ref);
-
-  // Bron van waarheid: frontmatter-object + body-tekst (+ origineel voor nul-diff).
-  const [splitDoc, setSplitDoc] = useState<SplitDoc | null>(null);
-  const [frontmatter, setFrontmatter] = useState<Record<string, unknown>>({});
-  const [body, setBody] = useState('');
-  const [loaded, setLoaded] = useState(false);
-  const [mode, setMode] = useState<'wysiwyg' | 'raw'>('raw');
-  const [saveOpen, setSaveOpen] = useState(false);
-
-  useEffect(() => {
-    if (isNew && !loaded) {
-      const template = sessionStorage.getItem(`nieuw:${site}:${path}`) ?? '';
-      const split = splitFrontmatter(template);
-      setSplitDoc(split);
-      setFrontmatter(split.frontmatter);
-      setBody(split.body);
-      setLoaded(true);
-      setMode('wysiwyg');
-    } else if (page && !loaded) {
-      const split = splitFrontmatter(page.content);
-      setSplitDoc(split);
-      setFrontmatter(split.frontmatter);
-      setBody(split.body);
-      setLoaded(true);
-      setMode(hasMdxConstructs(split.body) ? 'raw' : 'wysiwyg');
-    }
-  }, [page, isNew, loaded, site, path]);
-
-  const mdxLocked = useMemo(() => hasMdxConstructs(body), [body]);
-  const newContent = useMemo(
-    () => (splitDoc ? joinFrontmatter(splitDoc, frontmatter, body) : body),
-    [splitDoc, frontmatter, body],
-  );
-  const originalContent = page?.content ?? '';
-  const dirty = isNew || newContent !== originalContent;
-
-  function insertSnippet(content: string) {
-    if (mode === 'raw' && cmRef.current?.view) {
-      const view = cmRef.current.view;
-      const pos = view.state.selection.main.head;
-      view.dispatch({ changes: { from: pos, insert: content } });
-      // body-state volgt via onChange van CodeMirror
-    } else {
-      setBody((prev) => `${prev.replace(/\n+$/, '')}\n\n${content}`);
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const path = params.get('path') ?? '';
+  const branch = params.get('ref') ?? 'main';
+  const isNew = params.get('nieuw') === '1';
+  const {
+    data: page,
+    isLoading,
+    error,
+    refetch,
+  } = usePage(site, isNew || !path ? null : path, branch);
+  const { data: me } = useMe();
+  if (!path)
+    return <Alert color="orange">Kies eerst een pagina om te bewerken.</Alert>;
+  if (!isNew && isLoading) return <Loader aria-label="Pagina laden" />;
+  if (!isNew && (!page || error))
+    return (
+      <Alert color="red" title="Pagina niet geladen">
+        <Text>{String(error ?? 'Pagina niet gevonden.')}</Text>
+        <Button onClick={() => void refetch()}>Opnieuw proberen</Button>
+      </Alert>
+    );
+  let template = '';
+  if (isNew) {
+    try {
+      template = sessionStorage.getItem(`nieuw:${site}:${path}`) ?? '';
+    } catch {
+      return (
+        <Alert color="orange">
+          Het nieuwe concept kon niet worden geladen. Open de pagina opnieuw
+          vanuit Nieuwe pagina.
+        </Alert>
+      );
     }
   }
-
-  if (isLoading) return <Loader />;
-
+  const identity =
+    location.state?.editorSession ??
+    JSON.stringify([site, path, branch, isNew]);
   return (
-    <Stack gap="xs" h="calc(100vh - 92px)">
-      <Group justify="space-between">
+    <EditorSession
+      key={identity}
+      identity={identity}
+      user={me?.login ?? 'unknown'}
+      site={site}
+      path={path}
+      initialBranch={branch}
+      initialContent={isNew ? template : page!.content}
+      initialSha={isNew ? null : page!.sha}
+      isNew={isNew}
+    />
+  );
+}
+function EditorSession({
+  identity,
+  user,
+  site,
+  path,
+  initialBranch,
+  initialContent,
+  initialSha,
+  isNew,
+}: {
+  identity: string;
+  user: string;
+  site: string;
+  path: string;
+  initialBranch: string;
+  initialContent: string;
+  initialSha: string | null;
+  isNew: boolean;
+}) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { data: sites } = useSites();
+  const { data: previews } = usePreviews();
+  const [content, setContent] = useState(initialContent);
+  const current = useRef(content);
+  current.current = content;
+  const [baseline, setBaseline] = useState({
+    content: isNew ? '' : initialContent,
+    sha: initialSha,
+    branch: initialBranch,
+  });
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [mode, setMode] = useState('visual');
+  const [storageError, setStorageError] = useState('');
+  const key = recoveryKey(user, site, baseline.branch, path);
+  const [recovery, setRecovery] = useState(() => {
+    try {
+      const saved = readRecovery(localStorage, key);
+      return saved?.content !== initialContent ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const split = useMemo(() => splitFrontmatter(content), [content]);
+  const parseError = useMemo(
+    () => split.error ?? parseLesson(split.body, site).error,
+    [split.body, split.error, site],
+  );
+  const dirty = content !== baseline.content;
+  const imagesInvalid = useMemo(
+    () => imageProblems(split.body).length > 0,
+    [split.body],
+  );
+  const adoptedBranch = useRef<string | null>(null);
+  const blocker = useBlocker(({ nextLocation }) => {
+    const params = new URLSearchParams(nextLocation.search);
+    return (
+      dirty &&
+      !(
+        nextLocation.state?.editorSession === identity &&
+        params.get('ref') === adoptedBranch.current &&
+        params.get('path') === path
+      )
+    );
+  });
+  useEffect(() => {
+    function beforeUnload(event: BeforeUnloadEvent) {
+      if (dirty) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    }
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [dirty]);
+  useEffect(() => {
+    if (recovery) return;
+    try {
+      if (dirty) writeRecovery(localStorage, key, content, baseline.sha);
+      else clearRecovery(localStorage, key, content);
+      setStorageError('');
+    } catch {
+      setStorageError(
+        'Automatisch herstel opslaan lukt niet in deze browser. Bewaar je wijzigingen met Opslaan.',
+      );
+    }
+  }, [key, content, dirty, baseline.sha, recovery]);
+  function saved(result: SavedPage) {
+    const newKey = recoveryKey(user, site, result.branch, path);
+    try {
+      if (current.current !== result.content)
+        writeRecovery(localStorage, newKey, current.current, result.sha);
+      else clearRecovery(localStorage, newKey, result.content);
+      if (newKey !== key) {
+        clearRecovery(localStorage, key, current.current);
+        clearRecovery(localStorage, key, result.content);
+      }
+      sessionStorage.removeItem(`nieuw:${site}:${path}`);
+    } catch {
+      setStorageError(
+        'Het concept is opgeslagen, maar de lokale herstelkopie kon niet worden bijgewerkt.',
+      );
+    }
+    setBaseline(result);
+    qc.setQueryData(['page', site, path, result.branch], {
+      content: result.content,
+      sha: result.sha,
+      path,
+      ref: result.branch,
+    });
+    adoptedBranch.current = result.branch;
+    navigate(
+      {
+        pathname: `/sites/${site}/edit`,
+        search: `?${new URLSearchParams({ path, ref: result.branch })}`,
+      },
+      { replace: true, state: { editorSession: identity } },
+    );
+  }
+  const siteInfo = sites?.find((s) => s.slug === site);
+  const previewOrigin = previews?.find(
+    (p) => p.site === site && p.branch === baseline.branch,
+  )?.url;
+  const preview = split.error ? (
+    <Alert color="orange">{split.error}</Alert>
+  ) : (
+    <MdxPreview
+      body={split.body}
+      site={site}
+      domain={siteInfo?.domain}
+      path={path}
+      branch={baseline.branch}
+      previewOrigin={previewOrigin}
+      title={
+        typeof split.frontmatter.title === 'string'
+          ? split.frontmatter.title
+          : undefined
+      }
+    />
+  );
+  return (
+    <Stack gap="md" className="editor-page">
+      <Group justify="space-between" className="editor-toolbar">
+        <div>
+          <Title order={3}>Lesmateriaal bewerken</Title>
+          <Text size="xs" c="dimmed" className="editor-path">
+            {siteInfo?.display_name ?? site} / {path}
+          </Text>
+        </div>
         <Group gap="xs">
-          <Text fw={600}>{path}</Text>
-          <Badge variant="light">{ref}</Badge>
-          {isNew && <Badge color="green">nieuw</Badge>}
-        </Group>
-        <Group gap="xs">
-          <Menu>
-            <Menu.Target>
-              <Button variant="default" size="xs" rightSection={<IconChevronDown size={14} />}>
-                Snippet invoegen
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              {siteSnippets(site).map((snippet) => (
-                <Menu.Item key={snippet.label} onClick={() => insertSnippet(snippet.content)}>
-                  {snippet.label}
-                </Menu.Item>
-              ))}
-            </Menu.Dropdown>
-          </Menu>
-          <SegmentedControl
-            size="xs"
-            value={mode}
-            onChange={(v) => setMode(v as 'wysiwyg' | 'raw')}
-            data={[
-              { label: 'Visueel', value: 'wysiwyg', disabled: mdxLocked },
-              { label: 'MDX', value: 'raw' },
-            ]}
-          />
+          {previewOrigin && (
+            <Button
+              size="xs"
+              variant="subtle"
+              component="a"
+              href={previewOrigin}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Cursusvoorbeeld
+            </Button>
+          )}
+          <Badge variant="light">{baseline.branch}</Badge>
+          <Text size="sm" role="status">
+            {dirty ? 'Niet opgeslagen' : 'Opgeslagen'}
+          </Text>
           <Button
-            size="xs"
-            leftSection={<IconDeviceFloppy size={14} />}
-            disabled={!dirty}
+            disabled={!dirty || !!recovery || imagesInvalid}
             onClick={() => setSaveOpen(true)}
           >
             Opslaan…
           </Button>
         </Group>
       </Group>
-
-      <Paper withBorder p="xs">
-        <FrontmatterForm value={frontmatter} onChange={setFrontmatter} />
-      </Paper>
-
-      <Group grow align="stretch" style={{ flex: 1, minHeight: 0 }}>
-        <Paper withBorder style={{ overflow: 'hidden', height: '100%' }}>
-          {mode === 'raw' ? (
-            <ScrollArea h="100%">
-              <RawEditor ref={cmRef} value={body} onChange={setBody} />
-            </ScrollArea>
-          ) : (
-            <WysiwygEditor initialValue={body} onChange={setBody} />
-          )}
+      {imagesInvalid && (
+        <Alert color="orange">
+          Een afbeelding gebruikt een tijdelijke of ongeldige URL. Vervang deze
+          via Broncode door een bestaande cursusafbeelding of HTTPS-URL voordat
+          je opslaat.
+        </Alert>
+      )}
+      {storageError && <Alert color="orange">{storageError}</Alert>}
+      {recovery && (
+        <Alert color="blue" title="Er is een herstelkopie beschikbaar">
+          <Text size="sm">
+            {recovery.baseSha !== initialSha
+              ? 'De opgeslagen pagina is intussen gewijzigd. Controleer je herstelkopie voor je opslaat.'
+              : 'Wil je verdergaan met je niet-opgeslagen wijzigingen?'}
+          </Text>
+          <Group mt="xs">
+            <Button
+              size="xs"
+              onClick={() => {
+                setContent(recovery.content);
+                setRecovery(null);
+              }}
+            >
+              Concept herstellen
+            </Button>
+            <Button
+              size="xs"
+              variant="default"
+              onClick={() => {
+                try {
+                  clearRecovery(localStorage, key, recovery.content);
+                } catch {
+                  setStorageError('Herstelkopie kon niet worden verwijderd.');
+                }
+                setRecovery(null);
+              }}
+            >
+              Opgeslagen versie gebruiken
+            </Button>
+          </Group>
+        </Alert>
+      )}
+      {!split.error && (
+        <Paper withBorder p="sm">
+          <FrontmatterForm
+            value={split.frontmatter}
+            onChange={(fm) =>
+              setContent(joinFrontmatter(split, fm, split.body))
+            }
+          />
         </Paper>
-        <Paper withBorder p="md" style={{ overflow: 'hidden', height: '100%' }}>
-          <ScrollArea h="100%">
-            <MdxPreview body={body} />
-          </ScrollArea>
-        </Paper>
-      </Group>
-
-      <SaveModal
-        opened={saveOpen}
-        onClose={() => setSaveOpen(false)}
-        site={site}
-        path={path}
-        originalContent={originalContent}
-        newContent={newContent}
-        sha={isNew ? null : (page?.sha ?? null)}
-        currentBranch={ref}
+      )}
+      <SegmentedControl
+        aria-label="Editorweergave"
+        value={mode}
+        onChange={setMode}
+        data={[
+          { value: 'visual', label: 'Bewerken' },
+          { value: 'preview', label: 'Voorbeeld' },
+          { value: 'raw', label: 'Broncode' },
+        ]}
       />
+      {!recovery && (
+        <div className={mode === 'preview' ? '' : 'editor-workspace'}>
+          <Paper withBorder className="editor-pane">
+            {mode === 'preview' ? (
+              preview
+            ) : mode === 'raw' ? (
+              <RawEditor value={content} onChange={setContent} />
+            ) : parseError ? (
+              <Alert
+                color="orange"
+                title="Open de broncode om deze pagina te corrigeren"
+              >
+                <Text size="sm">{parseError}</Text>
+                <Button size="xs" mt="xs" onClick={() => setMode('raw')}>
+                  Broncode openen
+                </Button>
+              </Alert>
+            ) : (
+              <LessonEditor
+                assetContext={{
+                  domain: siteInfo?.domain,
+                  path,
+                  branch: baseline.branch,
+                  previewOrigin,
+                }}
+                site={site}
+                value={split.body}
+                onChange={(body) =>
+                  setContent(joinFrontmatter(split, split.frontmatter, body))
+                }
+              />
+            )}
+          </Paper>
+          {mode !== 'preview' && (
+            <Paper withBorder className="editor-pane editor-preview-secondary">
+              {preview}
+            </Paper>
+          )}
+        </div>
+      )}
+      {saveOpen && (
+        <SaveModal
+          opened
+          onClose={() => setSaveOpen(false)}
+          site={site}
+          path={path}
+          originalContent={baseline.content}
+          newContent={content}
+          sha={baseline.sha}
+          currentBranch={baseline.branch}
+          onSaved={saved}
+        />
+      )}
+      <Modal
+        opened={blocker.state === 'blocked'}
+        onClose={() => blocker.state === 'blocked' && blocker.reset()}
+        title="Niet-opgeslagen wijzigingen"
+      >
+        <Stack>
+          <Text>
+            Je wijzigingen zijn nog niet op de server opgeslagen.
+            {!storageError &&
+              ' Een herstelkopie blijft in deze browser beschikbaar.'}
+          </Text>
+          <Group>
+            <Button
+              variant="default"
+              onClick={() => blocker.state === 'blocked' && blocker.reset()}
+            >
+              Verder bewerken
+            </Button>
+            <Button
+              color="orange"
+              onClick={() => blocker.state === 'blocked' && blocker.proceed()}
+            >
+              Pagina verlaten
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
