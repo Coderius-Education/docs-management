@@ -1,6 +1,7 @@
 import { parseTree, type LessonNode } from './syntax';
 import { attributes, literal } from './components';
 export interface AssetContext {
+  site?: string;
   domain?: string;
   path?: string;
   branch?: string;
@@ -21,6 +22,34 @@ export function resolveAsset(
 ): string | undefined {
   if (!persistentImage(url)) return undefined;
   if (/^https?:\/\//i.test(url)) return url;
+  if (
+    context.site &&
+    context.path &&
+    !url.startsWith('/') &&
+    !url.startsWith('@')
+  ) {
+    try {
+      // Source-relative raster images can be read directly from the selected branch.
+      const base = new URL(
+        context.path.split('/').map(encodeURIComponent).join('/'),
+        'https://lesson.invalid/',
+      );
+      const target = new URL(url, base);
+      if (
+        target.origin === base.origin &&
+        /\.(png|jpe?g|gif|webp)$/i.test(target.pathname)
+      ) {
+        return `/api/sites/${encodeURIComponent(context.site)}/assets?${new URLSearchParams(
+          {
+            path: decodeURIComponent(target.pathname.slice(1)),
+            ref: context.branch ?? 'main',
+          },
+        )}`;
+      }
+    } catch {
+      return undefined;
+    }
+  }
   const origin =
     context.branch && context.branch !== 'main'
       ? context.previewOrigin

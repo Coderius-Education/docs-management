@@ -212,7 +212,9 @@ test('inserts a nested callout without moving preserved siblings outside its par
   await page
     .getByRole('menuitem', { name: 'Informatie (callout)', exact: true })
     .click();
-  await expect(page.getByRole('textbox', { name: 'Soort blok', exact: true })).toHaveCount(2);
+  await expect(
+    page.getByRole('textbox', { name: 'Soort blok', exact: true }),
+  ).toHaveCount(2);
   await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
@@ -481,4 +483,232 @@ test('invalid frontmatter stays in source recovery instead of entering Markdown 
   await expect(
     page.getByRole('button', { name: 'Opslaan…', exact: true }),
   ).toBeDisabled();
+});
+
+const uploadPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+  'base64',
+);
+
+test('uploads an image to a new draft from main, previews it and saves the lesson on that branch', async ({
+  page,
+}) => {
+  const saves = await mockPortal(page);
+  let uploaded = '';
+  let createdBranch = '';
+  await page.route('**/api/branches', async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      expect(body.from_branch).toBe('main');
+      createdBranch = body.name;
+      await route.fulfill({ json: { name: body.name, sha: 'main' } });
+    } else
+      await route.fulfill({
+        json: [
+          { name: 'main', sha: 'main' },
+          { name: createdBranch, sha: 'b' },
+          { name: 'other-draft', sha: 'c' },
+        ],
+      });
+  });
+  await page.route(
+    (url) => url.pathname.endsWith('/assets'),
+    async (route) => {
+      if (route.request().method() === 'POST') {
+        uploaded = route.request().postDataBuffer()!.toString('latin1');
+        expect(route.request().headers()['x-csrf-token']).toBe('test');
+        await route.fulfill({
+          json: {
+            path: 'diagram-1234567890abcdef.png',
+            url: './diagram-1234567890abcdef.png',
+            commit_sha: 'image-commit',
+          },
+        });
+      } else await route.fulfill({ body: uploadPng, contentType: 'image/png' });
+    },
+  );
+  await page.goto('/sites/python/edit?path=les.mdx');
+  await page
+    .getByRole('button', { name: 'Blok toevoegen', exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: /Afbeelding/ }).click();
+  await page.getByLabel('Afbeeldingsbestand', { exact: true }).setInputFiles({
+    name: 'diagram.png',
+    mimeType: 'image/png',
+    buffer: uploadPng,
+  });
+  await page
+    .getByLabel('Alternatieve tekst', { exact: true })
+    .fill('Schema van de les');
+  await page
+    .getByRole('button', { name: 'Uploaden en invoegen', exact: true })
+    .click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  expect(createdBranch).toMatch(/^docs\//);
+  expect(uploaded).toContain(createdBranch);
+  expect(uploaded).toContain('diagram.png');
+  await expect(page).toHaveURL(/ref=docs%2F/);
+  const img = page.locator('.mdx-preview img');
+  await expect(img).toHaveAttribute('alt', 'Schema van de les');
+  await expect
+    .poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth))
+    .toBe(1);
+  await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'Conceptversie (branch)', exact: true })
+    .click();
+  await expect(
+    page.getByRole('option', { name: createdBranch, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('option', { name: 'other-draft', exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('button', { name: 'Concept opslaan', exact: true })
+    .click();
+  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  expect(saves[0]).toMatchObject({ branch: createdBranch, sha: 'sha-1' });
+  expect(saves[0].content).toContain('./diagram-1234567890abcdef.png');
+  expect(saves[0].content).not.toContain('blob:');
+});
+
+test('an upload failure keeps the selected file and text for retry inside a nested block', async ({
+  page,
+}) => {
+  const saves = await mockPortal(
+    page,
+    '<details>\n<summary>Tip</summary>\n\nExisting text\n\n</details>',
+  );
+  let attempts = 0;
+  await page.route(
+    (url) => url.pathname.endsWith('/assets'),
+    async (route) => {
+      if (route.request().method() !== 'POST')
+        return route.fulfill({ body: uploadPng, contentType: 'image/png' });
+      attempts++;
+      await route.fulfill(
+        attempts === 1
+          ? { status: 502, json: { detail: 'Upload mislukt' } }
+          : {
+              json: {
+                path: 'image-1234567890abcdef.png',
+                url: './image-1234567890abcdef.png',
+                commit_sha: 'i',
+              },
+            },
+      );
+    },
+  );
+  await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
+  await page
+    .locator('.lesson-editor-nested')
+    .getByRole('button', { name: 'Blok toevoegen', exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: /Afbeelding/ }).click();
+  await page.getByLabel('Afbeeldingsbestand', { exact: true }).setInputFiles({
+    name: 'image.png',
+    mimeType: 'image/png',
+    buffer: uploadPng,
+  });
+  await page
+    .getByLabel('Alternatieve tekst', { exact: true })
+    .fill('Nested image');
+  await page
+    .getByRole('button', { name: 'Uploaden en invoegen', exact: true })
+    .click();
+  await expect(page.getByRole('dialog')).toContainText('Upload mislukt');
+  await expect(
+    page.getByLabel('Alternatieve tekst', { exact: true }),
+  ).toHaveValue('Nested image');
+  await page
+    .getByRole('button', { name: 'Uploaden en invoegen', exact: true })
+    .click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Concept opslaan', exact: true })
+    .click();
+  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  expect(saves[0].content).toMatch(
+    /Existing text[\s\S]*image-1234567890abcdef.png[\s\S]*<\/details>/,
+  );
+  expect(saves[0].branch).toBe('lesson');
+});
+
+test('a new unsaved lesson retains its uploaded image and draft branch after recovery', async ({
+  page,
+}) => {
+  const saves = await mockPortal(page);
+  let branch = '';
+  await page.addInitScript(() =>
+    sessionStorage.setItem(
+      'nieuw:python:folder/new.mdx',
+      '# New lesson\n\nUnsaved text',
+    ),
+  );
+  await page.route('**/api/branches', async (route) => {
+    if (route.request().method() === 'POST') {
+      branch = route.request().postDataJSON().name;
+      await route.fulfill({ json: { name: branch, sha: 'base' } });
+    } else
+      await route.fulfill({
+        json: [
+          { name: 'main', sha: 'base' },
+          { name: branch, sha: 'base' },
+        ],
+      });
+  });
+  await page.route(
+    (url) => url.pathname.endsWith('/assets'),
+    async (route) => {
+      if (route.request().method() === 'POST') {
+        expect(route.request().postData()).toContain('folder');
+        await route.fulfill({
+          json: {
+            url: './new-1234567890abcdef.png',
+            path: 'folder/new-1234567890abcdef.png',
+            commit_sha: 'image',
+          },
+        });
+      } else await route.fulfill({ body: uploadPng, contentType: 'image/png' });
+    },
+  );
+  await page.goto('/sites/python/edit?path=folder%2Fnew.mdx&nieuw=1');
+  await page
+    .getByRole('button', { name: 'Blok toevoegen', exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: /Afbeelding/ }).click();
+  await page
+    .getByLabel('Afbeeldingsbestand', { exact: true })
+    .setInputFiles({
+      name: 'new.png',
+      mimeType: 'image/png',
+      buffer: uploadPng,
+    });
+  await page
+    .getByLabel('Alternatieve tekst', { exact: true })
+    .fill('New image');
+  await page
+    .getByRole('button', { name: 'Uploaden en invoegen', exact: true })
+    .click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page).toHaveURL(/nieuw=1/);
+  await page.reload();
+  await page
+    .getByRole('button', { name: 'Concept herstellen', exact: true })
+    .click();
+  await expect(page.locator('.mdx-preview')).toContainText('Unsaved text');
+  await expect(page.locator('.mdx-preview img')).toHaveAttribute(
+    'alt',
+    'New image',
+  );
+  await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Concept opslaan', exact: true })
+    .click();
+  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  expect(saves[0]).toMatchObject({ branch, sha: null, path: 'folder/new.mdx' });
+  expect(saves[0].content).toContain('Unsaved text');
+  expect(saves[0].content).toContain('./new-1234567890abcdef.png');
 });

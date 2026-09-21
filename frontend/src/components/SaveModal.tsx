@@ -12,12 +12,7 @@ import {
 import { createTwoFilesPatch } from 'diff';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  useBranches,
-  useCreateBranch,
-  useCreatePr,
-  useSavePage,
-} from '../api/git';
+import { useCreateBranch, useCreatePr, useSavePage } from '../api/git';
 import { ApiError } from '../api/client';
 import { DiffView } from './DiffView';
 export interface SavedPage {
@@ -47,7 +42,6 @@ export function SaveModal({
   onSaved: (result: SavedPage) => void;
 }) {
   const navigate = useNavigate();
-  const { data: branches } = useBranches();
   const createBranch = useCreateBranch();
   const savePage = useSavePage(site);
   const createPr = useCreatePr();
@@ -165,17 +159,13 @@ export function SaveModal({
             <DiffView patch={diff} maxHeight={220} />
             <Select
               label="Conceptversie (branch)"
+              description="Bewaar in dit concept of maak er een kopie van, inclusief afbeeldingen."
               value={selection}
               onChange={setSelection}
               disabled={saving}
               data={[
                 { value: '__new__', label: 'Nieuw concept maken' },
-                ...Array.from(
-                  new Set([
-                    currentBranch,
-                    ...(branches ?? []).map((b) => b.name),
-                  ]),
-                )
+                ...[currentBranch]
                   .filter((b) => b !== 'main')
                   .map((b) => ({ value: b, label: b })),
               ]}

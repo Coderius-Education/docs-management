@@ -93,6 +93,25 @@ export function useSavePage(site: string) {
   });
 }
 
+export function uploadImage(
+  site: string,
+  branch: string,
+  path: string,
+  file: File,
+) {
+  const body = new FormData();
+  body.set('branch', branch);
+  body.set(
+    'directory',
+    path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '',
+  );
+  body.set('file', file);
+  return api<{ url: string; path: string; commit_sha: string | null }>(
+    `/api/sites/${site}/assets`,
+    { method: 'POST', body },
+  );
+}
+
 export function usePrs(state = 'open') {
   return useQuery({
     queryKey: ['prs', state],

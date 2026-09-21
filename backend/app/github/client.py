@@ -33,6 +33,7 @@ class GitHubClient:
         json: Any = None,
         params: dict | None = None,
         expect: tuple[int, ...] = (200,),
+        accept: str = "application/vnd.github+json",
     ) -> Any:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.request(
@@ -40,7 +41,7 @@ class GitHubClient:
                 f"{self._base}{path}",
                 json=json,
                 params=params,
-                headers=_headers(self._token),
+                headers={**_headers(self._token), "Accept": accept},
             )
         if resp.status_code not in expect:
             detail = "GitHub-fout"
@@ -56,8 +57,15 @@ class GitHubClient:
             return None
         return resp.json()
 
-    async def get(self, path: str, *, params: dict | None = None, expect=(200,)) -> Any:
-        return await self.request("GET", path, params=params, expect=expect)
+    async def get(
+        self,
+        path: str,
+        *,
+        params: dict | None = None,
+        expect=(200,),
+        accept: str = "application/vnd.github+json",
+    ) -> Any:
+        return await self.request("GET", path, params=params, expect=expect, accept=accept)
 
     async def post(self, path: str, *, json: Any = None, expect=(200, 201)) -> Any:
         return await self.request("POST", path, json=json, expect=expect)

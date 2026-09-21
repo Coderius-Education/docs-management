@@ -21,6 +21,7 @@ import {
   useSearchParams,
 } from 'react-router';
 import { useMe, usePage, useSites, usePreviews } from '../api/hooks';
+import { uploadImage, useCreateBranch } from '../api/git';
 import { FrontmatterForm } from '../components/editor/FrontmatterForm';
 import { LessonEditor } from '../components/editor/LessonEditor';
 import { RawEditor } from '../components/editor/RawEditor';
@@ -122,6 +123,9 @@ function EditorSession({
     branch: initialBranch,
   });
   const [saveOpen, setSaveOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const imageBranch = useRef<string | null>(null);
+  const createBranch = useCreateBranch();
   const [mode, setMode] = useState('visual');
   const [storageError, setStorageError] = useState('');
   const key = recoveryKey(user, site, baseline.branch, path);
@@ -147,7 +151,7 @@ function EditorSession({
   const blocker = useBlocker(({ nextLocation }) => {
     const params = new URLSearchParams(nextLocation.search);
     return (
-      dirty &&
+      (dirty || uploading) &&
       !(
         nextLocation.state?.editorSession === identity &&
         params.get('ref') === adoptedBranch.current &&
@@ -157,14 +161,14 @@ function EditorSession({
   });
   useEffect(() => {
     function beforeUnload(event: BeforeUnloadEvent) {
-      if (dirty) {
+      if (dirty || uploading) {
         event.preventDefault();
         event.returnValue = '';
       }
     }
     window.addEventListener('beforeunload', beforeUnload);
     return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [dirty]);
+  }, [dirty, uploading]);
   useEffect(() => {
     if (recovery) return;
     try {
@@ -177,6 +181,55 @@ function EditorSession({
       );
     }
   }, [key, content, dirty, baseline.sha, recovery]);
+  async function upload(file: File) {
+    setUploading(true);
+    try {
+      let branch = baseline.branch;
+      if (branch === 'main') {
+        if (!imageBranch.current) {
+          const created = await createBranch.mutateAsync({
+            name: `docs/${site}-${crypto.randomUUID()}`,
+            from_branch: 'main',
+          });
+          imageBranch.current = created.name;
+        }
+        branch = imageBranch.current;
+      }
+      const result = await uploadImage(site, branch, path, file);
+      if (branch !== baseline.branch) {
+        try {
+          writeRecovery(
+            localStorage,
+            recoveryKey(user, site, branch, path),
+            current.current,
+            baseline.sha,
+          );
+          clearRecovery(localStorage, key, current.current);
+        } catch {
+          setStorageError(
+            'De afbeelding is opgeslagen, maar de lokale herstelkopie kon niet worden bijgewerkt.',
+          );
+        }
+        setBaseline((previous) => ({ ...previous, branch }));
+        qc.setQueryData(['page', site, path, branch], {
+          content: baseline.content,
+          sha: baseline.sha,
+          path,
+          ref: branch,
+        });
+        adoptedBranch.current = branch;
+        const params = new URLSearchParams({ path, ref: branch });
+        if (baseline.sha === null) params.set('nieuw', '1');
+        navigate(
+          { pathname: `/sites/${site}/edit`, search: `?${params}` },
+          { replace: true, state: { editorSession: identity } },
+        );
+      }
+      return result.url;
+    } finally {
+      setUploading(false);
+    }
+  }
   function saved(result: SavedPage) {
     const newKey = recoveryKey(user, site, result.branch, path);
     try {
@@ -257,7 +310,7 @@ function EditorSession({
             {dirty ? 'Niet opgeslagen' : 'Opgeslagen'}
           </Text>
           <Button
-            disabled={!dirty || !!recovery || imagesInvalid}
+            disabled={!dirty || !!recovery || imagesInvalid || uploading}
             onClick={() => setSaveOpen(true)}
           >
             Opslaan…
@@ -317,6 +370,7 @@ function EditorSession({
         </Paper>
       )}
       <SegmentedControl
+        disabled={uploading}
         aria-label="Editorweergave"
         value={mode}
         onChange={setMode}
@@ -345,7 +399,9 @@ function EditorSession({
               </Alert>
             ) : (
               <LessonEditor
+                onUploadImage={upload}
                 assetContext={{
+                  site,
                   domain: siteInfo?.domain,
                   path,
                   branch: baseline.branch,
@@ -399,6 +455,7 @@ function EditorSession({
             </Button>
             <Button
               color="orange"
+              disabled={uploading}
               onClick={() => blocker.state === 'blocked' && blocker.proceed()}
             >
               Pagina verlaten

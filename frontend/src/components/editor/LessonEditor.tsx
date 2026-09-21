@@ -10,8 +10,9 @@ import {
   Stack,
   Text,
   TextInput,
+  Divider,
 } from '@mantine/core';
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import {
   calloutTypes,
   parseLesson,
@@ -49,6 +50,7 @@ export function LessonEditor({
   nested = false,
   onInsertComponent,
   assetContext = {},
+  onUploadImage,
 }: {
   value: string;
   site: string;
@@ -57,6 +59,7 @@ export function LessonEditor({
   nested?: boolean;
   onInsertComponent?: (name: string, offset: number) => void;
   assetContext?: AssetContext;
+  onUploadImage?: (file: File) => Promise<string>;
 }) {
   const doc = useMemo(() => parseLesson(value, site), [value, site]);
   const imports = { ...inheritedImports, ...doc.imports };
@@ -66,6 +69,10 @@ export function LessonEditor({
   const [imageOpen, setImageOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageError, setImageError] = useState('');
+  const imageInputId = useId();
   const [failure, setFailure] = useState('');
   function edit(block: LessonBlock, text: string) {
     onChange(replaceRange(value, block, text));
@@ -185,8 +192,14 @@ export function LessonEditor({
                       {c.label}
                     </Menu.Item>
                   ))}
-                <Menu.Item onClick={() => setImageOpen(true)}>
-                  Afbeelding via URL
+                <Menu.Item
+                  onClick={() => {
+                    setImageFile(null);
+                    setImageError('');
+                    setImageOpen(true);
+                  }}
+                >
+                  Afbeelding
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
@@ -314,6 +327,7 @@ export function LessonEditor({
                         />
                         <LessonEditor
                           nested
+                          onUploadImage={onUploadImage}
                           assetContext={assetContext}
                           onInsertComponent={(name, offset) => {
                             if (onInsertComponent)
@@ -369,36 +383,96 @@ export function LessonEditor({
       </Modal>
       <Modal
         opened={imageOpen}
-        onClose={() => setImageOpen(false)}
+        onClose={() => !imageBusy && setImageOpen(false)}
+        closeOnEscape={!imageBusy}
+        closeOnClickOutside={!imageBusy}
+        withCloseButton={!imageBusy}
         title="Afbeelding toevoegen"
       >
         <Stack>
           <Text size="sm">
-            Gebruik een bestaande afbeelding op de cursuswebsite of een openbare
-            HTTPS-URL. Lokale bestanden uploaden is nog niet beschikbaar.
+            Upload een afbeelding of gebruik een bestaande afbeeldings-URL.
           </Text>
-          <TextInput
-            label="Afbeeldings-URL"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.currentTarget.value)}
-            placeholder="/img/voorbeeld.png"
-          />
+          {onUploadImage && (
+            <>
+              <Text component="label" size="sm" htmlFor={imageInputId}>
+                Afbeeldingsbestand
+              </Text>
+              <input
+                id={imageInputId}
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                disabled={imageBusy}
+                onChange={(e) => {
+                  setImageFile(e.currentTarget.files?.[0] ?? null);
+                  setImageError('');
+                }}
+              />
+              <Text size="xs" c="dimmed">
+                PNG, JPEG, GIF of WebP, maximaal 5 MB. Uploaden bewaart de
+                afbeelding meteen in je conceptversie. Sla daarna de les op om
+                de verwijzing te bewaren.
+              </Text>
+            </>
+          )}
+          {!imageFile && (
+            <>
+              <Divider label="Of via URL" />
+              <TextInput
+                label="Afbeeldings-URL"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.currentTarget.value)}
+                placeholder="/img/voorbeeld.png"
+              />
+            </>
+          )}
           <TextInput
             label="Alternatieve tekst"
             value={imageAlt}
+            disabled={imageBusy}
             onChange={(e) => setImageAlt(e.currentTarget.value)}
           />
+          {imageError && <Alert color="red">{imageError}</Alert>}
           <Button
-            disabled={!persistentImage(imageUrl) || !imageAlt.trim()}
-            onClick={() => {
-              insertText(
-                `![${escapeText(imageAlt)}](<${imageUrl.trim().replace(/[<>]/g, encodeURIComponent)}>)`,
-                true,
-              );
-              setImageOpen(false);
+            loading={imageBusy}
+            disabled={
+              (!imageFile && !persistentImage(imageUrl)) || !imageAlt.trim()
+            }
+            onClick={async () => {
+              if (imageBusy) return;
+              setImageError('');
+              if (
+                imageFile &&
+                (imageFile.size > 5 * 1024 * 1024 ||
+                  imageFile.size === 0 ||
+                  !/\.(png|jpe?g|gif|webp)$/i.test(imageFile.name))
+              ) {
+                setImageError(
+                  'Kies een PNG-, JPEG-, GIF- of WebP-afbeelding van maximaal 5 MB.',
+                );
+                return;
+              }
+              setImageBusy(true);
+              try {
+                const url = imageFile
+                  ? await onUploadImage!(imageFile)
+                  : imageUrl.trim();
+                insertText(
+                  `![${escapeText(imageAlt)}](<${url.replace(/[<>]/g, encodeURIComponent)}>)`,
+                  true,
+                );
+                setImageOpen(false);
+                setImageFile(null);
+                setImageUrl('');
+                setImageAlt('');
+              } catch (error) {
+                setImageError(String(error));
+              } finally {
+                setImageBusy(false);
+              }
             }}
           >
-            Afbeelding invoegen
+            {imageFile ? 'Uploaden en invoegen' : 'Afbeelding invoegen'}
           </Button>
         </Stack>
       </Modal>

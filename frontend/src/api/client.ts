@@ -17,19 +17,29 @@ export class ApiError extends Error {
 
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: unknown; params?: Record<string, string> } = {},
+  options: {
+    method?: string;
+    body?: unknown;
+    params?: Record<string, string>;
+  } = {},
 ): Promise<T> {
   const { method = 'GET', body, params } = options;
   const url = params ? `${path}?${new URLSearchParams(params)}` : path;
 
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const multipart = body instanceof FormData;
+  if (body !== undefined && !multipart)
+    headers['Content-Type'] = 'application/json';
   if (method !== 'GET' && csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
   const resp = await fetch(url, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: multipart
+      ? body
+      : body !== undefined
+        ? JSON.stringify(body)
+        : undefined,
   });
 
   if (resp.status === 401 && !path.startsWith('/api/auth/me')) {

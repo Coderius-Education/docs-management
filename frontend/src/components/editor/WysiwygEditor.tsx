@@ -40,6 +40,7 @@ export const WysiwygEditor = forwardRef<
   useEffect(() => {
     imageUpdates.current.forEach((update) => update());
   }, [
+    assetContext.site,
     assetContext.domain,
     assetContext.path,
     assetContext.branch,

@@ -68,6 +68,10 @@ Preview states are explicit: updating, current, and error. An error must not pre
 
 Image controls initially support persisted URLs and existing site assets with alternative text. Temporary `blob:` URLs must not be accepted as publishable assets. A repository upload service is outside this first implementation; the UI must make the available image workflow clear and must not expose a nonfunctional local upload affordance.
 
+Follow-up, 2026-09-21: at the user's request, image uploads now extend this initial scope. The existing asset endpoint commits PNG/JPEG/GIF/WebP files up to 5 MB alongside the lesson, using content-hashed names and the teacher's GitHub token. The visual editor inserts a relative URL and previews the image through an authenticated branch reader. Uploading from main creates a draft branch; saving stays on that branch or creates a copy including its assets. Images are committed immediately, while lesson changes use the existing Save action. Deleting a lesson reference does not delete the committed file.
+
+Upload verification: 75 backend tests, 39 frontend unit tests, 18 mocked-API Chromium scenarios, and the production build pass. Independent review identified the risk of saving references onto an unrelated branch; destination choices now preserve the source branch's assets. Tests cover image bytes, no overwrites, retry deduplication, limits/type checks, authentication/CSRF, immediate preview, branch adoption, nested insertion, recovery of new lessons, and URL escaping. No live GitHub writes were made during testing.
+
 ## Draft and save continuity
 
 Keep an explicit session baseline containing content, content SHA, branch, and document identity. A successful save updates all four and marks the exact saved snapshot clean. Edits made during a request remain dirty after that request completes. The save dialog resets for each new save attempt while retaining useful teacher inputs.
