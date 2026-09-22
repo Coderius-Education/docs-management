@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from './client';
+import { api } from "./client";
+import type { ContentScope } from "./types";
 
 export interface Branch {
   name: string;
@@ -43,7 +44,7 @@ export interface PrCommit {
 }
 
 export interface PrActivityEvent {
-  type: 'commit' | 'build' | 'opened' | 'merged' | 'closed';
+  type: "commit" | "build" | "opened" | "merged" | "closed";
   ts: string | null;
   sha?: string;
   message?: string;
@@ -55,8 +56,8 @@ export interface PrActivityEvent {
 
 export function useBranches() {
   return useQuery({
-    queryKey: ['branches'],
-    queryFn: () => api<Branch[]>('/api/branches'),
+    queryKey: ["branches"],
+    queryFn: () => api<Branch[]>("/api/branches"),
   });
 }
 
@@ -64,8 +65,8 @@ export function useCreateBranch() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { name: string; from_branch: string }) =>
-      api<Branch>('/api/branches', { method: 'POST', body: payload }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['branches'] }),
+      api<Branch>("/api/branches", { method: "POST", body: payload }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["branches"] }),
   });
 }
 
@@ -74,6 +75,7 @@ export function useSavePage(site: string) {
   return useMutation({
     mutationFn: (payload: {
       path: string;
+      scope?: ContentScope;
       branch: string;
       content: string;
       message: string;
@@ -82,13 +84,13 @@ export function useSavePage(site: string) {
       api<{ commit_sha: string; content_sha: string }>(
         `/api/sites/${site}/page`,
         {
-          method: 'PUT',
+          method: "PUT",
           body: payload,
         },
       ),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['page', site, vars.path] });
-      qc.invalidateQueries({ queryKey: ['tree', site] });
+      qc.invalidateQueries({ queryKey: ["page", site, vars.path] });
+      qc.invalidateQueries({ queryKey: ["tree", site] });
     },
   });
 }
@@ -98,30 +100,32 @@ export function uploadImage(
   branch: string,
   path: string,
   file: File,
+  scope: ContentScope = "docs",
 ) {
   const body = new FormData();
-  body.set('branch', branch);
+  body.set("branch", branch);
+  body.set("scope", scope);
   body.set(
-    'directory',
-    path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '',
+    "directory",
+    path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "",
   );
-  body.set('file', file);
+  body.set("file", file);
   return api<{ url: string; path: string; commit_sha: string | null }>(
     `/api/sites/${site}/assets`,
-    { method: 'POST', body },
+    { method: "POST", body },
   );
 }
 
-export function usePrs(state = 'open') {
+export function usePrs(state = "open") {
   return useQuery({
-    queryKey: ['prs', state],
-    queryFn: () => api<PrSummary[]>('/api/prs', { params: { state } }),
+    queryKey: ["prs", state],
+    queryFn: () => api<PrSummary[]>("/api/prs", { params: { state } }),
   });
 }
 
 export function usePr(number: number) {
   return useQuery({
-    queryKey: ['pr', number],
+    queryKey: ["pr", number],
     queryFn: () => api<PrDetail>(`/api/prs/${number}`),
     refetchInterval: 30_000, // checks/builds veranderen terwijl je kijkt
   });
@@ -129,21 +133,21 @@ export function usePr(number: number) {
 
 export function usePrFiles(number: number) {
   return useQuery({
-    queryKey: ['pr', number, 'files'],
+    queryKey: ["pr", number, "files"],
     queryFn: () => api<PrFile[]>(`/api/prs/${number}/files`),
   });
 }
 
 export function usePrCommits(number: number) {
   return useQuery({
-    queryKey: ['pr', number, 'commits'],
+    queryKey: ["pr", number, "commits"],
     queryFn: () => api<PrCommit[]>(`/api/prs/${number}/commits`),
   });
 }
 
 export function usePrActivity(number: number) {
   return useQuery({
-    queryKey: ['pr', number, 'activity'],
+    queryKey: ["pr", number, "activity"],
     queryFn: () => api<PrActivityEvent[]>(`/api/prs/${number}/activity`),
     refetchInterval: 30_000, // builds verschijnen terwijl CI loopt
   });
@@ -153,8 +157,8 @@ export function useCreatePr() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { branch: string; title: string; body?: string }) =>
-      api<PrSummary>('/api/prs', { method: 'POST', body: payload }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['prs'] }),
+      api<PrSummary>("/api/prs", { method: "POST", body: payload }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prs"] }),
   });
 }
 
@@ -163,12 +167,12 @@ export function useMergePr(number: number) {
   return useMutation({
     mutationFn: () =>
       api<{ merged: boolean }>(`/api/prs/${number}/merge`, {
-        method: 'POST',
+        method: "POST",
         body: {},
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['prs'] });
-      qc.invalidateQueries({ queryKey: ['pr', number] });
+      qc.invalidateQueries({ queryKey: ["prs"] });
+      qc.invalidateQueries({ queryKey: ["pr", number] });
     },
   });
 }
@@ -177,10 +181,10 @@ export function useClosePr(number: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () =>
-      api(`/api/prs/${number}/close`, { method: 'POST', body: {} }),
+      api(`/api/prs/${number}/close`, { method: "POST", body: {} }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['prs'] });
-      qc.invalidateQueries({ queryKey: ['pr', number] });
+      qc.invalidateQueries({ queryKey: ["prs"] });
+      qc.invalidateQueries({ queryKey: ["pr", number] });
     },
   });
 }

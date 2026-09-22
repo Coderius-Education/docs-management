@@ -1,0 +1,30 @@
+---
+---
+
+import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
+
+<Hero title="Coderius Fullstack">
+  <Buttons>
+    <Button href="/docs/FastAPI/installatie">Begin met FastAPI</Button>
+  </Buttons>
+</Hero>
+
+<Section title="Waar wil je mee aan de slag?">
+  <Columns count={3}>
+    <Card title="Je eerste endpoint" href="/docs/FastAPI/eerste_endpoint">
+
+      Bouw je eerste API-route met FastAPI.
+
+    </Card>
+    <Card title="Database" href="/docs/FastAPI/database">
+
+      Sla gegevens op en haal ze weer op met SQLite.
+
+    </Card>
+    <Card title="Cheatsheet" href="/docs/cheatsheet">
+
+      Snel terugvinden hoe een route, form of template werkt.
+
+    </Card>
+  </Columns>
+</Section>

@@ -10,6 +10,9 @@ import { componentModel } from '../authoring/components';
 import { attributes } from '../authoring/components';
 import { resolveAsset, type AssetContext } from '../authoring/assets';
 import { textContent, type LessonNode } from '../authoring/syntax';
+import { CodePreview, HeadingPreview, TabsPreview } from './ContentPreview';
+import { tabsModel } from '../authoring/content';
+import { modelForNode, sectionBindings } from '../authoring/homepage';
 import './MdxPreview.css';
 
 export interface PreviewContext extends AssetContext {
@@ -24,12 +27,15 @@ export function renderLesson(
   const doc = parseLesson(source, context.site ?? '');
   if (doc.error)
     return <div role="alert">Voorbeeld niet beschikbaar: {doc.error}</div>;
+  const homepageBindings = sectionBindings(source);
   const definitions = new Map(
     (doc.tree.children ?? [])
       .filter((n) => n.type === 'definition')
       .map((n) => [n.identifier, n]),
   );
   function render(node: LessonNode, key: number): ReactNode {
+    const tabGroup = tabsModel(node,source,doc.imports);
+    if (tabGroup) return <TabsPreview key={key} model={tabGroup} render={render}/>;
     const children = node.children?.map(render);
     const tag = (name: string, props: Record<string, unknown> = {}) =>
       createElement(name, { key, ...props }, children);
@@ -41,7 +47,7 @@ export function renderLesson(
       case 'paragraph':
         return tag('p');
       case 'heading':
-        return tag(`h${Math.max(1, Math.min(node.depth ?? 2, 6))}`);
+        return <HeadingPreview key={key} node={node} source={source} render={render}/>;
       case 'strong':
         return tag('strong');
       case 'emphasis':
@@ -57,16 +63,7 @@ export function renderLesson(
       case 'inlineCode':
         return <code key={key}>{node.value}</code>;
       case 'code':
-        return (
-          <figure key={key} className="preview-code">
-            {node.meta && <figcaption>{node.meta}</figcaption>}
-            <pre>
-              <code className={node.lang ? `language-${node.lang}` : undefined}>
-                {node.value}
-              </code>
-            </pre>
-          </figure>
-        );
+        return <CodePreview key={key} node={node} source={source}/>;
       case 'list':
         return tag(
           node.ordered ? 'ol' : 'ul',
@@ -151,6 +148,22 @@ export function renderLesson(
       }
       case 'mdxJsxFlowElement':
       case 'mdxJsxTextElement': {
+        const section = modelForNode(node, homepageBindings, source);
+        if (section) {
+          const p = section.props;
+          const heading = typeof p.title === 'string' ? p.title : undefined;
+          const className = `homepage-preview-block homepage-${section.name.toLowerCase()} homepage-bg-${p.background ?? 'transparent'}`;
+          const style = { textAlign: ['left','center','right'].includes(String(p.align)) ? p.align as 'left'|'center'|'right' : undefined };
+          if (section.name === 'Divider') return <hr key={key}/>;
+          if (section.name === 'Picture') {
+            const src=resolveAsset(String(p.src??''),context);
+            return <figure key={key}>{src?<img src={src} alt={String(p.alt??'')}/>:<span>Afbeelding: {String(p.src??'')}</span>}{p.caption&&<figcaption>{String(p.caption)}</figcaption>}</figure>;
+          }
+          if (section.name === 'Button') return <span key={key} className="homepage-preview-button">{children}</span>;
+          if (section.name === 'Columns') return <div key={key} className={className} style={{display:'grid',gridTemplateColumns:`repeat(${Math.max(1,Math.min(4,Number(p.count)||3))},minmax(0,1fr))`,gap:16}}>{children}</div>;
+          return <section key={key} className={className} style={style}>{heading && (section.name==='Hero'?<h1>{heading}</h1>:<h2>{heading}</h2>)}{(p.tagline||p.subtitle)&&<p>{String(p.tagline||p.subtitle)}</p>}{children}</section>;
+        }
+
         const model = componentModel(node, context.site ?? '', doc.imports);
         if (model)
           return (
@@ -241,7 +254,7 @@ export function MdxPreview({
   ...context
 }: { body: string } & PreviewContext) {
   const deferred = useDeferredValue(body);
-  const { site, domain, path, branch, previewOrigin, title, description } =
+  const { site, domain, path, branch, previewOrigin, title, description, scope } =
     context;
   const parsed = useMemo(
     () => parseLesson(deferred, site ?? ''),
@@ -257,8 +270,9 @@ export function MdxPreview({
         previewOrigin,
         title,
         description,
+        scope,
       }),
-    [deferred, site, domain, path, branch, previewOrigin, title, description],
+    [deferred, site, domain, path, branch, previewOrigin, title, description, scope],
   );
   return (
     <div className="mdx-preview" aria-busy={body !== deferred}>

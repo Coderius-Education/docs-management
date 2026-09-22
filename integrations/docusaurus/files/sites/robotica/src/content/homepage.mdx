@@ -1,0 +1,30 @@
+---
+---
+
+import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
+
+<Hero title="Coderius Robotica">
+  <Buttons>
+    <Button href="/lego_auto/frame">Start met de Lego-auto</Button>
+  </Buttons>
+</Hero>
+
+<Section title="Waar wil je mee aan de slag?">
+  <Columns count={3}>
+    <Card title="Lego-auto" href="/lego_auto/frame">
+
+      Bouw stap voor stap je eigen rijdende robot.
+
+    </Card>
+    <Card title="Editor" href="/editor">
+
+      Schrijf en upload code naar je microcontroller.
+
+    </Card>
+    <Card title="Cheatsheet" href="/cheatsheet">
+
+      Pin-aansluitingen en code-snippets snel opzoeken.
+
+    </Card>
+  </Columns>
+</Section>

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "framework": "docusaurus",
+  "framework_version": "3.10.1",
+  "managed_homepage": true,
+  "settings_runtime": true,
+  "mermaid": false,
+  "math": false,
+  "homepage_fields": [
+    "title",
+    "description",
+    "keywords",
+    "image",
+    "slug",
+    "wrapperClassName",
+    "noFooter",
+    "fullscreen"
+  ]
+}

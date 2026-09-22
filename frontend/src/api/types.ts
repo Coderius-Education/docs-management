@@ -1,3 +1,13 @@
+export type ContentScope = "docs" | "pages" | "homepage" | "metadata";
+export function contentScope(value: string | null): ContentScope {
+  return value === "pages" || value === "homepage" || value === "metadata"
+    ? value
+    : "docs";
+}
+export function scopedKey(scope: ContentScope, path: string) {
+  return scope === "docs" ? path : `${scope}:${path}`;
+}
+
 export interface Me {
   login: string;
   name: string | null;
@@ -29,7 +39,7 @@ export interface CreateSiteResult {
 
 export interface TreeItem {
   path: string;
-  type: 'blob' | 'tree';
+  type: "blob" | "tree";
   sha: string;
 }
 

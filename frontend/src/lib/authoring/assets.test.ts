@@ -34,3 +34,8 @@ it('preserves special characters in the lesson folder when resolving an uploaded
     }),
   ).toBe('/api/sites/python/assets?path=part%23one%2Fdiagram.png&ref=lesson');
 });
+
+it('rejects temporary URLs in registered homepage pictures',async()=>{
+ const {imageProblems}=await import('./assets');
+ expect(imageProblems("import {Picture as Photo} from '@coderius/shared/components/HomepageSections';\n\n<Photo src=\"blob:temporary\" alt=\"\" />")).toEqual(['blob:temporary']);
+});

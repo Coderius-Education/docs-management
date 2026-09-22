@@ -171,3 +171,52 @@ geïnstalleerde browser gebruiken. De lesfixtures in `frontend/tests/fixtures`
 komen uit het Coderius-Education/docs-repo (Python hoofdstuk 1 en Algorithms,
 Vind maximum, stap 6) en vallen onder dezelfde CC BY-NC 4.0-licentie als het
 lesmateriaal.
+
+## Cursus-homepages, pagina-eigenschappen en vormgeving
+
+Docusaurus-cursussen hebben naast **Lessen** ook **Pagina's**, **Homepage**,
+**Categorieën en tags**, en **Vormgeving**. De Svelte-hoofdsite `coderius.nl`
+valt buiten deze editor.
+
+De homepage bewaart bewerkbare MDX in `src/content/homepage.mdx`. Voeg intro's,
+tekstsecties, kolommen, kaarten, knoppen, afbeeldingen en scheidingslijnen toe;
+wijzig tekst visueel en verplaats, dupliceer of verwijder onderdelen. Verwijderen
+kan direct ongedaan worden gemaakt. Bestaande interactieve onderdelen blijven
+als bronblokken behouden en werken in de echte cursusbuild. De IDE behoudt zijn
+schermvullende indeling. Onbekende MDX en dynamische eigenschappen blijven intact.
+
+Pagina-instellingen bevatten de Docusaurus 3.10.1-eigenschappen voor het gekozen
+paginatype, inclusief tags, SEO, menu, navigatie, inhoudsopgave en publicatie.
+**Overnemen**, expliciet **Nee** en **Uitgeschakeld** zijn verschillende waarden.
+Onbekende YAML-eigenschappen en opmerkingen blijven behouden; geavanceerde YAML
+kan rechtstreeks worden aangepast. Gewone pagina's ondersteunen Docusaurus
+`draft` en `unlisted`. De beheerde homepage gebruikt een React-omsluiting en
+ondersteunt die twee vlaggen niet; gebruik daar de conceptbranch. Het vaste
+homepagepad is `/`. Codevoorbeelden hebben velden voor titel, regelnummers en
+markeringen. Tabs en koppen met een vast anker zijn visueel bewerkbaar.
+
+Vormgeving bewaart per cursus `site-settings.json` en gegenereerde
+`src/css/managed-theme.css`. Instelbaar zijn onder meer kleuren voor licht/donker,
+lettertypen, afmetingen, logo's, navigatie, voettekst, mededelingen, zijmenu en
+codethema. Lege velden nemen bestaande instellingen over. Navigatie en
+voettekstlinks hebben formulieren; geavanceerde configuratie kan via JSON.
+Een overeenkomstige, schone cursusbuild levert de effectief samengevoegde
+instellingen. Bestaande CSS-waarden worden daarbij niet uit stylesheets afgeleid.
+Het lokale voorbeeld toont expliciete stijlkeuzes; controleer de volledige
+cursus in het branchvoorbeeld.
+
+Opslaan gebruikt de bestaande conceptbranch/PR-flow. Homepage-, pagina- en
+metadata-assets krijgen een eigen begrensde opslaglocatie; lokale herstelkopieën
+onderscheiden gebruiker, cursus, branch en inhoudstype. Vormgeving en CSS worden
+samen opgeslagen, met een controle op de verwachte branchversie.
+
+### Vereiste Docusaurus-integratie
+
+Integreer eerst de bijbehorende wijzigingen in het docs-repository en bouw de
+cursussen opnieuw, daarna de management-app. De nieuwe-site-template gebruikt
+ook deze gedeelde runtime. Zie [integratie en bewaakte migratie](integrations/docusaurus/README.md)
+en [uitgevoerde runtimechecks](integrations/docusaurus/VERIFICATION.md).
+De patch migreert de 13 bestaande cursus-homepages met behoud van inhoud en tools.
+Mermaid/wiskunde worden niet als beschikbaar aangeboden wanneer de cursusbuild
+hun plugins niet heeft ingeschakeld. Blog-, vertaal-, versie- en algemeen
+pluginbeheer zijn geen onderdeel van deze uitbreiding.

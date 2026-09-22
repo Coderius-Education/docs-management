@@ -9,13 +9,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import CurrentUser, require_csrf, user_github_token
+from app.authoring.content import validate_content
+from app.authoring.effective import read_effective_settings
+from app.authoring.settings import capabilities, read_settings, save_settings
 from app.config import get_settings
 from app.db.models import Site
 from app.db.session import get_db
 from app.github.assets import MAX_IMAGE_BYTES, read_image, write_image
 from app.github.client import GitHubClient
 from app.github.commits import multi_file_commit
-from app.github.contents import get_file_text, get_tree, read_page, safe_page_path, write_page
+from app.github.contents import (
+    ContentScope,
+    get_file_text,
+    get_tree,
+    read_page,
+    safe_page_path,
+    write_page,
+)
 from app.github.pulls import create_branch, create_pr
 from app.scaffold.site_template import (
     add_domain_to_traefik,
@@ -172,9 +182,10 @@ async def site_tree(
     user: CurrentUser,
     site_obj: Annotated[Site, Depends(valid_site)],
     ref: str = "main",
+    scope: ContentScope = "docs",
 ) -> list[dict]:
     client = GitHubClient(user_github_token(user))
-    return await get_tree(client, site_obj.slug, ref)
+    return await get_tree(client, site_obj.slug, ref, scope)
 
 
 @router.get("/{site}/page")
@@ -183,12 +194,14 @@ async def site_page(
     site_obj: Annotated[Site, Depends(valid_site)],
     path: str,
     ref: str = "main",
+    scope: ContentScope = "docs",
 ) -> dict:
     client = GitHubClient(user_github_token(user))
-    return await read_page(client, site_obj.slug, path, ref)
+    return await read_page(client, site_obj.slug, path, ref, scope)
 
 
 class PageWrite(BaseModel):
+    scope: ContentScope = "docs"
     path: str
     branch: str
     content: str
@@ -197,6 +210,8 @@ class PageWrite(BaseModel):
 
 
 class PageRename(BaseModel):
+    scope: ContentScope = "docs"
+    expected_head: str | None = None
     old_path: str
     new_path: str
     branch: str
@@ -221,6 +236,7 @@ async def save_page(
         payload.content,
         payload.message,
         payload.sha,
+        payload.scope,
     )
 
 
@@ -232,8 +248,9 @@ async def rename_page(
 ) -> dict:
     if payload.branch == "main":
         raise HTTPException(status_code=400, detail="Rechtstreeks naar main schrijven mag niet")
-    old_full = safe_page_path(site_obj.slug, payload.old_path)
-    new_full = safe_page_path(site_obj.slug, payload.new_path)
+    old_full = safe_page_path(site_obj.slug, payload.old_path, payload.scope)
+    new_full = safe_page_path(site_obj.slug, payload.new_path, payload.scope)
+    validate_content(payload.scope, payload.new_path, payload.content)
     client = GitHubClient(user_github_token(user))
     sha = await multi_file_commit(
         client,
@@ -241,6 +258,7 @@ async def rename_page(
         payload.message,
         add={new_full: payload.content.encode("utf-8")},
         delete=[old_full],
+        expected_head=payload.expected_head,
     )
     return {"commit_sha": sha}
 
@@ -252,13 +270,16 @@ async def upload_asset(
     branch: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
     directory: Annotated[str, Form()] = "",
+    scope: Annotated[ContentScope, Form()] = "docs",
 ) -> dict:
     """Commit een afbeelding naast de les, zonder bestaande bestanden te overschrijven."""
     if branch == "main":
         raise HTTPException(status_code=400, detail="Rechtstreeks naar main schrijven mag niet")
     content = await file.read(MAX_IMAGE_BYTES + 1)
     client = GitHubClient(user_github_token(user))
-    return await write_image(client, site_obj.slug, directory, file.filename or "", branch, content)
+    return await write_image(
+        client, site_obj.slug, directory, file.filename or "", branch, content, scope
+    )
 
 
 @router.get("/{site}/assets")
@@ -267,9 +288,10 @@ async def preview_asset(
     site_obj: Annotated[Site, Depends(valid_site)],
     path: str,
     ref: str = "main",
+    scope: ContentScope = "docs",
 ) -> Response:
     client = GitHubClient(user_github_token(user))
-    content, media_type = await read_image(client, site_obj.slug, path, ref)
+    content, media_type = await read_image(client, site_obj.slug, path, ref, scope)
     return Response(
         content,
         media_type=media_type,
@@ -278,3 +300,45 @@ async def preview_asset(
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+class SettingsWrite(BaseModel):
+    branch: str
+    expected_head: str
+    settings: dict
+    message: str
+
+
+@router.get("/{site}/settings")
+async def site_settings(
+    user: CurrentUser,
+    site_obj: Annotated[Site, Depends(valid_site)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    ref: str = "main",
+) -> dict:
+    result = await read_settings(GitHubClient(user_github_token(user)), site_obj.slug, ref)
+    effective = await read_effective_settings(db, site_obj, ref, result["head_sha"])
+    if effective is not None:
+        result["effective"] = effective
+    return result
+
+
+@router.put("/{site}/settings", dependencies=[Depends(require_csrf)])
+async def update_settings(
+    payload: SettingsWrite, user: CurrentUser, site_obj: Annotated[Site, Depends(valid_site)]
+) -> dict:
+    return await save_settings(
+        GitHubClient(user_github_token(user)),
+        site_obj.slug,
+        payload.branch,
+        payload.expected_head,
+        payload.settings,
+        payload.message,
+    )
+
+
+@router.get("/{site}/capabilities")
+async def site_capabilities(
+    user: CurrentUser, site_obj: Annotated[Site, Depends(valid_site)], ref: str = "main"
+) -> dict:
+    return await capabilities(GitHubClient(user_github_token(user)), site_obj.slug, ref)

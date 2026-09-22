@@ -1,0 +1,30 @@
+---
+---
+
+import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
+
+<Hero title="Coderius DVWA">
+  <Buttons>
+    <Button href="/docs/dvwa_tutorial">Begin met de labs</Button>
+  </Buttons>
+</Hero>
+
+<Section title="Waar wil je mee aan de slag?">
+  <Columns count={3}>
+    <Card title="Challenges" href="/docs/dvwa_tutorial">
+
+      Begin meteen in je browser: SQL-injectie, XSS, command injection en meer.
+
+    </Card>
+    <Card title="Naslag" href="/docs/linux_leren">
+
+      Terminal, HTTP en databases uitgelegd — plus de cheatsheet.
+
+    </Card>
+    <Card title="Lokaal installeren" href="/docs/dvwa_installatie">
+
+      Nodig voor de zwaardere challenges met lokaal gereedschap.
+
+    </Card>
+  </Columns>
+</Section>

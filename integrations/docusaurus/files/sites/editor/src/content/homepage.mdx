@@ -1,0 +1,32 @@
+---
+title: "Home"
+description: "Leer hoe je kunt werken met een code editor"
+---
+
+import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
+
+<Hero title="Coderius Editor">
+  <Buttons>
+    <Button href="/installatie-vscode">Klik hier om te beginnen met VS Code</Button>
+  </Buttons>
+</Hero>
+
+<Section title="Waar wil je mee aan de slag?">
+  <Columns count={3}>
+    <Card title="Website in VS Code" href="/web">
+
+      Maak en bewerk je webproject in de editor.
+
+    </Card>
+    <Card title="Python in VS Code" href="/python">
+
+      Schrijf en run Python-scripts lokaal.
+
+    </Card>
+    <Card title="Git &amp; GitHub" href="/git">
+
+      Versiebeheer: commits, branches en pull requests.
+
+    </Card>
+  </Columns>
+</Section>
