@@ -4,34 +4,30 @@ import {
   Button,
   Group,
   Loader,
-  Paper,
   SegmentedControl,
   Stack,
   Text,
   Title,
-} from "@mantine/core";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+} from '@mantine/core';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useLocation,
   useNavigate,
   useParams,
   useSearchParams,
-} from "react-router";
-import { api } from "../api/client";
-import { useMe, usePreviews } from "../api/hooks";
-import { SaveModal } from "../components/SaveModal";
-import { ThemeForm } from "../components/editor/ThemeForm";
-import { RawEditor } from "../components/editor/RawEditor";
+} from 'react-router';
+import { api } from '../api/client';
+import { useMe, usePreviews } from '../api/hooks';
+import { SaveModal } from '../components/SaveModal';
+import { ThemeForm } from '../components/editor/ThemeForm';
+import { ThemeWorkspace } from '../components/editor/ThemeWorkspace';
+import { RawEditor } from '../components/editor/RawEditor';
 import {
   ResourceRecovery,
   useResourceDraft,
-} from "../components/editor/ResourceRecovery";
-import {
-  parseSettings,
-  readSetting,
-  type SiteSettings,
-} from "../lib/authoring/settings";
+} from '../components/editor/ResourceRecovery';
+import { parseSettings, type SiteSettings } from '../lib/authoring/settings';
 interface SettingsResult {
   settings: SiteSettings;
   head_sha: string;
@@ -43,19 +39,19 @@ interface SettingsResult {
 }
 export function SettingsPage() {
   const location = useLocation();
-  const { site = "" } = useParams();
+  const { site = '' } = useParams();
   const [params] = useSearchParams();
-  const branch = params.get("ref") ?? "main";
+  const branch = params.get('ref') ?? 'main';
   const { data: me } = useMe();
   const result = useQuery({
-    queryKey: ["settings", site, branch],
+    queryKey: ['settings', site, branch],
     queryFn: () =>
       api<SettingsResult>(`/api/sites/${site}/settings`, {
         params: { ref: branch },
       }),
-    enabled: site !== "home",
+    enabled: site !== 'home',
   });
-  if (site === "home")
+  if (site === 'home')
     return (
       <Alert>
         Deze instellingen zijn alleen beschikbaar voor Docusaurus-cursussen.
@@ -75,7 +71,7 @@ export function SettingsPage() {
       site={site}
       branch={branch}
       initial={result.data}
-      user={me?.login ?? "unknown"}
+      user={me?.login ?? 'unknown'}
     />
   );
 }
@@ -98,13 +94,13 @@ function SettingsSession({
     user,
     site,
     branch,
-    "settings:site-settings.json",
+    'settings:site-settings.json',
     JSON.stringify(initial.settings, null, 2),
     initial.head_sha,
   );
   useEffect(() => {
     if (draft.base.branch !== branch && !draft.dirty) {
-      qc.setQueryData(["settings", site, draft.base.branch], {
+      qc.setQueryData(['settings', site, draft.base.branch], {
         settings: parseSettings(draft.base.content),
         head_sha: draft.base.sha,
       });
@@ -114,14 +110,12 @@ function SettingsSession({
       );
     }
   }, [draft.base.branch, draft.dirty, branch]);
-  const [mode, setMode] = useState("form"),
+  const [mode, setMode] = useState('form'),
     [saveOpen, setSaveOpen] = useState(false),
     [errors, setErrors] = useState<Record<string, string>>({});
-  const [colorMode, setColorMode] = useState("light"),
-    [device, setDevice] = useState("desktop");
   const { data: previews } = usePreviews();
   const { data: capabilities } = useQuery({
-    queryKey: ["capabilities", site, draft.base.branch],
+    queryKey: ['capabilities', site, draft.base.branch],
     queryFn: () =>
       api<{ settings_runtime: boolean }>(`/api/sites/${site}/capabilities`, {
         params: { ref: draft.base.branch },
@@ -129,7 +123,7 @@ function SettingsSession({
   });
   const parsed = useMemo(() => {
     try {
-      return { settings: parseSettings(draft.content), error: "" };
+      return { settings: parseSettings(draft.content), error: '' };
     } catch (e) {
       return { settings: null, error: String(e) };
     }
@@ -137,13 +131,10 @@ function SettingsSession({
   const previewUrl = previews?.find(
     (p) => p.site === site && p.branch === draft.base.branch,
   )?.url;
-  const vars = parsed.settings?.tokens[colorMode] as
-    | Record<string, string>
-    | undefined;
-  const get = (path: string, fallback: string) => {
-    const value = parsed.settings && readSetting(parsed.settings, path);
-    return typeof value === "string" ? value : fallback;
-  };
+  const inherited =
+    initial.effective?.commit === draft.base.sha
+      ? initial.effective.settings
+      : undefined;
   return (
     <Stack>
       <Group justify="space-between">
@@ -151,7 +142,7 @@ function SettingsSession({
         <Group>
           <Badge>{draft.base.branch}</Badge>
           <Text role="status">
-            {draft.dirty ? "Niet opgeslagen" : "Opgeslagen"}
+            {draft.dirty ? 'Niet opgeslagen' : 'Opgeslagen'}
           </Text>
           <Button
             disabled={
@@ -174,125 +165,64 @@ function SettingsSession({
           nog niet toegepast in de build.
         </Alert>
       )}
-      {initial.effective && initial.effective.commit === draft.base.sha ? (
-        <details>
-          <summary>Overgenomen instellingen uit de cursusbuild</summary>
-          <Text size="xs">
-            Build: {initial.effective.commit.slice(0, 12)} · CSS-waarden blijven
-            afhankelijk van de bestaande stylesheets.
-          </Text>
-          <pre
-            style={{ whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto" }}
-          >
-            {JSON.stringify(initial.effective.settings, null, 2)}
-          </pre>
-        </details>
-      ) : (
-        <Text size="sm" c="dimmed">
-          Geen passende build beschikbaar voor de overgenomen instellingen. Maak
-          een cursusvoorbeeld om die te controleren.
-        </Text>
-      )}
-      <SegmentedControl
-        aria-label="Instellingenweergave"
-        value={mode}
-        onChange={setMode}
-        data={[
-          { value: "form", label: "Instellingen" },
-          { value: "preview", label: "Voorbeeld" },
-          { value: "raw", label: "JSON" },
-        ]}
-      />
+      <Text size="xs" c="dimmed">
+        {inherited
+          ? 'Overgenomen instellingen uit de passende cursusbuild. Eigen aanpassingen zie je direct.'
+          : 'Geen passende build beschikbaar. Overgenomen waarden kunnen afwijken; controleer ze in een cursusvoorbeeld.'}
+      </Text>
       {parsed.error && <Alert color="red">{parsed.error}</Alert>}
-      {mode === "raw" ? (
-        <RawEditor value={draft.content} onChange={draft.setContent} />
-      ) : mode === "form" && parsed.settings ? (
-        <Paper withBorder p="md">
-          <ThemeForm
-            value={parsed.settings}
-            onChange={(value) =>
-              draft.setContent(JSON.stringify(value, null, 2))
-            }
-            onValidationChange={setErrors}
-          />
-        </Paper>
-      ) : mode === "preview" ? (
-        <Stack>
-          <Group>
+      <ThemeWorkspace
+        site={site}
+        branch={draft.base.branch}
+        value={parsed.settings ?? parseSettings(draft.base.content)}
+        savedValue={parseSettings(draft.base.content)}
+        inherited={inherited}
+        disabled={!!parsed.error}
+        onChange={(value) => draft.setContent(JSON.stringify(value, null, 2))}
+        previewUrl={previewUrl}
+        advanced={
+          <Stack>
+            {parsed.error && <Alert color="red">{parsed.error}</Alert>}
             <SegmentedControl
-              value={colorMode}
-              onChange={setColorMode}
+              aria-label="Geavanceerde instellingenweergave"
+              value={mode}
+              onChange={setMode}
               data={[
-                { value: "light", label: "Licht" },
-                { value: "dark", label: "Donker" },
+                { value: 'form', label: 'Alle instellingen' },
+                { value: 'raw', label: 'JSON-bron' },
               ]}
             />
-            <SegmentedControl
-              value={device}
-              onChange={setDevice}
-              data={[
-                { value: "desktop", label: "Desktop" },
-                { value: "mobile", label: "Mobiel" },
-              ]}
-            />
-            {previewUrl && (
-              <Button
-                component="a"
-                target="_blank"
-                rel="noopener noreferrer"
-                href={previewUrl}
-              >
-                Cursusvoorbeeld
-              </Button>
-            )}
-          </Group>
-          <Text size="sm" c="dimmed">
-            Stijlvoorbeeld van expliciete instellingen. Overgenomen waarden en
-            interactieve onderdelen controleer je in de cursusbuild.
-          </Text>
-          <Paper
-            withBorder
-            p="lg"
-            style={{
-              ...vars,
-              maxWidth: device === "mobile" ? 390 : 1100,
-              background:
-                vars?.["--ifm-background-color"] ??
-                (colorMode === "dark" ? "#1b1b1d" : "white"),
-              color:
-                vars?.["--ifm-font-color-base"] ??
-                (colorMode === "dark" ? "#eee" : "#222"),
-              fontFamily: vars?.["--ifm-font-family-base"],
-              fontSize: vars?.["--ifm-font-size-base"],
-              borderRadius: vars?.["--ifm-global-radius"],
-            }}
-          >
-            <Text fw={700}>
-              {get("themeConfig.navbar.title", "Cursusnavigatie")}
-            </Text>
-            <div
-              style={{
-                padding: "3rem 1rem",
-                textAlign: "center",
-                background: vars?.["--ifm-color-primary"] ?? "#3578e5",
-                color: "white",
-                margin: "1rem 0",
-              }}
-            >
-              <h1>{get("site.title", "Titel van de cursus")}</h1>
-              <p>{get("site.tagline", "Leer stap voor stap")}</p>
+            <div hidden={mode !== 'form'}>
+              {parsed.settings && (
+                <ThemeForm
+                  value={parsed.settings}
+                  onChange={(value) =>
+                    draft.setContent(JSON.stringify(value, null, 2))
+                  }
+                  onValidationChange={setErrors}
+                />
+              )}
             </div>
-            <h2>Een lespagina</h2>
-            <p>Zo ziet gewone tekst eruit met deze kleuren en lettertypen.</p>
-            <pre style={{ fontFamily: vars?.["--ifm-font-family-monospace"] }}>
-              print("Hallo wereld")
-            </pre>
-            <Text size="sm">
-              {get("themeConfig.footer.copyright", "Voettekst van de cursus")}
-            </Text>
-          </Paper>
-        </Stack>
-      ) : null}
+            {mode === 'raw' && (
+              <RawEditor value={draft.content} onChange={draft.setContent} />
+            )}
+            {inherited && (
+              <details>
+                <summary>Overgenomen instellingen uit de cursusbuild</summary>
+                <pre
+                  style={{
+                    whiteSpace: 'pre-wrap',
+                    maxHeight: 300,
+                    overflow: 'auto',
+                  }}
+                >
+                  {JSON.stringify(inherited, null, 2)}
+                </pre>
+              </details>
+            )}
+          </Stack>
+        }
+      />
       {saveOpen && (
         <SaveModal
           opened
@@ -307,19 +237,22 @@ function SettingsSession({
             const result = await api<{ head_sha: string }>(
               `/api/sites/${site}/settings`,
               {
-                method: "PUT",
+                method: 'PUT',
                 body: {
                   branch: target,
                   expected_head: draft.base.sha,
                   settings: parseSettings(snapshot),
-                  message: "Cursusvormgeving bijwerken",
+                  message: 'Cursusvormgeving bijwerken',
                 },
               },
             );
             return result.head_sha;
           }}
           onSaved={(saved) => {
-            qc.setQueryData(['settings',site,saved.branch], {settings:parseSettings(saved.content),head_sha:saved.sha});
+            qc.setQueryData(['settings', site, saved.branch], {
+              settings: parseSettings(saved.content),
+              head_sha: saved.sha,
+            });
             draft.setBase(saved);
           }}
         />

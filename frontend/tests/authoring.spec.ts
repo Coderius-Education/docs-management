@@ -438,18 +438,15 @@ test('creates an exercise lesson through the portal and saves it as a new file',
 }) => {
   const saves = await mockPortal(page);
   await page.goto('/sites/python?ref=lesson');
-  await page
-    .getByRole('button', { name: 'Nieuwe pagina', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Nieuwe les', exact: true }).click();
   await page.getByLabel('Titel van de les').fill('!!!');
   await expect(
     page.getByRole('button', { name: 'Openen in editor', exact: true }),
   ).toBeDisabled();
   await page.getByLabel('Titel van de les').fill('Mijn nieuwe les');
-  await page.getByRole('textbox', { name: 'Begin met', exact: true }).click();
   await page
-    .getByRole('option', { name: 'Opdracht met leerdoel en tip', exact: true })
-    .click();
+    .getByRole('radio', { name: 'Opdracht met leerdoel en tip', exact: true })
+    .check();
   await page
     .getByRole('button', { name: 'Openen in editor', exact: true })
     .click();
@@ -679,13 +676,11 @@ test('a new unsaved lesson retains its uploaded image and draft branch after rec
     .getByRole('button', { name: 'Blok toevoegen', exact: true })
     .click();
   await page.getByRole('menuitem', { name: /Afbeelding/ }).click();
-  await page
-    .getByLabel('Afbeeldingsbestand', { exact: true })
-    .setInputFiles({
-      name: 'new.png',
-      mimeType: 'image/png',
-      buffer: uploadPng,
-    });
+  await page.getByLabel('Afbeeldingsbestand', { exact: true }).setInputFiles({
+    name: 'new.png',
+    mimeType: 'image/png',
+    buffer: uploadPng,
+  });
   await page
     .getByLabel('Alternatieve tekst', { exact: true })
     .fill('New image');

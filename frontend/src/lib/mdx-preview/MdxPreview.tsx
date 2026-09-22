@@ -34,8 +34,9 @@ export function renderLesson(
       .map((n) => [n.identifier, n]),
   );
   function render(node: LessonNode, key: number): ReactNode {
-    const tabGroup = tabsModel(node,source,doc.imports);
-    if (tabGroup) return <TabsPreview key={key} model={tabGroup} render={render}/>;
+    const tabGroup = tabsModel(node, source, doc.imports);
+    if (tabGroup)
+      return <TabsPreview key={key} model={tabGroup} render={render} />;
     const children = node.children?.map(render);
     const tag = (name: string, props: Record<string, unknown> = {}) =>
       createElement(name, { key, ...props }, children);
@@ -47,7 +48,14 @@ export function renderLesson(
       case 'paragraph':
         return tag('p');
       case 'heading':
-        return <HeadingPreview key={key} node={node} source={source} render={render}/>;
+        return (
+          <HeadingPreview
+            key={key}
+            node={node}
+            source={source}
+            render={render}
+          />
+        );
       case 'strong':
         return tag('strong');
       case 'emphasis':
@@ -63,7 +71,7 @@ export function renderLesson(
       case 'inlineCode':
         return <code key={key}>{node.value}</code>;
       case 'code':
-        return <CodePreview key={key} node={node} source={source}/>;
+        return <CodePreview key={key} node={node} source={source} />;
       case 'list':
         return tag(
           node.ordered ? 'ol' : 'ul',
@@ -153,15 +161,59 @@ export function renderLesson(
           const p = section.props;
           const heading = typeof p.title === 'string' ? p.title : undefined;
           const className = `homepage-preview-block homepage-${section.name.toLowerCase()} homepage-bg-${p.background ?? 'transparent'}`;
-          const style = { textAlign: ['left','center','right'].includes(String(p.align)) ? p.align as 'left'|'center'|'right' : undefined };
-          if (section.name === 'Divider') return <hr key={key}/>;
+          const style = {
+            textAlign: ['left', 'center', 'right'].includes(String(p.align))
+              ? (p.align as 'left' | 'center' | 'right')
+              : undefined,
+          };
+          if (section.name === 'Divider') return <hr key={key} />;
           if (section.name === 'Picture') {
-            const src=resolveAsset(String(p.src??''),context);
-            return <figure key={key}>{src?<img src={src} alt={String(p.alt??'')}/>:<span>Afbeelding: {String(p.src??'')}</span>}{p.caption&&<figcaption>{String(p.caption)}</figcaption>}</figure>;
+            const src = resolveAsset(String(p.src ?? ''), context);
+            return (
+              <figure key={key}>
+                {src ? (
+                  <img src={src} alt={String(p.alt ?? '')} />
+                ) : (
+                  <span>Afbeelding: {String(p.src ?? '')}</span>
+                )}
+                {p.caption && <figcaption>{String(p.caption)}</figcaption>}
+              </figure>
+            );
           }
-          if (section.name === 'Button') return <span key={key} className="homepage-preview-button">{children}</span>;
-          if (section.name === 'Columns') return <div key={key} className={className} style={{display:'grid',gridTemplateColumns:`repeat(${Math.max(1,Math.min(4,Number(p.count)||3))},minmax(0,1fr))`,gap:16}}>{children}</div>;
-          return <section key={key} className={className} style={style}>{heading && (section.name==='Hero'?<h1>{heading}</h1>:<h2>{heading}</h2>)}{(p.tagline||p.subtitle)&&<p>{String(p.tagline||p.subtitle)}</p>}{children}</section>;
+          if (section.name === 'Button')
+            return (
+              <span key={key} className="homepage-preview-button">
+                {children}
+              </span>
+            );
+          if (section.name === 'Columns')
+            return (
+              <div
+                key={key}
+                className={className}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${Math.max(1, Math.min(4, Number(p.count) || 3))},minmax(0,1fr))`,
+                  gap: 16,
+                }}
+              >
+                {children}
+              </div>
+            );
+          return (
+            <section key={key} className={className} style={style}>
+              {heading &&
+                (section.name === 'Hero' ? (
+                  <h1>{heading}</h1>
+                ) : (
+                  <h2>{heading}</h2>
+                ))}
+              {(p.tagline || p.subtitle) && (
+                <p>{String(p.tagline || p.subtitle)}</p>
+              )}
+              {children}
+            </section>
+          );
         }
 
         const model = componentModel(node, context.site ?? '', doc.imports);
@@ -251,11 +303,20 @@ export function renderLesson(
 }
 export function MdxPreview({
   body,
+  embedded = false,
   ...context
-}: { body: string } & PreviewContext) {
+}: { body: string; embedded?: boolean } & PreviewContext) {
   const deferred = useDeferredValue(body);
-  const { site, domain, path, branch, previewOrigin, title, description, scope } =
-    context;
+  const {
+    site,
+    domain,
+    path,
+    branch,
+    previewOrigin,
+    title,
+    description,
+    scope,
+  } = context;
   const parsed = useMemo(
     () => parseLesson(deferred, site ?? ''),
     [deferred, site],
@@ -272,15 +333,27 @@ export function MdxPreview({
         description,
         scope,
       }),
-    [deferred, site, domain, path, branch, previewOrigin, title, description, scope],
+    [
+      deferred,
+      site,
+      domain,
+      path,
+      branch,
+      previewOrigin,
+      title,
+      description,
+      scope,
+    ],
   );
   return (
     <div className="mdx-preview" aria-busy={body !== deferred}>
-      <Text size="xs" c="dimmed" mb="sm" role="status">
-        {body !== deferred
-          ? 'Voorbeeld wordt bijgewerkt…'
-          : 'Inhoudsvoorbeeld · interactieve onderdelen controleer je na opslaan in het cursusvoorbeeld.'}
-      </Text>
+      {!embedded && (
+        <Text size="xs" c="dimmed" mb="sm" role="status">
+          {body !== deferred
+            ? 'Voorbeeld wordt bijgewerkt…'
+            : 'Inhoudsvoorbeeld · interactieve onderdelen controleer je na opslaan in het cursusvoorbeeld.'}
+        </Text>
+      )}
       {parsed.error ? (
         <Alert color="orange" title="Broncode controleren">
           {parsed.error}

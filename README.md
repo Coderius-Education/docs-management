@@ -175,15 +175,23 @@ lesmateriaal.
 ## Cursus-homepages, pagina-eigenschappen en vormgeving
 
 Docusaurus-cursussen hebben naast **Lessen** ook **Pagina's**, **Homepage**,
-**Categorieën en tags**, en **Vormgeving**. De Svelte-hoofdsite `coderius.nl`
+**Geavanceerd** (categorie-instellingen en tags), en **Vormgeving**. De Svelte-hoofdsite `coderius.nl`
 valt buiten deze editor.
 
 De homepage bewaart bewerkbare MDX in `src/content/homepage.mdx`. Voeg intro's,
-tekstsecties, kolommen, kaarten, knoppen, afbeeldingen en scheidingslijnen toe;
-wijzig tekst visueel en verplaats, dupliceer of verwijder onderdelen. Verwijderen
-kan direct ongedaan worden gemaakt. Bestaande interactieve onderdelen blijven
-als bronblokken behouden en werken in de echte cursusbuild. De IDE behoudt zijn
+tekstsecties, kolommen, kaarten, knoppen, afbeeldingen en scheidingslijnen toe.
+Klik rechtstreeks op titels, knopteksten en inhoud om ze te bewerken. Kies nieuwe
+secties uit de visuele galerij en verplaats ze met slepen of de pijltjes.
+Dupliceren, verwijderen, ongedaan maken en opnieuw uitvoeren werken op de pagina.
+Controleer de indeling met het mobiele voorbeeld en de licht/donker-weergave.
+Bestaande interactieve onderdelen blijven als bronblokken behouden en werken in de echte cursusbuild. De IDE behoudt zijn
 schermvullende indeling. Onbekende MDX en dynamische eigenschappen blijven intact.
+
+Bij **Lessen** maak je met **Nieuwe map** een hoofdstuk aan. Kies de naam en
+bovenliggende map; de categorie-instellingen en overzichtspagina worden automatisch
+aangemaakt. Na opslaan blijft de nieuwe map geselecteerd voor **Nieuwe les**.
+Les- en paginatemplates zijn visuele keuzes; de bestandsnaam wordt uit de titel
+afgeleid. Via het tandwiel bij een map wijzig je bestaande categorie-instellingen.
 
 Pagina-instellingen bevatten de Docusaurus 3.10.1-eigenschappen voor het gekozen
 paginatype, inclusief tags, SEO, menu, navigatie, inhoudsopgave en publicatie.
@@ -194,6 +202,11 @@ kan rechtstreeks worden aangepast. Gewone pagina's ondersteunen Docusaurus
 ondersteunt die twee vlaggen niet; gebruik daar de conceptbranch. Het vaste
 homepagepad is `/`. Codevoorbeelden hebben velden voor titel, regelnummers en
 markeringen. Tabs en koppen met een vast anker zijn visueel bewerkbaar.
+
+Vormgeving toont de startpagina van de gekozen conceptbranch met directe previews
+voor kleuren, lettertypen, afmetingen, koptekst en voettekst. Klik een gebied op
+de pagina aan of kies een van de duidelijke categorieën. Extra instellingen staan
+onder **Geavanceerd**.
 
 Vormgeving bewaart per cursus `site-settings.json` en gegenereerde
 `src/css/managed-theme.css`. Instelbaar zijn onder meer kleuren voor licht/donker,

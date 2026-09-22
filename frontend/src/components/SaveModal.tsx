@@ -8,14 +8,14 @@ import {
   Stack,
   Text,
   TextInput,
-} from "@mantine/core";
-import { createTwoFilesPatch } from "diff";
-import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
-import { useCreateBranch, useCreatePr, useSavePage } from "../api/git";
-import { ApiError } from "../api/client";
-import type { ContentScope } from "../api/types";
-import { DiffView } from "./DiffView";
+} from '@mantine/core';
+import { createTwoFilesPatch } from 'diff';
+import { useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useCreateBranch, useCreatePr, useSavePage } from '../api/git';
+import { ApiError } from '../api/client';
+import type { ContentScope } from '../api/types';
+import { DiffView } from './DiffView';
 export interface SavedPage {
   content: string;
   branch: string;
@@ -26,13 +26,16 @@ export function SaveModal({
   onClose,
   site,
   path,
-  scope = "docs",
+  scope = 'docs',
   originalContent,
   newContent,
   sha,
   currentBranch,
   onSaved,
   saveResource,
+  title = 'Lesmateriaal opslaan',
+  summary = 'Sla eerst een concept op. Publiceren gebeurt later via een pull request.',
+  continueLabel = 'Verder bewerken',
 }: {
   opened: boolean;
   onClose: () => void;
@@ -45,13 +48,16 @@ export function SaveModal({
   currentBranch: string;
   onSaved: (result: SavedPage) => void;
   saveResource?: (branch: string, snapshot: string) => Promise<string>;
+  title?: string;
+  summary?: string;
+  continueLabel?: string;
 }) {
   const navigate = useNavigate();
   const createBranch = useCreateBranch();
   const savePage = useSavePage(site);
   const createPr = useCreatePr();
   const [selection, setSelection] = useState<string | null>(
-    currentBranch === "main" ? "__new__" : currentBranch,
+    currentBranch === 'main' ? '__new__' : currentBranch,
   );
   const [newBranch, setNewBranch] = useState(
     `docs/${site}-${Date.now().toString(36)}`,
@@ -59,7 +65,7 @@ export function SaveModal({
   const [message, setMessage] = useState(`Lesmateriaal bijwerken: ${path}`);
   const [saving, setSaving] = useState(false);
   const [savedToBranch, setSavedToBranch] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const created = useRef(new Set<string>());
   const diff = useMemo(
     () =>
@@ -68,19 +74,19 @@ export function SaveModal({
         path,
         originalContent,
         newContent,
-        "voor",
-        "na",
+        'voor',
+        'na',
       ),
     [path, originalContent, newContent],
   );
-  const target = selection === "__new__" ? newBranch.trim() : (selection ?? "");
+  const target = selection === '__new__' ? newBranch.trim() : (selection ?? '');
   async function save() {
     if (!target || !message.trim() || saving) return;
     const snapshot = newContent;
     setSaving(true);
-    setError("");
+    setError('');
     try {
-      if (selection === "__new__" && !created.current.has(target)) {
+      if (selection === '__new__' && !created.current.has(target)) {
         await createBranch.mutateAsync({
           name: target,
           from_branch: currentBranch,
@@ -102,7 +108,7 @@ export function SaveModal({
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409
-          ? "Deze pagina is op de server gewijzigd. Je eigen tekst blijft bewaard. Vergelijk de nieuwste versie voordat je opnieuw opslaat."
+          ? 'Deze pagina is op de server gewijzigd. Je eigen tekst blijft bewaard. Vergelijk de nieuwste versie voordat je opnieuw opslaat.'
           : String(err),
       );
     } finally {
@@ -130,7 +136,7 @@ export function SaveModal({
       }}
       closeOnClickOutside={!saving}
       closeOnEscape={!saving}
-      title="Lesmateriaal opslaan"
+      title={title}
       size="xl"
     >
       <Stack>
@@ -151,7 +157,7 @@ export function SaveModal({
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={onClose}>
-                Verder bewerken
+                {continueLabel}
               </Button>
               <Button onClick={review} loading={createPr.isPending}>
                 Controle aanvragen
@@ -160,10 +166,7 @@ export function SaveModal({
           </>
         ) : (
           <>
-            <Text size="sm">
-              Sla eerst een concept op. Publiceren gebeurt later via een pull
-              request.
-            </Text>
+            <Text size="sm">{summary}</Text>
             <DiffView patch={diff} maxHeight={220} />
             <Select
               label="Conceptversie (branch)"
@@ -172,13 +175,13 @@ export function SaveModal({
               onChange={setSelection}
               disabled={saving}
               data={[
-                { value: "__new__", label: "Nieuw concept maken" },
+                { value: '__new__', label: 'Nieuw concept maken' },
                 ...[currentBranch]
-                  .filter((b) => b !== "main")
+                  .filter((b) => b !== 'main')
                   .map((b) => ({ value: b, label: b })),
               ]}
             />
-            {selection === "__new__" && (
+            {selection === '__new__' && (
               <TextInput
                 label="Naam conceptversie"
                 description={`Gebaseerd op ${currentBranch}`}

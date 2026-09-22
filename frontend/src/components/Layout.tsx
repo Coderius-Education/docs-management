@@ -35,6 +35,10 @@ export function Layout() {
   const { data: sites } = useSites();
   const navigate = useNavigate();
   const location = useLocation();
+  const canvasRoute =
+    location.pathname.endsWith('/settings') ||
+    (location.pathname.endsWith('/edit') &&
+      new URLSearchParams(location.search).get('scope') === 'homepage');
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
 
   async function logout() {
@@ -45,7 +49,11 @@ export function Layout() {
   return (
     <AppShell
       header={{ height: 56 }}
-      navbar={{ width: 260, breakpoint: 'sm', collapsed: { mobile: !opened } }}
+      navbar={{
+        width: 260,
+        breakpoint: 'sm',
+        collapsed: { mobile: !opened, desktop: canvasRoute && !opened },
+      }}
       padding="md"
     >
       <AppShell.Header>
@@ -54,7 +62,8 @@ export function Layout() {
             <Burger
               opened={opened}
               onClick={toggle}
-              hiddenFrom="sm"
+              hiddenFrom={canvasRoute ? undefined : 'sm'}
+              aria-label={opened ? 'Navigatie sluiten' : 'Navigatie openen'}
               size="sm"
             />
             <Title order={4} style={{ fontSize: 'clamp(14px, 3vw, 18px)' }}>
