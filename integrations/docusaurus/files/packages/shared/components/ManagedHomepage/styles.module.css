@@ -1,0 +1,6 @@
+.fullscreen {
+  height: calc(100vh - var(--ifm-navbar-height));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

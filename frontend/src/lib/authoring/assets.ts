@@ -1,6 +1,8 @@
 import { parseTree, type LessonNode } from './syntax';
+import { sectionBindings } from './homepage';
 import { attributes, literal } from './components';
 export interface AssetContext {
+  scope?: 'docs' | 'pages' | 'homepage' | 'metadata';
   site?: string;
   domain?: string;
   path?: string;
@@ -22,6 +24,7 @@ export function resolveAsset(
 ): string | undefined {
   if (!persistentImage(url)) return undefined;
   if (/^https?:\/\//i.test(url)) return url;
+  if (context.scope === 'homepage' && context.site && url.startsWith('/managed/')) return `/api/sites/${encodeURIComponent(context.site)}/assets?${new URLSearchParams({scope:'homepage',path:url.slice('/managed/'.length),ref:context.branch??'main'})}`;
   if (
     context.site &&
     context.path &&
@@ -43,6 +46,7 @@ export function resolveAsset(
           {
             path: decodeURIComponent(target.pathname.slice(1)),
             ref: context.branch ?? 'main',
+            ...(context.scope && context.scope !== 'docs' ? { scope: context.scope } : {}),
           },
         )}`;
       }
@@ -67,6 +71,7 @@ export function resolveAsset(
 export function imageProblems(source: string): string[] {
   try {
     const tree = parseTree(source);
+    const bindings = sectionBindings(source);
     const issues: string[] = [];
     const definitions = new Map(
       (tree.children ?? [])
@@ -80,7 +85,7 @@ export function imageProblems(source: string): string[] {
           : node.type === 'imageReference'
             ? definitions.get(node.identifier)
             : undefined;
-      if (node.name === 'img') {
+      if (node.name === 'img' || bindings[node.name ?? ''] === 'Picture') {
         const value = attributes(node).find((a) => a.name === 'src')?.value;
         url =
           typeof value === 'string'

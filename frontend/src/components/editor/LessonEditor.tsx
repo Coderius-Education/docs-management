@@ -30,6 +30,14 @@ import { persistentImage, type AssetContext } from '../../lib/authoring/assets';
 import { WysiwygEditor, type MarkdownHandle } from './WysiwygEditor';
 import { RawEditor } from './RawEditor';
 import { ComponentFields } from './ComponentFields';
+import { CodeFields, HeadingFields } from './ContentFields';
+import { TabsFields } from './TabsFields';
+import {
+  codeModel,
+  headingModel,
+  insertTabs,
+  tabsModel,
+} from '../../lib/authoring/content';
 import './LessonEditor.css';
 const calloutLabels: Record<string, string> = {
   tip: 'Tip',
@@ -49,6 +57,7 @@ export function LessonEditor({
   inheritedImports = {},
   nested = false,
   onInsertComponent,
+  onInsertTabs,
   assetContext = {},
   onUploadImage,
 }: {
@@ -58,6 +67,7 @@ export function LessonEditor({
   inheritedImports?: Record<string, string>;
   nested?: boolean;
   onInsertComponent?: (name: string, offset: number) => void;
+  onInsertTabs?: (offset: number) => void;
   assetContext?: AssetContext;
   onUploadImage?: (file: File) => Promise<string>;
 }) {
@@ -134,11 +144,29 @@ export function LessonEditor({
                   Kop
                 </Menu.Item>
                 <Menu.Item
+                  onClick={() => insertText('## Nieuwe kop {#nieuwe-kop}')}
+                >
+                  Kop met vast ID
+                </Menu.Item>
+                <Menu.Item
                   onClick={() =>
                     insertText('```python\nprint("Hallo!")\n```', true)
                   }
                 >
                   Codevoorbeeld
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() => {
+                    try {
+                      if (onInsertTabs) onInsertTabs(position());
+                      else onChange(insertTabs(value, position()));
+                      setFailure('');
+                    } catch (cause) {
+                      setFailure(String(cause));
+                    }
+                  }}
+                >
+                  Tabbladen
                 </Menu.Item>
                 <Menu.Item
                   onClick={() =>
@@ -220,6 +248,9 @@ export function LessonEditor({
           {doc.blocks.map((block, index) => {
             const raw = value.slice(block.from, block.to);
             const model = componentModel(block.node, site, imports);
+            const code = codeModel(block.node, value);
+            const heading = headingModel(block.node, value);
+            const tabs = tabsModel(block.node, value, imports);
             const c = block.container;
             return (
               <div
@@ -247,17 +278,25 @@ export function LessonEditor({
                     <Group justify="space-between" mb="xs">
                       <Text fw={600} size="sm">
                         {model?.label ??
-                          (c
-                            ? c.type === 'details'
-                              ? 'Uitklapbaar blok'
-                              : calloutLabels[c.type]
-                            : block.kind === 'imports'
-                              ? 'Componentkoppelingen'
-                              : (block.node.name ?? 'Bronblok'))}
+                          (code
+                            ? 'Codevoorbeeld'
+                            : heading
+                              ? 'Kop'
+                              : tabs
+                                ? 'Tabbladen'
+                                : c
+                                  ? c.type === 'details'
+                                    ? 'Uitklapbaar blok'
+                                    : calloutLabels[c.type]
+                                  : block.kind === 'imports'
+                                    ? 'Componentkoppelingen'
+                                    : (block.node.name ?? 'Bronblok'))}
                       </Text>
                       <Group gap="xs">
                         <Badge size="xs" variant="light">
-                          {c || model ? 'Visueel' : 'Bron behouden'}
+                          {c || model || code || heading || tabs
+                            ? 'Visueel'
+                            : 'Bron behouden'}
                         </Badge>
                         <Button
                           size="compact-xs"
@@ -268,7 +307,62 @@ export function LessonEditor({
                         </Button>
                       </Group>
                     </Group>
-                    {model ? (
+                    {code ? (
+                      <CodeFields
+                        source={value}
+                        node={block.node}
+                        onChange={onChange}
+                      />
+                    ) : heading ? (
+                      <HeadingFields
+                        source={value}
+                        node={block.node}
+                        onChange={onChange}
+                      />
+                    ) : tabs ? (
+                      <TabsFields
+                        source={value}
+                        model={tabs}
+                        onChange={onChange}
+                        renderBody={(item) => (
+                          <LessonEditor
+                            nested
+                            site={site}
+                            value={value.slice(item.body!.from, item.body!.to)}
+                            inheritedImports={imports}
+                            assetContext={assetContext}
+                            onUploadImage={onUploadImage}
+                            onChange={(body) =>
+                              onChange(replaceRange(value, item.body!, body))
+                            }
+                            onInsertComponent={(name, offset) => {
+                              if (onInsertComponent)
+                                onInsertComponent(
+                                  name,
+                                  item.body!.from + offset,
+                                );
+                              else
+                                onChange(
+                                  insertComponent(
+                                    value,
+                                    site,
+                                    name,
+                                    item.body!.from + offset,
+                                  ),
+                                );
+                            }}
+                            onInsertTabs={(offset) => {
+                              if (onInsertTabs)
+                                onInsertTabs(item.body!.from + offset);
+                              else
+                                onChange(
+                                  insertTabs(value, item.body!.from + offset),
+                                );
+                            }}
+                          />
+                        )}
+                      />
+                    ) : model ? (
                       <ComponentFields
                         model={model}
                         onChange={(name, next) =>
@@ -327,6 +421,12 @@ export function LessonEditor({
                         />
                         <LessonEditor
                           nested
+                          onInsertTabs={(offset) => {
+                            if (onInsertTabs)
+                              onInsertTabs(c.body.from + offset);
+                            else
+                              onChange(insertTabs(value, c.body.from + offset));
+                          }}
                           onUploadImage={onUploadImage}
                           assetContext={assetContext}
                           onInsertComponent={(name, offset) => {

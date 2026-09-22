@@ -7,36 +7,41 @@ import {
   Loader,
   Paper,
   ScrollArea,
+  SegmentedControl,
   Text,
   TextInput,
   Title,
-} from '@mantine/core';
-import { IconAlertCircle, IconPencil, IconPlus } from '@tabler/icons-react';
-import { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+} from "@mantine/core";
+import { IconAlertCircle, IconPencil, IconPlus } from "@tabler/icons-react";
+import { useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 
-import { usePage, useSites, useTree } from '../api/hooks';
-import { NewPageModal } from '../components/NewPageModal';
-import { PageTree } from '../components/PageTree';
+import { usePage, useSites, useTree } from "../api/hooks";
+import { contentScope } from "../api/types";
+import { NewMetadataModal } from "../components/NewMetadataModal";
+import { NewPageModal } from "../components/NewPageModal";
+import { PageTree } from "../components/PageTree";
 
 export function SiteBrowser() {
-  const { site = '' } = useParams();
+  const { site = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [ref, setRef] = useState(searchParams.get('ref') ?? 'main');
+  const [ref, setRef] = useState(searchParams.get("ref") ?? "main");
   const [newPageOpen, setNewPageOpen] = useState(false);
 
-  const selectedPath = searchParams.get('path');
+  const scope = contentScope(searchParams.get("scope"));
+  const selectedPath = searchParams.get("path");
   const { data: sites } = useSites();
   const {
     data: tree,
     isLoading: treeLoading,
     error: treeError,
-  } = useTree(site, ref);
+  } = useTree(site, ref, scope);
   const { data: page, isLoading: pageLoading } = usePage(
     site,
     selectedPath,
     ref,
+    scope,
   );
 
   const siteInfo = sites?.find((s) => s.slug === site);
@@ -69,14 +74,61 @@ export function SiteBrowser() {
         </Group>
       </Group>
 
-      <NewPageModal
-        opened={newPageOpen}
-        onClose={() => setNewPageOpen(false)}
-        site={site}
-        tree={tree ?? []}
-        branch={ref}
-      />
+      {scope === "metadata" ? (
+        <NewMetadataModal
+          opened={newPageOpen}
+          onClose={() => setNewPageOpen(false)}
+          site={site}
+          branch={ref}
+          tree={tree ?? []}
+        />
+      ) : (
+        <NewPageModal
+          opened={newPageOpen}
+          onClose={() => setNewPageOpen(false)}
+          site={site}
+          tree={tree ?? []}
+          branch={ref}
+          scope={scope}
+        />
+      )}
 
+      <Group mb="md">
+        <SegmentedControl
+          aria-label="Inhoudstype"
+          value={scope}
+          onChange={(next) => setSearchParams({ ref, scope: next })}
+          data={[
+            { value: "docs", label: "Lessen" },
+            { value: "pages", label: "Pagina's" },
+            { value: "metadata", label: "Categorieën en tags" },
+          ]}
+        />
+        {site !== "home" && (
+          <>
+            <Button
+              variant="light"
+              onClick={() =>
+                navigate(
+                  `/sites/${site}/edit?${new URLSearchParams({ scope: "homepage", path: "homepage.mdx", ref })}`,
+                )
+              }
+            >
+              Homepage
+            </Button>
+            <Button
+              variant="light"
+              onClick={() =>
+                navigate(
+                  `/sites/${site}/settings?${new URLSearchParams({ ref })}`,
+                )
+              }
+            >
+              Vormgeving
+            </Button>
+          </>
+        )}
+      </Group>
       {treeError && (
         <Alert icon={<IconAlertCircle size={16} />} color="red" mb="md">
           Kon de bestandsboom niet laden: {String(treeError)}
@@ -93,7 +145,8 @@ export function SiteBrowser() {
                 <PageTree
                   items={tree ?? []}
                   selected={selectedPath}
-                  onSelect={(path) => setSearchParams({ path, ref })}
+                  onSelect={(path) => setSearchParams({ path, ref, scope })}
+                  metadata={scope === "metadata"}
                 />
               )}
             </ScrollArea>
@@ -112,7 +165,7 @@ export function SiteBrowser() {
                     leftSection={<IconPencil size={14} />}
                     onClick={() =>
                       navigate(
-                        `/sites/${site}/edit?path=${encodeURIComponent(page.path)}&ref=${encodeURIComponent(ref)}`,
+                        `/sites/${site}/${scope === "metadata" ? "metadata" : "edit"}?path=${encodeURIComponent(page.path)}&ref=${encodeURIComponent(ref)}&scope=${scope}`,
                       )
                     }
                   >

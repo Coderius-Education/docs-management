@@ -1,3 +1,4 @@
+import { MantineProvider } from '@mantine/core';
 import { expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderLesson } from './MdxPreview';
@@ -35,4 +36,12 @@ it('renders callout titles, details and branch-aware static assets', () => {
   expect(html).toContain(
     'https://lesson--python.preview.coderius.nl/img/a.png',
   );
+});
+
+it('retains the page scope when rendering the preview component',async()=>{
+ const {MdxPreview}=await import('./MdxPreview');
+ const html=renderToStaticMarkup(<MantineProvider><MdxPreview body="![diagram](./figure.png)" site="python" scope="pages" path="contact.mdx" branch="lesson"/></MantineProvider>);
+ expect(html).toContain('scope=pages');
+ const home=renderToStaticMarkup(<MantineProvider><MdxPreview body="![diagram](/managed/figure.png)" site="python" scope="homepage" path="homepage.mdx" branch="lesson"/></MantineProvider>);
+ expect(home).toContain('scope=homepage');expect(home).toContain('path=figure.png');
 });

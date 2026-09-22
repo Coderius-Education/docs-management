@@ -1,4 +1,5 @@
 import { componentModel } from './components';
+import { codeModel, headingModel, tabsModel } from './content';
 import {
   importsFrom,
   parseTree,
@@ -18,7 +19,15 @@ export interface Container {
   header?: Range;
 }
 export interface LessonBlock extends Range {
-  kind: 'markdown' | 'container' | 'component' | 'source' | 'imports';
+  kind:
+    | 'markdown'
+    | 'container'
+    | 'component'
+    | 'source'
+    | 'imports'
+    | 'code'
+    | 'heading'
+    | 'tabs';
   node: LessonNode;
   container?: Container;
 }
@@ -152,13 +161,19 @@ export function parseLesson(source: string, site: string) {
       const kind =
         node.type === 'mdxjsEsm'
           ? 'imports'
-          : container
-            ? 'container'
-            : componentModel(node, site, imports)
-              ? 'component'
-              : plain(node)
-                ? 'markdown'
-                : 'source';
+          : codeModel(node, source)
+            ? 'code'
+            : headingModel(node, source)?.id
+              ? 'heading'
+              : tabsModel(node, source, imports)
+                ? 'tabs'
+                : container
+                  ? 'container'
+                  : componentModel(node, site, imports)
+                    ? 'component'
+                    : plain(node)
+                      ? 'markdown'
+                      : 'source';
       const previous = blocks.at(-1);
       if (kind === 'markdown' && previous?.kind === 'markdown')
         previous.to = r.to;

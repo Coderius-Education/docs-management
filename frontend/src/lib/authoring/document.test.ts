@@ -14,7 +14,8 @@ describe('source-preserving lessons', () => {
     expect(replaceRange(source, block, 'Changed')).toBe(
       source.replace('Hello', 'Changed'),
     );
-    expect(doc.blocks.filter((b) => b.kind === 'source')).toHaveLength(2);
+    expect(doc.blocks.filter((b) => b.kind === 'source')).toHaveLength(1);
+    expect(doc.blocks.filter((b) => b.kind === 'code')).toHaveLength(1);
   });
   it('recognizes nested lesson containers without flattening their source', () => {
     const source =
@@ -35,7 +36,7 @@ describe('source-preserving lessons', () => {
     expect(
       parseLesson('```python\nimport time\n<X />\n```', 'python').blocks[0]
         .kind,
-    ).toBe('markdown');
+    ).toBe('code');
   });
   it('retains malformed source for recovery', () => {
     expect(parseLesson('<X foo={', 'python').error).toBeTruthy();

@@ -1,0 +1,1721 @@
+--- /dev/null
++++ b/packages/shared/components/HomepageSections/index.tsx
+@@ -0,0 +1,43 @@
++import type {CSSProperties, ReactNode} from 'react';
++import {useState} from 'react';
++import Link from '@docusaurus/Link';
++import useBaseUrl from '@docusaurus/useBaseUrl';
++import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
++import Heading from '@theme/Heading';
++import clsx from 'clsx';
++import heroStyles from '../HomepageHero/styles.module.css';
++import featureStyles from '../HomepageFeatures/styles.module.css';
++import styles from './styles.module.css';
++
++type Common = {children?: ReactNode; width?: 'full'|'wide'|'normal'|'narrow'; spacing?: 'none'|'small'|'normal'|'large'; align?: 'left'|'center'|'right'; background?: 'transparent'|'muted'|'primary'};
++function classes(props: Common) {return clsx(props.width && styles[props.width], props.spacing && styles[`spacing_${props.spacing}`], props.align && styles[`align_${props.align}`], props.background && styles[`background_${props.background}`]);}
++export function Hero({title,tagline,variant='default',children,...props}: Common & {title?:string;tagline?:string;variant?:'default'|'compact'|'plain'}) {
++  const {siteConfig}=useDocusaurusContext();
++  return <header className={clsx(variant==='plain' ? styles.plain : ['hero hero--primary',heroStyles.heroBanner],variant==='compact' && styles.compact, classes(props))}>
++    <div className={clsx('container',variant==='plain' && styles.plainInner)}>
++      <Heading as="h1" className={variant==='plain' ? undefined : 'hero__title'}>{title ?? siteConfig.title}</Heading>
++      <p className={variant==='plain' ? styles.plainTagline : 'hero__subtitle'}>{tagline ?? siteConfig.tagline}</p>
++      {children}
++    </div>
++  </header>;
++}
++export function Section({title,subtitle,children,...props}: Common & {title?:string;subtitle?:string}) {
++  return <section className={clsx(featureStyles.features,classes(props))}><div className="container">
++    {(title || subtitle) && <div className={featureStyles.featuresHeader}>{title && <Heading as="h2">{title}</Heading>}{subtitle && <p>{subtitle}</p>}</div>}{children}
++  </div></section>;
++}
++export function Columns({count=3,children,...props}:Common & {count?:number}) {
++  return <div className={clsx(styles.columns,classes(props))} style={{'--homepage-columns':Math.max(1,Math.min(4,count))} as CSSProperties}>{children}</div>;
++}
++export function Card({title,href,info,children,...props}:Common & {title?:string;href?:string;info?:string}) {
++  const [showInfo,setShowInfo]=useState(false);
++  const body=<>{title && <Heading as="h3">{title}</Heading>}{children}</>;
++  return <div className={clsx(featureStyles.featureCard,classes(props))}>
++    {href ? <Link to={href} className={featureStyles.featureLink}>{body}</Link> : <div className={featureStyles.featureLink}>{body}</div>}
++    {info && <div className={featureStyles.infoButtonWrapper}><button type="button" className={featureStyles.infoButton} onClick={()=>setShowInfo(!showInfo)} aria-label="Meer informatie" aria-expanded={showInfo}>i</button>{showInfo && <div className={featureStyles.infoTooltip}><div className={featureStyles.infoTooltipArrow}/>{info}</div>}</div>}
++  </div>;
++}
++export function Buttons({children,...props}:Common) {return <div className={clsx(heroStyles.buttons,classes(props))}>{children}</div>;}
++export function Button({href,variant='secondary',size='lg',children}: {href:string;variant?:'primary'|'secondary';size?:'sm'|'lg';children?:ReactNode}) {return <Link to={href} className={clsx('button',`button--${variant}`,`button--${size}`)}>{children}</Link>;}
++export function Picture({src,alt,caption,...props}: Common & {src:string;alt:string;caption?:string}) {const url=useBaseUrl(src);return <figure className={classes(props)}><img src={url} alt={alt} loading="lazy"/>{caption && <figcaption>{caption}</figcaption>}</figure>;}
++export function Divider(props:Common) {return <hr className={classes(props)}/>;}
+--- /dev/null
++++ b/packages/shared/components/HomepageSections/styles.module.css
+@@ -0,0 +1,23 @@
++.columns {display:grid;grid-template-columns:repeat(var(--homepage-columns,3),minmax(0,1fr));}
++.columns > * {min-width:0;}
++.full {width:100%;max-width:none;}
++.wide {width:100%;max-width:1400px;margin-inline:auto;}
++.normal {width:100%;max-width:1140px;margin-inline:auto;}
++.narrow {width:100%;max-width:720px;margin-inline:auto;}
++.spacing_none {padding-block:0;}
++.spacing_small {padding-block:1rem;}
++.spacing_normal {padding-block:2rem;}
++.spacing_large {padding-block:4rem;}
++.align_left {text-align:left;}
++.align_center {text-align:center;}
++.align_right {text-align:right;}
++.background_transparent {background:transparent;}
++.background_muted {background:var(--ifm-color-emphasis-100);}
++.background_primary {background:var(--ifm-color-primary);color:var(--ifm-font-color-base-inverse);}
++.compact {padding:1.25rem 0 1rem;}
++.compact h1 {font-size:1.75rem;margin:0;}
++.compact p {font-size:1rem;margin:.25rem 0 0;opacity:.92;}
++.plain {padding:2.5rem 0 .5rem;}
++.plainInner {max-width:720px;margin-left:max(1rem,calc((100vw - var(--ifm-container-width))/2));}
++.plainTagline {margin:.5rem 0 0;font-size:1.05rem;color:var(--ifm-color-emphasis-700);line-height:1.5;}
++@media(max-width:996px) {.columns {grid-template-columns:1fr;}.compact {padding:1rem 1rem .75rem;}.compact h1 {font-size:1.5rem;}.compact p {font-size:.95rem;}}
+--- /dev/null
++++ b/packages/shared/components/ManagedHomepage/index.tsx
+@@ -0,0 +1,32 @@
++/// <reference path="./mdx.d.ts" />
++import type {ComponentType, ReactNode} from 'react';
++import Layout from '@theme/Layout';
++import Head from '@docusaurus/Head';
++import useBaseUrl from '@docusaurus/useBaseUrl';
++import MDXContent from '@theme/MDXContent';
++import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
++import styles from './styles.module.css';
++
++type FrontMatter = {
++  title?: string; description?: string; image?: string; keywords?: string[];
++  wrapperClassName?: string; noFooter?: boolean; fullscreen?: boolean;
++  slug?: string;
++};
++/** Content lives outside src/pages so there remains exactly one root route. */
++export default function ManagedHomepage({Content, frontMatter = {}}: {
++  Content: ComponentType; frontMatter?: FrontMatter;
++}): ReactNode {
++  const {siteConfig} = useDocusaurusContext();
++  const image = useBaseUrl(frontMatter.image || '', {absolute: true});
++  if (frontMatter.slug && frontMatter.slug !== '/') throw new Error('Homepage slug must be /');
++  return <Layout title={frontMatter.title ?? siteConfig.title}
++    description={frontMatter.description ?? siteConfig.tagline}
++    noFooter={frontMatter.noFooter} wrapperClassName={frontMatter.wrapperClassName}>
++    <Head>
++      {frontMatter.image && <meta property="og:image" content={image} />}
++      {frontMatter.image && <meta name="twitter:image" content={image} />}
++      {frontMatter.keywords && <meta name="keywords" content={frontMatter.keywords.join(', ')} />}
++    </Head>
++    <div className={frontMatter.fullscreen ? styles.fullscreen : undefined}><MDXContent><Content /></MDXContent></div>
++  </Layout>;
++}
+--- /dev/null
++++ b/packages/shared/components/ManagedHomepage/mdx.d.ts
+@@ -0,0 +1,9 @@
++// The Docusaurus MDX loader exports frontMatter alongside the default component.
++// Its generic '*.mdx' declaration only describes the default export.
++declare module '*.mdx' {
++  export const frontMatter: {
++    title?: string; description?: string; image?: string; keywords?: string[];
++    wrapperClassName?: string; noFooter?: boolean; fullscreen?: boolean;
++    slug?: string;
++  };
++}
+--- /dev/null
++++ b/packages/shared/components/ManagedHomepage/styles.module.css
+@@ -0,0 +1,6 @@
++.fullscreen {
++  height: calc(100vh - var(--ifm-navbar-height));
++  display: flex;
++  flex-direction: column;
++  overflow: hidden;
++}
+--- a/packages/shared/config/index.js
++++ b/packages/shared/config/index.js
+@@ -8,6 +8,8 @@
+ const matomoPlugin = require('../plugins/matomo');
+ const { SITES, HOME, normalizeUrl } = require('../sites');
+ const { resolvePackageDir } = transpileShared;
++const {loadSettings, applySettings, deepMerge} = require('./managed-settings');
++const managedManifest = require('../plugins/managed-manifest');
+ 
+ // Alle cursussen behalve de huidige (op url gematcht). Voedt de footerkolom en
+ // de navbar-dropdown, zodat cross-site links uit één registry komen.
+@@ -88,6 +90,8 @@
+  * schrijven.
+  */
+ function createConfig(site = {}) {
++  const managed = loadSettings(process.cwd());
++  if (managed) site = applySettings(site, managed, process.cwd());
+   const {
+     sharedPackages = ['@coderius/shared'],
+     description,
+@@ -108,14 +112,29 @@
+   if (keywords)
+     seoTags.push({ tagName: 'meta', attributes: { name: 'keywords', content: keywords } });
+ 
+-  const themeConfig = {
++  const themeConfig = deepMerge({
+     colorMode: { respectPrefersColorScheme: true },
+     prism: { theme: prismThemes.github, darkTheme: prismThemes.dracula },
+     // Rechter inhoudsopgave toont standaard alleen H2-koppen. Een site mag dit
+     // overschrijven via themeConfig.tableOfContents.
+     tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 2 },
+-    ...siteThemeConfig,
+-  };
++  }, siteThemeConfig || {});
++  // Validate only after shared defaults, course settings and managed overrides
++  // have merged: a partial override must use the actual inherited other bound.
++  const {minHeadingLevel, maxHeadingLevel} = themeConfig.tableOfContents || {};
++  if (![minHeadingLevel, maxHeadingLevel].every(value => Number.isInteger(value) && value >= 2 && value <= 6)) {
++    throw new Error('themeConfig.tableOfContents: minHeadingLevel and maxHeadingLevel must be integers between 2 and 6');
++  }
++  if (minHeadingLevel > maxHeadingLevel) {
++    throw new Error(`themeConfig.tableOfContents: effective minHeadingLevel (${minHeadingLevel}) must not exceed effective maxHeadingLevel (${maxHeadingLevel})`);
++  }
++  for (const key of ['theme', 'darkTheme']) {
++    const value = themeConfig.prism?.[key];
++    if (typeof value === 'string') {
++      if (!prismThemes[value]) throw new Error(`Unknown Prism theme ${value}`);
++      themeConfig.prism[key] = prismThemes[value];
++    }
++  }
+   const others = otherSites(rest.url);
+ 
+   // Footer: zorg voor de CC-BY-NC copyright en één teruglink naar de homepage.
+@@ -148,7 +167,7 @@
+   // springen, plus een link naar het volledige overzicht op /cursussen.
+   const navbar = themeConfig.navbar ? { ...themeConfig.navbar } : {};
+   navbar.items = [
+-    ...(navbar.items || []),
++    ...(navbar.items || []).filter(item => item.to !== '/docenten' && !(item.type === 'dropdown' && item.label === 'Cursussen')),
+     // Elke site heeft een docentenhandleiding op /docenten (zie stijlgids §15).
+     { to: '/docenten', label: 'Docenten', position: 'right' },
+     {
+@@ -185,6 +204,7 @@
+     presets: withSharedCustomCss(presets),
+     plugins: [
+       ...(plugins || []),
++      ...(managed ? [[managedManifest, {settings: managed}]] : []),
+       [transpileShared, { packages: sharedPackages }],
+       mdxInspringing,
+       cursussenRoute,
+--- /dev/null
++++ b/packages/shared/config/managed-settings.js
+@@ -0,0 +1,88 @@
++const fs = require('node:fs');
++const path = require('node:path');
++const FORBIDDEN = new Set(['__proto__', 'constructor', 'prototype']);
++const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
++function deepMerge(base, overrides) {
++  const result = {...base};
++  for (const [key, value] of Object.entries(overrides)) {
++    if (FORBIDDEN.has(key)) throw new Error(`Unsafe settings key: ${key}`);
++    result[key] = isObject(value) ? deepMerge(isObject(base[key]) ? base[key] : {}, value) : value;
++  }
++  return result;
++}
++const colors = /^--ifm-(?:color-primary(?:-(?:dark|darker|darkest|light|lighter|lightest))?|background-color|font-color-base)$/;
++const fonts = new Set(['--ifm-font-family-base', '--ifm-font-family-monospace']);
++const sizes = new Set(['--ifm-font-size-base', '--ifm-container-width', '--ifm-container-width-xl', '--ifm-global-spacing', '--ifm-spacing-horizontal', '--ifm-global-radius', '--ifm-code-font-size']);
++function deriveShades(tokens) {
++  const result={...tokens};
++  const primary=tokens['--ifm-color-primary'];
++  if(typeof primary !== 'string' || !/^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/.test(primary)) return result;
++  const hex=primary.length===4 ? [...primary.slice(1)].map(c=>c+c).join('') : primary.slice(1);
++  const rgb=[0,2,4].map(offset=>parseInt(hex.slice(offset,offset+2),16));
++  for(const [suffix,factor] of Object.entries({dark:.9,darker:.85,darkest:.7,light:1.1,lighter:1.15,lightest:1.3})) {
++    const name=`--ifm-color-primary-${suffix}`;
++    if(!(name in result)) result[name]='#'+rgb.map(value=>Math.min(255,Math.floor(value*factor+.5)).toString(16).padStart(2,'0')).join('');
++  }
++  return result;
++}
++function renderCss(tokens = {}) {
++  if (!isObject(tokens) || Object.keys(tokens).some(key => !['light', 'dark'].includes(key))) throw new Error('Invalid token modes');
++  let css = '/* Generated from site-settings.json. */\n';
++  for (const mode of ['light', 'dark']) {
++    const values=tokens[mode];
++    if (values === undefined) continue;
++    if (!isObject(values)) throw new Error('Invalid tokens');
++    if (Object.keys(values).length === 0) continue;
++    const declarations = Object.entries(deriveShades(values)).sort(([a],[b]) => a < b ? -1 : a > b ? 1 : 0).map(([name, value]) => {
++      if ((typeof value !== 'string' || value.length > 300)) throw new Error(`Invalid token ${name}`);
++      const valid = colors.test(name) ? /^(?:#[\da-fA-F]{3,4}|#[\da-fA-F]{6}|#[\da-fA-F]{8}|(?:rgb|rgba|hsl|hsla)\([\d.,% +\-/]+\))$/.test(value)
++        : fonts.has(name) ? /^[a-zA-Z0-9 ,'"-]+$/.test(value)
++        : sizes.has(name) && /^(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%)$/.test(value);
++      if (!valid) throw new Error(`Invalid token ${name}`);
++      return `  ${name}: ${value};`;
++    });
++    css += `${mode === 'light' ? ':root' : '[data-theme="dark"]'} {\n${declarations.join('\n')}\n}\n`;
++  }
++  return css;
++}
++function validate(settings) {
++  if (!isObject(settings) || settings.version !== 1) throw new Error('Unsupported site-settings version');
++  for (const key of Object.keys(settings)) if (!['version','site','themeConfig','tokens','docs'].includes(key)) throw new Error(`Unknown settings group ${key}`);
++  for (const key of ['site','themeConfig','tokens','docs']) if (!isObject(settings[key])) throw new Error(`Invalid ${key} settings`);
++  const allowedSite = new Set(['title','tagline','description','keywords','favicon','image']);
++  for (const key of Object.keys(settings.site)) if (!allowedSite.has(key)) throw new Error(`Unsupported site property ${key}`);
++  renderCss(settings.tokens);
++  // Traverse unknown advanced settings too: reject prototype pollution at any depth.
++  const walk = (v) => { if (Array.isArray(v)) v.forEach(walk); else if(isObject(v)) for(const [k,x] of Object.entries(v)) { if(FORBIDDEN.has(k)) throw new Error(`Unsafe settings key ${k}`); walk(x); } };
++  walk(settings);
++  return settings;
++}
++function applySettings(config, raw, siteDir) {
++  const settings = validate(raw);
++  const {image, ...site} = settings.site;
++  if (Array.isArray(site.keywords)) site.keywords = site.keywords.join(', ');
++  const result = deepMerge(config, site);
++  result.themeConfig = deepMerge(config.themeConfig || {}, settings.themeConfig);
++  if (image !== undefined) result.themeConfig.image = image;
++  result.presets = (config.presets || []).map(entry => {
++    if (!Array.isArray(entry) || entry[0] !== 'classic') return entry;
++    const opts = {...entry[1]};
++    if (opts.docs !== false) opts.docs = deepMerge(opts.docs || {}, settings.docs);
++    const existing = opts.theme?.customCss;
++    const css = existing == null ? [] : Array.isArray(existing) ? existing : [existing];
++    opts.theme = {...opts.theme, customCss:[...css.filter(p => p !== path.join(siteDir,'src/css/managed-theme.css')),path.join(siteDir,'src/css/managed-theme.css')]};
++    return [entry[0],opts];
++  });
++  return result;
++}
++function loadSettings(siteDir) {
++  const filename = path.join(siteDir, 'site-settings.json');
++  if (!fs.existsSync(filename)) return null;
++  const settings = validate(JSON.parse(fs.readFileSync(filename, 'utf8')));
++  const cssPath = path.join(siteDir,'src/css/managed-theme.css');
++  fs.mkdirSync(path.dirname(cssPath),{recursive:true});
++  const css=renderCss(settings.tokens);
++  if(!fs.existsSync(cssPath) || fs.readFileSync(cssPath,'utf8')!==css) fs.writeFileSync(cssPath,css);
++  return settings;
++}
++module.exports = {deriveShades, deepMerge, renderCss, validate, applySettings, loadSettings};
+--- a/packages/shared/package.json
++++ b/packages/shared/package.json
+@@ -46,7 +46,9 @@
+     "./components/Leerlijnen/CursussenPage": "./components/Leerlijnen/CursussenPage.tsx",
+     "./components/Privacy/PrivacyPage": "./components/Privacy/PrivacyPage.tsx",
+     "./components/Privacy/MatomoOptOut": "./components/Privacy/MatomoOptOut.tsx",
+-    "./package.json": "./package.json"
++    "./package.json": "./package.json",
++    "./components/ManagedHomepage": "./components/ManagedHomepage/index.tsx",
++    "./components/HomepageSections": "./components/HomepageSections/index.tsx"
+   },
+   "dependencies": {
+     "prism-react-renderer": "catalog:"
+--- /dev/null
++++ b/packages/shared/plugins/managed-manifest.js
+@@ -0,0 +1,27 @@
++const fs = require('node:fs/promises');
++const path = require('node:path');
++const {execFileSync} = require('node:child_process');
++module.exports = function managedManifest(context, {settings}) {
++  return {
++    name: 'coderius-managed-settings',
++    async postBuild({outDir}) {
++      const config = context.siteConfig;
++      let commit = process.env.GITHUB_SHA || null;
++      if (!commit) { try {commit = execFileSync('git',['rev-parse','HEAD'],{cwd:context.siteDir,encoding:'utf8'}).trim();} catch {} }
++      let dirty = false;
++      try {dirty = Boolean(execFileSync('git',['status','--porcelain','--untracked-files=no'],{cwd:context.siteDir,encoding:'utf8'}).trim());} catch {}
++      if (dirty) commit = null;
++      const site = Object.fromEntries(['title','tagline','favicon'].filter(k=>config[k]!==undefined).map(k=>[k,config[k]]));
++      for(const key of ['description','keywords']) {
++        const tag=config.headTags?.find(tag=>tag.attributes?.name===key);
++        if(tag) site[key]=tag.attributes.content;
++      }
++      const supported=['image','metadata','colorMode','navbar','footer','announcementBar','docs','tableOfContents','prism'];
++      const themeConfig=Object.fromEntries(supported.filter(k=>config.themeConfig[k]!==undefined).map(k=>[k,config.themeConfig[k]]));
++      const preset=config.presets.find(p=>Array.isArray(p) && p[0]==='classic');
++      const capabilities={version:1, framework:'docusaurus', framework_version:'3.10.1',managed_homepage:true,settings_runtime:true,mermaid:false,math:false,homepage_fields:["title", "description", "keywords", "image", "slug", "wrapperClassName", "noFooter", "fullscreen"]};
++      await fs.writeFile(path.join(outDir,'effective-settings.json'),JSON.stringify({version:1,commit,dirty,unresolved:['inherited_css_tokens'],capabilities,settings:{version:1,site,themeConfig,tokens:settings.tokens,docs:Object.fromEntries(['breadcrumbs','showLastUpdateTime','showLastUpdateAuthor','sidebarCollapsed','sidebarCollapsible','editUrl'].map(key=>[key,preset?.[1]?.docs?.[key] ?? ({breadcrumbs:true,showLastUpdateTime:false,showLastUpdateAuthor:false,sidebarCollapsed:true,sidebarCollapsible:true,editUrl:null})[key]]))},inherited_navigation:['/docenten','/cursussen','/privacy','https://coderius.nl']},null,2)+'\n');
++      await fs.writeFile(path.join(outDir,'authoring-capabilities.json'),JSON.stringify(capabilities,null,2)+'\n');
++    },
++  };
++};
+--- /dev/null
++++ b/sites/algorithms/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/algorithms/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/algorithms/src/content/homepage.mdx
+@@ -0,0 +1,12 @@
++---
++description: "Leer algoritmes door ze zelf uit te voeren in de browser."
++---
++
++import {Hero} from '@coderius/shared/components/HomepageSections';
++import AlgorithmGrid from '@site/src/components/AlgorithmGrid';
++
++<Hero title="Coderius Algoritmes" variant="compact" />
++
++<main>
++  <AlgorithmGrid />
++</main>
+--- /dev/null
++++ b/sites/algorithms/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/algorithms/src/pages/index.tsx
++++ b/sites/algorithms/src/pages/index.tsx
+@@ -1,37 +1,6 @@
+-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+-import AlgorithmGrid from '@site/src/components/AlgorithmGrid';
+-import Heading from '@theme/Heading';
+-import Layout from '@theme/Layout';
+-import clsx from 'clsx';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-import styles from './index.module.css';
+-
+-function HomepageHeader() {
+-  const { siteConfig } = useDocusaurusContext();
+-  return (
+-    <header className={clsx('hero hero--primary', styles.heroBanner)}>
+-      <div className="container">
+-        <Heading as="h1" className={clsx('hero__title', styles.heroTitle)}>
+-          Coderius Algoritmes
+-        </Heading>
+-        <p className={clsx('hero__subtitle', styles.heroSubtitle)}>{siteConfig.tagline}</p>
+-      </div>
+-    </header>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+-
+-export default function Home(): ReactNode {
+-  const { siteConfig } = useDocusaurusContext();
+-  return (
+-    <Layout
+-      title={siteConfig.title}
+-      description="Leer algoritmes door ze zelf uit te voeren in de browser."
+-    >
+-      <HomepageHeader />
+-      <main>
+-        <AlgorithmGrid />
+-      </main>
+-    </Layout>
+-  );
+-}
+--- /dev/null
++++ b/sites/ctf/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/ctf/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/ctf/src/content/homepage.mdx
+@@ -0,0 +1,32 @@
++---
++title: "Home"
++description: "Leer cybersecurity door Capture the Flag challenges op te lossen"
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius CTF">
++  <Buttons>
++    <Button href="/docs/intro">Start de challenges</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?">
++  <Columns count={3}>
++    <Card title="Challenges" href="/docs/intro">
++
++      Begin met de eerste Capture the Flag-opdrachten.
++
++    </Card>
++    <Card title="Toolbox" href="/toolbox">
++
++      De tools die je nodig hebt om challenges te kraken.
++
++    </Card>
++    <Card title="Woordenlijst" href="/woordenlijst">
++
++      Snel de cybersecurity-termen opzoeken.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/ctf/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/ctf/src/pages/index.tsx
++++ b/sites/ctf/src/pages/index.tsx
+@@ -1,36 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [{ label: 'Start de challenges', to: '/docs/intro' }];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'Challenges',
+-    description: 'Begin met de eerste Capture the Flag-opdrachten.',
+-    link: '/docs/intro',
+-  },
+-  {
+-    title: 'Toolbox',
+-    description: 'De tools die je nodig hebt om challenges te kraken.',
+-    link: '/toolbox',
+-  },
+-  {
+-    title: 'Woordenlijst',
+-    description: 'Snel de cybersecurity-termen opzoeken.',
+-    link: '/woordenlijst',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  return (
+-    <Layout
+-      title="Home"
+-      description="Leer cybersecurity door Capture the Flag challenges op te lossen"
+-    >
+-      <HomepageHero title="Coderius CTF" ctas={ctas} />
+-      <HomepageFeatures heading="Waar wil je mee aan de slag?" features={features} />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/didactiek/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/didactiek/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/didactiek/src/content/homepage.mdx
+@@ -0,0 +1,13 @@
++---
++title: "Didactiek"
++description: "De didactische tips achter het Coderius-lesmateriaal en het onderzoek waarop ze rusten."
++---
++
++import {Hero} from '@coderius/shared/components/HomepageSections';
++import TipZoeker from '@site/src/components/TipZoeker';
++
++<Hero title="Tips uit onderzoek" tagline="Zoek hieronder een didactische tip en lees op de detailpagina welk onderzoek erachter zit." variant="plain" />
++
++<main>
++  <TipZoeker />
++</main>
+--- /dev/null
++++ b/sites/didactiek/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/didactiek/src/pages/index.tsx
++++ b/sites/didactiek/src/pages/index.tsx
+@@ -1,29 +1,6 @@
+-import TipZoeker from '@site/src/components/TipZoeker';
+-import Heading from '@theme/Heading';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
+-import styles from './index.module.css';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-export default function Home(): ReactNode {
+-  return (
+-    <Layout
+-      title="Didactiek"
+-      description="De didactische tips achter het Coderius-lesmateriaal en het onderzoek waarop ze rusten."
+-    >
+-      <header className={styles.hero}>
+-        <div className="container">
+-          <div className={styles.heroInner}>
+-            <Heading as="h1">Tips uit onderzoek</Heading>
+-            <p className={styles.tagline}>
+-              Zoek hieronder een didactische tip en lees op de detailpagina welk onderzoek erachter
+-              zit.
+-            </p>
+-          </div>
+-        </div>
+-      </header>
+-      <main>
+-        <TipZoeker />
+-      </main>
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/dvwa/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/dvwa/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/dvwa/src/content/homepage.mdx
+@@ -0,0 +1,30 @@
++---
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius DVWA">
++  <Buttons>
++    <Button href="/docs/dvwa_tutorial">Begin met de labs</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?">
++  <Columns count={3}>
++    <Card title="Challenges" href="/docs/dvwa_tutorial">
++
++      Begin meteen in je browser: SQL-injectie, XSS, command injection en meer.
++
++    </Card>
++    <Card title="Naslag" href="/docs/linux_leren">
++
++      Terminal, HTTP en databases uitgelegd — plus de cheatsheet.
++
++    </Card>
++    <Card title="Lokaal installeren" href="/docs/dvwa_installatie">
++
++      Nodig voor de zwaardere challenges met lokaal gereedschap.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/dvwa/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/dvwa/src/pages/index.js
++++ b/sites/dvwa/src/pages/index.js
+@@ -1,34 +1,6 @@
+-import HomepageFeatures from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero from '@coderius/shared/components/HomepageHero';
+-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+-import Layout from '@theme/Layout';
+-
+-const ctas = [{ label: 'Begin met de labs', to: '/docs/dvwa_tutorial' }];
+-
+-const features = [
+-  {
+-    title: 'Challenges',
+-    description: 'Begin meteen in je browser: SQL-injectie, XSS, command injection en meer.',
+-    link: '/docs/dvwa_tutorial',
+-  },
+-  {
+-    title: 'Naslag',
+-    description: 'Terminal, HTTP en databases uitgelegd — plus de cheatsheet.',
+-    link: '/docs/linux_leren',
+-  },
+-  {
+-    title: 'Lokaal installeren',
+-    description: 'Nodig voor de zwaardere challenges met lokaal gereedschap.',
+-    link: '/docs/dvwa_installatie',
+-  },
+-];
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+ export default function Home() {
+-  const { siteConfig } = useDocusaurusContext();
+-  return (
+-    <Layout title={siteConfig.title} description={siteConfig.tagline}>
+-      <HomepageHero title="Coderius DVWA" ctas={ctas} />
+-      <HomepageFeatures heading="Waar wil je mee aan de slag?" features={features} />
+-    </Layout>
+-  );
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/editor/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/editor/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/editor/src/content/homepage.mdx
+@@ -0,0 +1,32 @@
++---
++title: "Home"
++description: "Leer hoe je kunt werken met een code editor"
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius Editor">
++  <Buttons>
++    <Button href="/installatie-vscode">Klik hier om te beginnen met VS Code</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?">
++  <Columns count={3}>
++    <Card title="Website in VS Code" href="/web">
++
++      Maak en bewerk je webproject in de editor.
++
++    </Card>
++    <Card title="Python in VS Code" href="/python">
++
++      Schrijf en run Python-scripts lokaal.
++
++    </Card>
++    <Card title="Git &amp; GitHub" href="/git">
++
++      Versiebeheer: commits, branches en pull requests.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/editor/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/editor/src/pages/index.tsx
++++ b/sites/editor/src/pages/index.tsx
+@@ -1,35 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [
+-  { label: 'Klik hier om te beginnen met VS Code', to: '/installatie-vscode' },
+-];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'Website in VS Code',
+-    description: 'Maak en bewerk je webproject in de editor.',
+-    link: '/web',
+-  },
+-  {
+-    title: 'Python in VS Code',
+-    description: 'Schrijf en run Python-scripts lokaal.',
+-    link: '/python',
+-  },
+-  {
+-    title: 'Git & GitHub',
+-    description: 'Versiebeheer: commits, branches en pull requests.',
+-    link: '/git',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  return (
+-    <Layout title="Home" description="Leer hoe je kunt werken met een code editor">
+-      <HomepageHero title="Coderius Editor" ctas={ctas} />
+-      <HomepageFeatures heading="Waar wil je mee aan de slag?" features={features} />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/embedded/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/embedded/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/embedded/src/content/homepage.mdx
+@@ -0,0 +1,32 @@
++---
++title: "Embedded programmeren"
++description: "Leer embedded programmeren: van een blink-LED in de Arduino IDE tot IO en interfaces op een STM32."
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius Embedded">
++  <Buttons>
++    <Button href="/docs/introductie/wat-is-embedded">Start met je eerste LED →</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?" subtitle="Kies hieronder een startpunt">
++  <Columns count={3}>
++    <Card title="Begin hier" href="/docs/introductie/wat-is-embedded" info="Start hier als je nog nooit een microcontroller hebt geprogrammeerd. Je hebt geen hardware nodig: alles werkt in de simulator.">
++
++      Je eerste knipperende LED in de Arduino IDE
++
++    </Card>
++    <Card title="Naar de STM32" href="/docs/platformio/waarom-platformio" info="Klaar met de basis? Stap over op PlatformIO en leer IO en interfaces configureren op een STM32 Blue Pill.">
++
++      Van Arduino IDE via PlatformIO naar een echte STM32
++
++    </Card>
++    <Card title="Cheatsheet" href="/cheatsheet" info="Gebruik de cheatsheet als naslagwerk voor syntax, pin-namen en veelgebruikte commando’s.">
++
++      Snel iets opzoeken: functies, pinnen en commando’s
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/embedded/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/embedded/src/pages/index.tsx
++++ b/sites/embedded/src/pages/index.tsx
+@@ -1,45 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [
+-  { label: 'Start met je eerste LED →', to: '/docs/introductie/wat-is-embedded' },
+-];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'Begin hier',
+-    description: 'Je eerste knipperende LED in de Arduino IDE',
+-    link: '/docs/introductie/wat-is-embedded',
+-    info: 'Start hier als je nog nooit een microcontroller hebt geprogrammeerd. Je hebt geen hardware nodig: alles werkt in de simulator.',
+-  },
+-  {
+-    title: 'Naar de STM32',
+-    description: 'Van Arduino IDE via PlatformIO naar een echte STM32',
+-    link: '/docs/platformio/waarom-platformio',
+-    info: 'Klaar met de basis? Stap over op PlatformIO en leer IO en interfaces configureren op een STM32 Blue Pill.',
+-  },
+-  {
+-    title: 'Cheatsheet',
+-    description: 'Snel iets opzoeken: functies, pinnen en commando’s',
+-    link: '/cheatsheet',
+-    info: 'Gebruik de cheatsheet als naslagwerk voor syntax, pin-namen en veelgebruikte commando’s.',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  return (
+-    <Layout
+-      title="Embedded programmeren"
+-      description="Leer embedded programmeren: van een blink-LED in de Arduino IDE tot IO en interfaces op een STM32."
+-    >
+-      <HomepageHero title="Coderius Embedded" ctas={ctas} />
+-      <HomepageFeatures
+-        heading="Waar wil je mee aan de slag?"
+-        subheading="Kies hieronder een startpunt"
+-        features={features}
+-      />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/fullstack/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/fullstack/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/fullstack/src/content/homepage.mdx
+@@ -0,0 +1,30 @@
++---
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius Fullstack">
++  <Buttons>
++    <Button href="/docs/FastAPI/installatie">Begin met FastAPI</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?">
++  <Columns count={3}>
++    <Card title="Je eerste endpoint" href="/docs/FastAPI/eerste_endpoint">
++
++      Bouw je eerste API-route met FastAPI.
++
++    </Card>
++    <Card title="Database" href="/docs/FastAPI/database">
++
++      Sla gegevens op en haal ze weer op met SQLite.
++
++    </Card>
++    <Card title="Cheatsheet" href="/docs/cheatsheet">
++
++      Snel terugvinden hoe een route, form of template werkt.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/fullstack/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/fullstack/src/pages/index.tsx
++++ b/sites/fullstack/src/pages/index.tsx
+@@ -1,35 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [{ label: 'Begin met FastAPI', to: '/docs/FastAPI/installatie' }];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'Je eerste endpoint',
+-    description: 'Bouw je eerste API-route met FastAPI.',
+-    link: '/docs/FastAPI/eerste_endpoint',
+-  },
+-  {
+-    title: 'Database',
+-    description: 'Sla gegevens op en haal ze weer op met SQLite.',
+-    link: '/docs/FastAPI/database',
+-  },
+-  {
+-    title: 'Cheatsheet',
+-    description: 'Snel terugvinden hoe een route, form of template werkt.',
+-    link: '/docs/cheatsheet',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  const { siteConfig } = useDocusaurusContext();
+-  return (
+-    <Layout title={siteConfig.title} description={siteConfig.tagline}>
+-      <HomepageHero title="Coderius Fullstack" ctas={ctas} />
+-      <HomepageFeatures heading="Waar wil je mee aan de slag?" features={features} />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/godot/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/godot/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/godot/src/content/homepage.mdx
+@@ -0,0 +1,32 @@
++---
++title: "Coderius Godot — Leer je eerste 2D game maken"
++description: "Gratis Nederlandse cursus Godot 4: bouw stap voor stap je eerste 2D game met sprites, GDScript, animaties en collisions."
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius Godot">
++  <Buttons>
++    <Button href="/docs/installatie">Begin met je 1e 2D game</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?">
++  <Columns count={3}>
++    <Card title="Begin de tutorial" href="/docs/installatie">
++
++      Van installatie tot je eerste speelbare 2D game.
++
++    </Card>
++    <Card title="Nodes cheatsheet" href="/cheatsheet">
++
++      De belangrijkste Godot-nodes op een rij.
++
++    </Card>
++    <Card title="GDScript-tips" href="/gdscript-tips">
++
++      Handige patronen en valkuilen in GDScript.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/godot/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/godot/src/pages/index.tsx
++++ b/sites/godot/src/pages/index.tsx
+@@ -1,36 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [{ label: 'Begin met je 1e 2D game', to: '/docs/installatie' }];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'Begin de tutorial',
+-    description: 'Van installatie tot je eerste speelbare 2D game.',
+-    link: '/docs/installatie',
+-  },
+-  {
+-    title: 'Nodes cheatsheet',
+-    description: 'De belangrijkste Godot-nodes op een rij.',
+-    link: '/cheatsheet',
+-  },
+-  {
+-    title: 'GDScript-tips',
+-    description: 'Handige patronen en valkuilen in GDScript.',
+-    link: '/gdscript-tips',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  return (
+-    <Layout
+-      title="Coderius Godot — Leer je eerste 2D game maken"
+-      description="Gratis Nederlandse cursus Godot 4: bouw stap voor stap je eerste 2D game met sprites, GDScript, animaties en collisions."
+-    >
+-      <HomepageHero title="Coderius Godot" ctas={ctas} />
+-      <HomepageFeatures heading="Waar wil je mee aan de slag?" features={features} />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/ide/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/ide/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/ide/src/content/homepage.mdx
+@@ -0,0 +1,10 @@
++---
++title: "Editor"
++description: "Schrijf en draai code direct in je browser"
++noFooter: true
++fullscreen: true
++---
++
++import ProjectEditor from '@coderius/editor/ProjectEditor';
++
++<ProjectEditor height="100%" />
+--- /dev/null
++++ b/sites/ide/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/ide/src/pages/index.tsx
++++ b/sites/ide/src/pages/index.tsx
+@@ -1,14 +1,6 @@
+-import ProjectEditor from '@coderius/editor/ProjectEditor';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
+-import styles from './index.module.css';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-export default function Home(): ReactNode {
+-  return (
+-    <Layout title="Editor" description="Schrijf en draai code direct in je browser" noFooter>
+-      <div className={styles.fullscreen}>
+-        <ProjectEditor height="100%" />
+-      </div>
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/play/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/play/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/play/src/content/homepage.mdx
+@@ -0,0 +1,30 @@
++---
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius Play">
++  <Buttons>
++    <Button href="/docs/eerste-keer-python/IA">Klik hier om te beginnen!</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?">
++  <Columns count={3}>
++    <Card title="Begin bij het begin" href="/docs/eerste-keer-python/IA">
++
++      Je allereerste Python-programma, stap voor stap.
++
++    </Card>
++    <Card title="Speeltuin" href="/speeltuin">
++
++      Speel met kant-en-klare voorbeelden en pas ze direct aan.
++
++    </Card>
++    <Card title="Cheatsheet" href="/docs/cheatsheet">
++
++      Snel iets opzoeken: vormen, fysica, acties en gebeurtenissen.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/play/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/play/src/pages/index.tsx
++++ b/sites/play/src/pages/index.tsx
+@@ -1,35 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [{ label: 'Klik hier om te beginnen!', to: '/docs/eerste-keer-python/IA' }];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'Begin bij het begin',
+-    description: 'Je allereerste Python-programma, stap voor stap.',
+-    link: '/docs/eerste-keer-python/IA',
+-  },
+-  {
+-    title: 'Speeltuin',
+-    description: 'Speel met kant-en-klare voorbeelden en pas ze direct aan.',
+-    link: '/speeltuin',
+-  },
+-  {
+-    title: 'Cheatsheet',
+-    description: 'Snel iets opzoeken: vormen, fysica, acties en gebeurtenissen.',
+-    link: '/docs/cheatsheet',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  const { siteConfig } = useDocusaurusContext();
+-  return (
+-    <Layout title={siteConfig.title} description={siteConfig.tagline}>
+-      <HomepageHero title="Coderius Play" ctas={ctas} />
+-      <HomepageFeatures heading="Waar wil je mee aan de slag?" features={features} />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/python/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/python/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/python/src/content/homepage.mdx
+@@ -0,0 +1,33 @@
++---
++title: "Leer Python programmeren"
++description: "Leer stap voor stap programmeren in Python met interactieve oefeningen."
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius Python">
++  <Buttons>
++    <Button href="/docs/basis/introductie">Begin met leren</Button>
++    <Button href="/playground">Playground</Button>
++  </Buttons>
++</Hero>
++
++<Section>
++  <Columns count={3}>
++    <Card title="Stap voor stap" href="/docs/basis/introductie">
++
++      Van je eerste print() tot functies en lijsten. Elke les bouwt voort op de vorige.
++
++    </Card>
++    <Card title="Direct uitvoeren" href="/playground">
++
++      Schrijf en run Python code in je browser. Geen installatie nodig.
++
++    </Card>
++    <Card title="Leren door doen" href="/docs/basis/jouw-naam-op-het-scherm">
++
++      Elke les heeft oefeningen met tips en oplossingen om zelf mee te oefenen.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/python/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/python/src/pages/index.tsx
++++ b/sites/python/src/pages/index.tsx
+@@ -1,40 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [
+-  { label: 'Begin met leren', to: '/docs/basis/introductie' },
+-  { label: 'Playground', to: '/playground' },
+-];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'Stap voor stap',
+-    description:
+-      'Van je eerste print() tot functies en lijsten. Elke les bouwt voort op de vorige.',
+-    link: '/docs/basis/introductie',
+-  },
+-  {
+-    title: 'Direct uitvoeren',
+-    description: 'Schrijf en run Python code in je browser. Geen installatie nodig.',
+-    link: '/playground',
+-  },
+-  {
+-    title: 'Leren door doen',
+-    description: 'Elke les heeft oefeningen met tips en oplossingen om zelf mee te oefenen.',
+-    link: '/docs/basis/jouw-naam-op-het-scherm',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  return (
+-    <Layout
+-      title="Leer Python programmeren"
+-      description="Leer stap voor stap programmeren in Python met interactieve oefeningen."
+-    >
+-      <HomepageHero title="Coderius Python" ctas={ctas} />
+-      <HomepageFeatures features={features} />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/robotica/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/robotica/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/robotica/src/content/homepage.mdx
+@@ -0,0 +1,30 @@
++---
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius Robotica">
++  <Buttons>
++    <Button href="/lego_auto/frame">Start met de Lego-auto</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?">
++  <Columns count={3}>
++    <Card title="Lego-auto" href="/lego_auto/frame">
++
++      Bouw stap voor stap je eigen rijdende robot.
++
++    </Card>
++    <Card title="Editor" href="/editor">
++
++      Schrijf en upload code naar je microcontroller.
++
++    </Card>
++    <Card title="Cheatsheet" href="/cheatsheet">
++
++      Pin-aansluitingen en code-snippets snel opzoeken.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/robotica/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/robotica/src/pages/index.tsx
++++ b/sites/robotica/src/pages/index.tsx
+@@ -1,35 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [{ label: 'Start met de Lego-auto', to: '/lego_auto/frame' }];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'Lego-auto',
+-    description: 'Bouw stap voor stap je eigen rijdende robot.',
+-    link: '/lego_auto/frame',
+-  },
+-  {
+-    title: 'Editor',
+-    description: 'Schrijf en upload code naar je microcontroller.',
+-    link: '/editor',
+-  },
+-  {
+-    title: 'Cheatsheet',
+-    description: 'Pin-aansluitingen en code-snippets snel opzoeken.',
+-    link: '/cheatsheet',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  const { siteConfig } = useDocusaurusContext();
+-  return (
+-    <Layout title={siteConfig.title} description={siteConfig.tagline}>
+-      <HomepageHero title="Coderius Robotica" ctas={ctas} />
+-      <HomepageFeatures heading="Waar wil je mee aan de slag?" features={features} />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }
+--- /dev/null
++++ b/sites/web/authoring-capabilities.json
+@@ -0,0 +1,19 @@
++{
++  "version": 1,
++  "framework": "docusaurus",
++  "framework_version": "3.10.1",
++  "managed_homepage": true,
++  "settings_runtime": true,
++  "mermaid": false,
++  "math": false,
++  "homepage_fields": [
++    "title",
++    "description",
++    "keywords",
++    "image",
++    "slug",
++    "wrapperClassName",
++    "noFooter",
++    "fullscreen"
++  ]
++}
+--- /dev/null
++++ b/sites/web/site-settings.json
+@@ -0,0 +1,7 @@
++{
++  "version": 1,
++  "site": {},
++  "themeConfig": {},
++  "tokens": {},
++  "docs": {}
++}
+--- /dev/null
++++ b/sites/web/src/content/homepage.mdx
+@@ -0,0 +1,30 @@
++---
++---
++
++import {Hero, Section, Columns, Card, Buttons, Button} from '@coderius/shared/components/HomepageSections';
++
++<Hero title="Coderius Web">
++  <Buttons>
++    <Button href="/docs/html-css/intro-html">Begin de cursus</Button>
++  </Buttons>
++</Hero>
++
++<Section title="Waar wil je mee aan de slag?">
++  <Columns count={3}>
++    <Card title="HTML &amp; CSS" href="/docs/html-css/intro-html">
++
++      Bouw en style je eerste webpagina.
++
++    </Card>
++    <Card title="JavaScript" href="/js">
++
++      Maak je pagina interactief met JavaScript.
++
++    </Card>
++    <Card title="Jouw website" href="/jouw-website">
++
++      Zet alles samen in je eigen project.
++
++    </Card>
++  </Columns>
++</Section>
+--- /dev/null
++++ b/sites/web/src/css/managed-theme.css
+@@ -0,0 +1 @@
++/* Generated from site-settings.json. */
+--- a/sites/web/src/pages/index.tsx
++++ b/sites/web/src/pages/index.tsx
+@@ -1,35 +1,6 @@
+-import HomepageFeatures, { type FeatureItem } from '@coderius/shared/components/HomepageFeatures';
+-import HomepageHero, { type HeroCta } from '@coderius/shared/components/HomepageHero';
+-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+-import Layout from '@theme/Layout';
+-import type { ReactNode } from 'react';
++import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
++import Content, {frontMatter} from '../content/homepage.mdx';
+ 
+-const ctas: HeroCta[] = [{ label: 'Begin de cursus', to: '/docs/html-css/intro-html' }];
+-
+-const features: FeatureItem[] = [
+-  {
+-    title: 'HTML & CSS',
+-    description: 'Bouw en style je eerste webpagina.',
+-    link: '/docs/html-css/intro-html',
+-  },
+-  {
+-    title: 'JavaScript',
+-    description: 'Maak je pagina interactief met JavaScript.',
+-    link: '/js',
+-  },
+-  {
+-    title: 'Jouw website',
+-    description: 'Zet alles samen in je eigen project.',
+-    link: '/jouw-website',
+-  },
+-];
+-
+-export default function Home(): ReactNode {
+-  const { siteConfig } = useDocusaurusContext();
+-  return (
+-    <Layout title={siteConfig.title} description={siteConfig.tagline}>
+-      <HomepageHero title="Coderius Web" ctas={ctas} />
+-      <HomepageFeatures heading="Waar wil je mee aan de slag?" features={features} />
+-    </Layout>
+-  );
++export default function Home() {
++  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
+ }

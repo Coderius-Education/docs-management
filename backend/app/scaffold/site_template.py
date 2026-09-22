@@ -14,36 +14,36 @@ import re
 
 def _package_json(slug: str) -> str:
     data = {
-            "name": f"@coderius/{slug}-docs",
-            "version": "0.0.0",
-            "private": True,
-            "scripts": {
-                "docusaurus": "docusaurus",
-                "start": "docusaurus start",
-                "build": "docusaurus build",
-                "swizzle": "docusaurus swizzle",
-                "serve": "docusaurus serve",
-                "clear": "docusaurus clear",
-                "write-translations": "docusaurus write-translations",
-                "write-heading-ids": "docusaurus write-heading-ids",
-                "typecheck": "tsc",
-            },
-            "dependencies": {
-                "@coderius/shared": "workspace:*",
-                "@docusaurus/core": "catalog:",
-                "@docusaurus/preset-classic": "catalog:",
-                "@mdx-js/react": "catalog:",
-                "clsx": "catalog:",
-                "prism-react-renderer": "catalog:",
-                "react": "catalog:",
-                "react-dom": "catalog:",
-            },
-            "devDependencies": {
-                "@docusaurus/module-type-aliases": "catalog:",
-                "@docusaurus/tsconfig": "catalog:",
-                "@docusaurus/types": "catalog:",
-                "typescript": "catalog:",
-            },
+        "name": f"@coderius/{slug}-docs",
+        "version": "0.0.0",
+        "private": True,
+        "scripts": {
+            "docusaurus": "docusaurus",
+            "start": "docusaurus start",
+            "build": "docusaurus build",
+            "swizzle": "docusaurus swizzle",
+            "serve": "docusaurus serve",
+            "clear": "docusaurus clear",
+            "write-translations": "docusaurus write-translations",
+            "write-heading-ids": "docusaurus write-heading-ids",
+            "typecheck": "tsc",
+        },
+        "dependencies": {
+            "@coderius/shared": "workspace:*",
+            "@docusaurus/core": "catalog:",
+            "@docusaurus/preset-classic": "catalog:",
+            "@mdx-js/react": "catalog:",
+            "clsx": "catalog:",
+            "prism-react-renderer": "catalog:",
+            "react": "catalog:",
+            "react-dom": "catalog:",
+        },
+        "devDependencies": {
+            "@docusaurus/module-type-aliases": "catalog:",
+            "@docusaurus/tsconfig": "catalog:",
+            "@docusaurus/types": "catalog:",
+            "typescript": "catalog:",
+        },
     }
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
@@ -131,42 +131,47 @@ _TSCONFIG_JSON = """{
 }
 """
 
-# Zelfstandige homepage zonder lokale component-/CSS-afhankelijkheden, zodat de
-# site bouwt met alleen de gescaffolde bestanden.
-_INDEX_TSX = """import type {ReactNode} from 'react';
-import Link from '@docusaurus/Link';
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import Layout from '@theme/Layout';
-import Heading from '@theme/Heading';
+# The shared runtime consumes the imported MDX frontmatter and keeps one route.
+_INDEX_TSX = """import ManagedHomepage from '@coderius/shared/components/ManagedHomepage';
+import Content, {frontMatter} from '../content/homepage.mdx';
 
-function HomepageHeader() {
-  const {siteConfig} = useDocusaurusContext();
-  return (
-    <header className="hero hero--primary">
-      <div className="container">
-        <Heading as="h1" className="hero__title">
-          {siteConfig.title}
-        </Heading>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
-        <div>
-          <Link className="button button--secondary button--lg" to="/docs/intro">
-            Begin de cursus
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-export default function Home(): ReactNode {
-  const {siteConfig} = useDocusaurusContext();
-  return (
-    <Layout title={siteConfig.title} description={siteConfig.tagline}>
-      <HomepageHeader />
-    </Layout>
-  );
+export default function Home() {
+  return <ManagedHomepage Content={Content} frontMatter={frontMatter} />;
 }
 """
+
+_HOMEPAGE_MDX = """---
+---
+
+import {Hero, Buttons, Button} from '@coderius/shared/components/HomepageSections';
+
+<Hero>
+  <Buttons>
+    <Button href="/docs/intro">Begin de cursus</Button>
+  </Buttons>
+</Hero>
+"""
+
+_MANAGED_SETTINGS = {"version": 1, "site": {}, "themeConfig": {}, "tokens": {}, "docs": {}}
+_CAPABILITIES = {
+    "version": 1,
+    "framework": "docusaurus",
+    "framework_version": "3.10.1",
+    "managed_homepage": True,
+    "settings_runtime": True,
+    "mermaid": False,
+    "math": False,
+    "homepage_fields": [
+        "title",
+        "description",
+        "keywords",
+        "image",
+        "slug",
+        "wrapperClassName",
+        "noFooter",
+        "fullscreen",
+    ],
+}
 
 
 def _intro_md(title: str) -> str:
@@ -193,6 +198,10 @@ def scaffold_files(
         f"{base}/sidebars.ts": _SIDEBARS_TS,
         f"{base}/tsconfig.json": _TSCONFIG_JSON,
         f"{base}/src/pages/index.tsx": _INDEX_TSX,
+        f"{base}/src/content/homepage.mdx": _HOMEPAGE_MDX,
+        f"{base}/site-settings.json": json.dumps(_MANAGED_SETTINGS, indent=2) + "\n",
+        f"{base}/authoring-capabilities.json": json.dumps(_CAPABILITIES, indent=2) + "\n",
+        f"{base}/src/css/managed-theme.css": "/* Generated from site-settings.json. */\n",
         f"{base}/docs/intro.md": _intro_md(title),
     }
     return {path: content.encode("utf-8") for path, content in files.items()}

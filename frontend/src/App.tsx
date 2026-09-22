@@ -1,21 +1,22 @@
-import { Center, Loader } from '@mantine/core';
-import { Suspense, lazy } from 'react';
-import { Route, Routes } from 'react-router';
+import { Center, Loader } from "@mantine/core";
+import { Suspense, lazy } from "react";
+import { Route, Routes } from "react-router";
 
-import { Layout } from './components/Layout';
-import { RequireAuth } from './components/RequireAuth';
-import { BuildsPage } from './routes/BuildsPage';
-import { Dashboard } from './routes/Dashboard';
-import { ExperimentDetail } from './routes/ExperimentDetail';
-import { ExperimentsPage } from './routes/ExperimentsPage';
-import { Login } from './routes/Login';
+import { Layout } from "./components/Layout";
+import { RequireAuth } from "./components/RequireAuth";
+import { BuildsPage } from "./routes/BuildsPage";
+import { Dashboard } from "./routes/Dashboard";
+import { ExperimentDetail } from "./routes/ExperimentDetail";
+import { ExperimentsPage } from "./routes/ExperimentsPage";
+import { Login } from "./routes/Login";
 
 const EditorPage = lazy(() =>
-  import('./routes/EditorPage').then((m) => ({ default: m.EditorPage })),
+  import("./routes/EditorPage").then((m) => ({ default: m.EditorPage })),
 );
-import { PrDetail } from './routes/PrDetail';
-import { PrList } from './routes/PrList';
-import { SiteBrowser } from './routes/SiteBrowser';
+import { PrDetail } from "./routes/PrDetail";
+import { PrList } from "./routes/PrList";
+import { SettingsPage } from "./routes/SettingsPage";
+import { SiteBrowser } from "./routes/SiteBrowser";
 
 export default function App() {
   return (
@@ -35,6 +36,15 @@ export default function App() {
                   </Center>
                 }
               >
+                <EditorPage />
+              </Suspense>
+            }
+          />
+          <Route path="/sites/:site/settings" element={<SettingsPage />} />
+          <Route
+            path="/sites/:site/metadata"
+            element={
+              <Suspense fallback={<Loader />}>
                 <EditorPage />
               </Suspense>
             }

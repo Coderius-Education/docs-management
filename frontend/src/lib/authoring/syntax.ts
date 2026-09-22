@@ -36,7 +36,52 @@ const processor = createProcessor({
   remarkPlugins: [remarkGfm, remarkDirective],
 });
 export function parseTree(source: string): LessonNode {
-  return processor.parse(source) as unknown as LessonNode;
+  // Docusaurus' MDX compatibility accepts legacy heading IDs. Escape the brace
+  // for the MDX parser, then map every AST range back to the original source.
+  const insertions: number[] = [];
+  let offset = 0;
+  let fence: { char: string; length: number } | undefined;
+  const prepared = source
+    .split(/(?<=\n)/)
+    .map((line) => {
+      const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
+      if (marker) {
+        if (!fence) fence = { char: marker[1][0], length: marker[1].length };
+        else if (
+          marker[1][0] === fence.char &&
+          marker[1].length >= fence.length &&
+          line.slice(marker[0].length).trim() === ''
+        )
+          fence = undefined;
+      }
+      let output = line;
+      if (!fence && !marker && /^ {0,3}#{1,6}[ \t]/.test(line)) {
+        const id = line.match(/(?<!\\)\{#[^\s{}]+\}(?:[ \t]+#+)?[ \t]*\r?\n?$/);
+        if (id?.index !== undefined) {
+          insertions.push(offset + id.index);
+          output = line.slice(0, id.index) + '\\' + line.slice(id.index);
+        }
+      }
+      offset += line.length;
+      return output;
+    })
+    .join('');
+  const tree = processor.parse(prepared) as unknown as LessonNode;
+  if (!insertions.length) return tree;
+  const originalOffset = (value: number) =>
+    value -
+    insertions.filter((original, index) => original + index < value).length;
+  const remap = (node: LessonNode | Attribute) => {
+    if (node.position) {
+      node.position.start.offset = originalOffset(node.position.start.offset);
+      node.position.end.offset = originalOffset(node.position.end.offset);
+    }
+    if ('children' in node) node.children?.forEach(remap);
+    if ('attributes' in node && Array.isArray(node.attributes))
+      node.attributes.forEach(remap);
+  };
+  remap(tree);
+  return tree;
 }
 export function range(node: Pick<LessonNode, 'position'>): Range {
   if (!node.position)

@@ -1,0 +1,66 @@
+{
+  "name": "@coderius/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Gedeelde Docusaurus-resources voor alle Coderius -docs sites: config-factory, merkthema, brand-assets en herbruikbare componenten.",
+  "type": "commonjs",
+  "exports": {
+    "./config": "./config/index.js",
+    "./sites": {
+      "types": "./sites.d.ts",
+      "default": "./sites.js"
+    },
+    "./voorkennis": {
+      "types": "./voorkennis.d.ts",
+      "default": "./voorkennis.js"
+    },
+    "./codeblokken": {
+      "types": "./codeblokken.d.ts",
+      "default": "./codeblokken.js"
+    },
+    "./stijl": {
+      "types": "./stijl.d.ts",
+      "default": "./stijl.js"
+    },
+    "./matomo": {
+      "types": "./matomo.d.ts",
+      "default": "./matomo.js"
+    },
+    "./privacy-content": {
+      "types": "./privacy-content.d.ts",
+      "default": "./privacy-content.js"
+    },
+    "./plugins/transpile-shared": "./plugins/transpile-shared.js",
+    "./plugins/cursussen-route": "./plugins/cursussen-route.js",
+    "./plugins/privacy-route": "./plugins/privacy-route.js",
+    "./plugins/matomo": "./plugins/matomo.js",
+    "./css/custom.css": "./css/custom.css",
+    "./components/HomepageHero": "./components/HomepageHero/index.tsx",
+    "./components/HomepageHero/styles.module.css": "./components/HomepageHero/styles.module.css",
+    "./components/HomepageFeatures": "./components/HomepageFeatures/index.tsx",
+    "./components/HomepageFeatures/styles.module.css": "./components/HomepageFeatures/styles.module.css",
+    "./components/Voorkennis": "./components/Voorkennis/index.tsx",
+    "./components/CodeUitleg": "./components/CodeUitleg/index.tsx",
+    "./components/SiteLink": "./components/SiteLink/index.tsx",
+    "./components/Leerlijnen": "./components/Leerlijnen/index.tsx",
+    "./components/Leerlijnen/CursussenPage": "./components/Leerlijnen/CursussenPage.tsx",
+    "./components/Privacy/PrivacyPage": "./components/Privacy/PrivacyPage.tsx",
+    "./components/Privacy/MatomoOptOut": "./components/Privacy/MatomoOptOut.tsx",
+    "./package.json": "./package.json",
+    "./components/ManagedHomepage": "./components/ManagedHomepage/index.tsx",
+    "./components/HomepageSections": "./components/HomepageSections/index.tsx"
+  },
+  "dependencies": {
+    "prism-react-renderer": "catalog:"
+  },
+  "peerDependencies": {
+    "@docusaurus/core": "*",
+    "@docusaurus/preset-classic": "*",
+    "clsx": "*",
+    "react": "*",
+    "react-dom": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

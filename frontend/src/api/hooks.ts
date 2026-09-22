@@ -1,20 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, setCsrfToken } from './client';
+import { api, setCsrfToken } from "./client";
 import type {
+  ContentScope,
   CreateSiteResult,
   Me,
   PageContent,
   SiteCreate,
   SiteInfo,
   TreeItem,
-} from './types';
+} from "./types";
 
 export function useMe() {
   return useQuery({
-    queryKey: ['me'],
+    queryKey: ["me"],
     queryFn: async () => {
-      const me = await api<Me>('/api/auth/me');
+      const me = await api<Me>("/api/auth/me");
       setCsrfToken(me.csrf_token);
       return me;
     },
@@ -25,8 +26,8 @@ export function useMe() {
 
 export function useSites() {
   return useQuery({
-    queryKey: ['sites'],
-    queryFn: () => api<SiteInfo[]>('/api/sites'),
+    queryKey: ["sites"],
+    queryFn: () => api<SiteInfo[]>("/api/sites"),
     staleTime: 60 * 60 * 1000,
   });
 }
@@ -35,25 +36,35 @@ export function useCreateSite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: SiteCreate) =>
-      api<CreateSiteResult>('/api/sites', { method: 'POST', body: payload }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
+      api<CreateSiteResult>("/api/sites", { method: "POST", body: payload }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sites"] }),
   });
 }
 
-export function useTree(site: string, ref = 'main') {
+export function useTree(
+  site: string,
+  ref = "main",
+  scope: ContentScope = "docs",
+) {
   return useQuery({
-    queryKey: ['tree', site, ref],
+    queryKey:
+      scope === "docs" ? ["tree", site, ref] : ["tree", site, ref, scope],
     queryFn: () =>
-      api<TreeItem[]>(`/api/sites/${site}/tree`, { params: { ref } }),
+      api<TreeItem[]>(`/api/sites/${site}/tree`, { params: { ref, scope } }),
   });
 }
 
-export function usePage(site: string, path: string | null, ref = 'main') {
+export function usePage(
+  site: string,
+  path: string | null,
+  ref = "main",
+  scope: ContentScope = "docs",
+) {
   return useQuery({
-    queryKey: ['page', site, path, ref],
+    queryKey: pageKey(site, path, ref, scope),
     queryFn: () =>
       api<PageContent>(`/api/sites/${site}/page`, {
-        params: { path: path!, ref },
+        params: { path: path!, ref, scope },
       }),
     enabled: path !== null,
   });
@@ -61,10 +72,21 @@ export function usePage(site: string, path: string | null, ref = 'main') {
 
 export function usePreviews() {
   return useQuery({
-    queryKey: ['previews'],
+    queryKey: ["previews"],
     queryFn: () =>
-      api<{ site: string; branch: string; url: string }[]>('/api/previews'),
+      api<{ site: string; branch: string; url: string }[]>("/api/previews"),
     staleTime: 30_000,
     refetchInterval: 30_000,
   });
+}
+
+export function pageKey(
+  site: string,
+  path: string | null,
+  ref: string,
+  scope: ContentScope = "docs",
+) {
+  return scope === "docs"
+    ? ["page", site, path, ref]
+    : ["page", site, path, ref, scope];
 }

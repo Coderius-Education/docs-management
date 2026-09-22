@@ -9,7 +9,17 @@ from urllib.parse import quote
 from fastapi import HTTPException
 
 from app.github.client import GitHubClient, repo_path
-from app.github.contents import safe_page_path
+from app.github.contents import ContentScope, content_root, safe_relative_path, validate_branch
+
+
+def safe_asset_path(site: str, path: str, scope: ContentScope = "docs") -> str:
+    root = content_root(site, scope)
+    if scope == "metadata":
+        raise HTTPException(400, "Metadata ondersteunt geen afbeeldingen")
+    if scope == "homepage":
+        root = f"sites/{site}/static/managed"
+    return f"{root}/{safe_relative_path(path)}"
+
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 IMAGE_TYPES = {
@@ -41,14 +51,21 @@ def image_type(filename: str, content: bytes | None = None) -> str:
 
 
 async def write_image(
-    client: GitHubClient, site: str, directory: str, filename: str, branch: str, content: bytes
+    client: GitHubClient,
+    site: str,
+    directory: str,
+    filename: str,
+    branch: str,
+    content: bytes,
+    scope: ContentScope = "docs",
 ) -> dict:
+    validate_branch(branch, writing=True)
     image_type(filename, content)
     stem, extension = posixpath.splitext(posixpath.basename(filename))
     stem = re.sub(r"[^a-z0-9-]+", "-", stem.lower()).strip("-")[:60] or "afbeelding"
     name = f"{stem}-{hashlib.sha256(content).hexdigest()[:16]}{extension.lower()}"
     path = f"{directory.rstrip('/')}/{name}" if directory else name
-    full_path = safe_page_path(site, path)
+    full_path = safe_asset_path(site, path, scope)
     endpoint = repo_path(f"/contents/{quote(full_path, safe='/')}")
     existing = await client.get(endpoint, params={"ref": branch}, expect=(200, 404))
     blob_sha = hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
@@ -68,11 +85,17 @@ async def write_image(
             },
         )
         commit_sha = result["commit"]["sha"]
-    return {"commit_sha": commit_sha, "path": path, "url": f"./{name}"}
+    return {
+        "commit_sha": commit_sha,
+        "path": path,
+        "url": f"/managed/{quote(path, safe='/')}" if scope == "homepage" else f"./{name}",
+    }
 
 
-async def read_image(client: GitHubClient, site: str, path: str, ref: str) -> tuple[bytes, str]:
-    full_path = safe_page_path(site, path)
+async def read_image(
+    client: GitHubClient, site: str, path: str, ref: str, scope: ContentScope = "docs"
+) -> tuple[bytes, str]:
+    full_path = safe_asset_path(site, path, scope)
     image_type(path)
     data = await client.get(
         repo_path(f"/contents/{quote(full_path, safe='/')}"),
