@@ -104,7 +104,8 @@ python3 integrations/docusaurus/tests/build-homepage.py ../docs
 node integrations/docusaurus/tests/browser.cjs
 ```
 
-In the docs checkout run `pnpm test`, per-site production builds, and shared/site
-`typecheck`. `browser.cjs` checks the actual production homepages for hydration,
+In the docs checkout run the full CI checks: `pnpm lint`, `pnpm typecheck`,
+`pnpm test`, and per-site production builds. Checking only selected packages
+does not cover the repository-wide Biome formatting and import rules. `browser.cjs` checks the actual production homepages for hydration,
 algorithm links, tip search, IDE sizing/footer, card information, and mobile
 horizontal overflow. See `VERIFICATION.md` for the execution record and limits.

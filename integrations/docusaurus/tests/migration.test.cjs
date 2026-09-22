@@ -10,7 +10,7 @@ test('all 13 known courses have editable MDX and one thin root route',()=>{
   assert.ok(fs.existsSync(path.join(base,'src/content/homepage.mdx')),`${site} content missing`);
   const extension=site==='dvwa'?'js':'tsx';
   const wrapper=fs.readFileSync(path.join(base,`src/pages/index.${extension}`),'utf8');
-  assert.match(wrapper,/Content, \{frontMatter\}/);
+  assert.match(wrapper,/import Content,\s*\{\s*frontMatter\s*\}\s+from '\.\.\/content\/homepage\.mdx'/);
   assert.match(wrapper,/<ManagedHomepage Content=\{Content\} frontMatter=\{frontMatter\}/);
   assert.equal(fs.existsSync(path.join(base,'src/pages/index.mdx')),false);
  }

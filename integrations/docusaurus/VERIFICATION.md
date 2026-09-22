@@ -52,3 +52,23 @@ Logs used in this session:
 
 Review correction: merged TOC validation passed a Python production rebuild
 (`/tmp/docusaurus-authoring-toc-build.log`).
+
+## CI follow-up
+
+The initial docs PR run failed its `checks` job on 27 Biome formatting/import/style
+violations; the aggregate `build` job consequently failed too. All 14 individual
+site builds, cross-site links and test/content jobs in that run passed. Management
+CI was green. The fixes are committed in docs as `7c4cad9`.
+
+Runtime files now follow the repository's Biome configuration. The MDX declaration
+reference remains above imports with a separating blank line, preserving its
+TypeScript meaning during import sorting. Migration and new-site wrapper output
+use the same import formatting; the migration assertion checks the actual module
+and accepts harmless whitespace.
+
+Verified locally after correction: full `pnpm lint` (713 files), full
+`pnpm typecheck` (every site and package, Svelte zero warnings/errors), all 1365
+course tests, 12 Node integration tests, 3 migration guard tests, scaffold test,
+and scoped Ruff checks. Logs: `/tmp/docusaurus-ci-typecheck.log` and
+`/tmp/docusaurus-ci-tests.log`. The bundled runtime and patch match the fixed docs
+checkout byte-for-byte.
