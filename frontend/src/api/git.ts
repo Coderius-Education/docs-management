@@ -63,8 +63,8 @@ export function useBranches() {
 export function useCreateBranch() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) =>
-      api<Branch>('/api/branches', { method: 'POST', body: { name } }),
+    mutationFn: (payload: { name: string; from_branch: string }) =>
+      api<Branch>('/api/branches', { method: 'POST', body: payload }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['branches'] }),
   });
 }
@@ -79,15 +79,37 @@ export function useSavePage(site: string) {
       message: string;
       sha?: string | null;
     }) =>
-      api<{ commit_sha: string; content_sha: string }>(`/api/sites/${site}/page`, {
-        method: 'PUT',
-        body: payload,
-      }),
+      api<{ commit_sha: string; content_sha: string }>(
+        `/api/sites/${site}/page`,
+        {
+          method: 'PUT',
+          body: payload,
+        },
+      ),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['page', site, vars.path] });
       qc.invalidateQueries({ queryKey: ['tree', site] });
     },
   });
+}
+
+export function uploadImage(
+  site: string,
+  branch: string,
+  path: string,
+  file: File,
+) {
+  const body = new FormData();
+  body.set('branch', branch);
+  body.set(
+    'directory',
+    path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '',
+  );
+  body.set('file', file);
+  return api<{ url: string; path: string; commit_sha: string | null }>(
+    `/api/sites/${site}/assets`,
+    { method: 'POST', body },
+  );
 }
 
 export function usePrs(state = 'open') {
@@ -139,10 +161,11 @@ export function useCreatePr() {
 export function useMergePr(number: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api<{ merged: boolean }>(`/api/prs/${number}/merge`, {
-      method: 'POST',
-      body: {},
-    }),
+    mutationFn: () =>
+      api<{ merged: boolean }>(`/api/prs/${number}/merge`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['prs'] });
       qc.invalidateQueries({ queryKey: ['pr', number] });
@@ -153,7 +176,8 @@ export function useMergePr(number: number) {
 export function useClosePr(number: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api(`/api/prs/${number}/close`, { method: 'POST', body: {} }),
+    mutationFn: () =>
+      api(`/api/prs/${number}/close`, { method: 'POST', body: {} }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['prs'] });
       qc.invalidateQueries({ queryKey: ['pr', number] });

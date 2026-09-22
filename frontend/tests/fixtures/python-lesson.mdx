@@ -1,0 +1,151 @@
+---
+sidebar_position: 2
+description: Leer de print()-functie van Python. Toon tekst op het scherm en ontdek dat Python je code regel voor regel uitvoert.
+---
+
+import CodeExercise from '@site/src/components/CodeExercise';
+
+# 1 Jouw naam op het scherm
+
+Welkom bij je eerste les Python. Je schrijft hier je allereerste programma: een paar regels tekst op het scherm. Het enige wat je nodig hebt is één instructie: `print()`.
+
+## Tekst tonen met print
+
+Alles wat je tussen aanhalingstekens in `print(...)` zet, verschijnt op het scherm:
+
+```python
+print("Hallo, wereld!")
+```
+
+Python voert je code **van boven naar beneden** uit. Elke regel is één instructie. Wil je drie regels tonen, dan gebruik je drie keer `print()`:
+
+```python
+print("Hallo!")
+print("Ik leer Python.")
+print("Dit is makkelijk.")
+```
+
+Uitvoer:
+
+```
+Hallo!
+Ik leer Python.
+Dit is makkelijk.
+```
+
+Tekst moet altijd tussen aanhalingstekens staan. Vergeet je ze, dan denkt Python dat je een variabele bedoelt — en geeft een foutmelding.
+
+---
+
+## Opdracht 1.1: Jouw naam
+
+Print je eigen naam op het scherm.
+
+<CodeExercise>{`# Schrijf hier je code`}</CodeExercise>
+
+<details>
+<summary>Klik hier voor een tip.</summary>
+
+Eén regel `print()` met je naam tussen aanhalingstekens.
+
+</details>
+
+<details>
+<summary>Klik hier voor de oplossing.</summary>
+
+```python
+print("Alex")
+```
+
+Vervang `Alex` door je eigen naam — vergeet de aanhalingstekens niet.
+
+<CodeExercise>{`print("Alex")`}</CodeExercise>
+
+</details>
+
+---
+
+## Opdracht 1.2: Visitekaartje
+
+Print drie regels onder elkaar: je naam, je leeftijd en je hobby.
+
+Verwachte uitvoer (voorbeeld):
+
+```
+Alex Jansen
+15
+Muziek maken
+```
+
+<CodeExercise>{`# Schrijf hier je code`}</CodeExercise>
+
+<details>
+<summary>Klik hier voor een tip.</summary>
+
+Drie `print()`-regels, elk met je eigen gegevens tussen aanhalingstekens. Getallen mag je ook tussen aanhalingstekens zetten — het is dan gewoon tekst.
+
+</details>
+
+<details>
+<summary>Klik hier voor de oplossing.</summary>
+
+```python
+print("Alex Jansen")
+print("15")
+print("Muziek maken")
+```
+
+<CodeExercise>{`print("Alex Jansen")
+print("15")
+print("Muziek maken")`}</CodeExercise>
+
+</details>
+
+---
+
+## Opdracht 1.3: Visitekaartje met titel
+
+Maak je visitekaartje uit opdracht 1.2 mooier door een titel, labels en een afsluitzin toe te voegen.
+
+Verwachte uitvoer:
+
+```
+=== Mijn Visitekaartje ===
+Naam: Alex Jansen
+Leeftijd: 15
+School: Python College
+Hobby: Muziek maken
+Tot ziens!
+```
+
+<CodeExercise>{`# Schrijf hier je code`}</CodeExercise>
+
+<details>
+<summary>Klik hier voor een tip.</summary>
+
+Zes regels `print()`. Elke regel is één hele tekst tussen aanhalingstekens, inclusief het label (zoals `"Naam: Alex Jansen"`).
+
+</details>
+
+<details>
+<summary>Klik hier voor de oplossing.</summary>
+
+```python
+print("=== Mijn Visitekaartje ===")
+print("Naam: Alex Jansen")
+print("Leeftijd: 15")
+print("School: Python College")
+print("Hobby: Muziek maken")
+print("Tot ziens!")
+```
+
+In de volgende les ga je dit visitekaartje verbeteren met **variabelen** — dan hoef je niet meer alle gegevens in elke `print()` opnieuw te typen.
+
+<CodeExercise>{`print("=== Mijn Visitekaartje ===")
+print("Naam: Alex Jansen")
+print("Leeftijd: 15")
+print("School: Python College")
+print("Hobby: Muziek maken")
+print("Tot ziens!")`}</CodeExercise>
+
+</details>

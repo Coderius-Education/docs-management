@@ -6,6 +6,7 @@ export interface SplitDoc {
   rawFrontmatter: string;
   body: string;
   hadFrontmatter: boolean;
+  error?: string;
 }
 
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
@@ -13,14 +14,32 @@ const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 export function splitFrontmatter(content: string): SplitDoc {
   const match = content.match(FM_RE);
   if (!match) {
-    return { frontmatter: {}, rawFrontmatter: '', body: content, hadFrontmatter: false };
+    return {
+      frontmatter: {},
+      rawFrontmatter: '',
+      body: content,
+      hadFrontmatter: false,
+    };
   }
   let frontmatter: Record<string, unknown> = {};
   try {
-    frontmatter = (YAML.parse(match[1]) as Record<string, unknown>) ?? {};
+    const parsed: unknown = YAML.parse(match[1]);
+    if (
+      parsed !== null &&
+      (typeof parsed !== 'object' || Array.isArray(parsed))
+    )
+      throw new Error('Frontmatter moet een object zijn');
+    frontmatter = (parsed as Record<string, unknown>) ?? {};
   } catch {
-    // kapotte frontmatter: behandel als body zodat er niets verloren gaat
-    return { frontmatter: {}, rawFrontmatter: '', body: content, hadFrontmatter: false };
+    // Keep invalid frontmatter intact and require explicit source recovery.
+    return {
+      frontmatter: {},
+      rawFrontmatter: '',
+      body: content,
+      hadFrontmatter: false,
+      error:
+        'De pagina-instellingen bevatten ongeldige YAML of zijn geen object. Corrigeer de broncode.',
+    };
   }
   return {
     frontmatter,
@@ -35,11 +54,17 @@ export function splitFrontmatter(content: string): SplitDoc {
  * blijft de oorspronkelijke tekst (incl. volgorde/comments) letterlijk behouden —
  * zo geeft openen+opslaan zonder wijzigingen gegarandeerd nul diff.
  */
-export function joinFrontmatter(doc: SplitDoc, frontmatter: Record<string, unknown>, body: string): string {
+export function joinFrontmatter(
+  doc: SplitDoc,
+  frontmatter: Record<string, unknown>,
+  body: string,
+): string {
   if (doc.hadFrontmatter && deepEqual(frontmatter, doc.frontmatter)) {
     return doc.rawFrontmatter + body;
   }
-  const entries = Object.entries(frontmatter).filter(([, v]) => v !== undefined && v !== '');
+  const entries = Object.entries(frontmatter).filter(
+    ([, v]) => v !== undefined && v !== '',
+  );
   if (entries.length === 0) return body;
   const yamlText = YAML.stringify(Object.fromEntries(entries)).trimEnd();
   return `---\n${yamlText}\n---\n\n${body.replace(/^\n+/, '')}`;

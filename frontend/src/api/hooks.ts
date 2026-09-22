@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, setCsrfToken } from './client';
-import type { CreateSiteResult, Me, PageContent, SiteCreate, SiteInfo, TreeItem } from './types';
+import type {
+  CreateSiteResult,
+  Me,
+  PageContent,
+  SiteCreate,
+  SiteInfo,
+  TreeItem,
+} from './types';
 
 export function useMe() {
   return useQuery({
@@ -36,14 +43,28 @@ export function useCreateSite() {
 export function useTree(site: string, ref = 'main') {
   return useQuery({
     queryKey: ['tree', site, ref],
-    queryFn: () => api<TreeItem[]>(`/api/sites/${site}/tree`, { params: { ref } }),
+    queryFn: () =>
+      api<TreeItem[]>(`/api/sites/${site}/tree`, { params: { ref } }),
   });
 }
 
 export function usePage(site: string, path: string | null, ref = 'main') {
   return useQuery({
     queryKey: ['page', site, path, ref],
-    queryFn: () => api<PageContent>(`/api/sites/${site}/page`, { params: { path: path!, ref } }),
+    queryFn: () =>
+      api<PageContent>(`/api/sites/${site}/page`, {
+        params: { path: path!, ref },
+      }),
     enabled: path !== null,
+  });
+}
+
+export function usePreviews() {
+  return useQuery({
+    queryKey: ['previews'],
+    queryFn: () =>
+      api<{ site: string; branch: string; url: string }[]>('/api/previews'),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 }

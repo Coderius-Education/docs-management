@@ -1,0 +1,104 @@
+---
+sidebar_position: 6
+---
+
+# 2.6 Het complete algoritme
+
+<Voorkennis
+  items={[
+    {site: 'python', to: '/docs/functies/functies', label: 'Functies en return-waarden'},
+  ]}
+/>
+
+**Leerdoel:** je ziet alle bouwstenen samen werken en onderzoekt het
+algoritme als geheel.
+
+## Alles samen
+
+```python
+def vind_maximum(lijst):
+    maximum = lijst[0]
+    for waarde in lijst:
+        if waarde > maximum:
+            maximum = waarde
+    return maximum
+```
+
+Zie je de bouwstenen?
+
+- Regel 2 → **bouwsteen 3**: startwaarde is `lijst[0]` (veilig).
+- Regel 3 → **bouwsteen 2**: door de lijst lopen.
+- Regels 4-5 → **bouwsteen 1**: vergelijken en bij update overschrijven.
+- Regel 6 → het resultaat teruggeven.
+
+## Run
+
+<PyRunner editable={false} initialCode={`def vind_maximum(lijst):
+    maximum = lijst[0]
+    for waarde in lijst:
+        if waarde > maximum:
+            maximum = waarde
+    return maximum
+
+print(vind_maximum([3, 7, 2, 9, 4]))         # verwacht: 9
+print(vind_maximum([-3, -1, -7]))             # verwacht: -1
+print(vind_maximum([42]))                     # verwacht: 42
+print(vind_maximum([5, 5, 5, 5]))             # verwacht: 5`} />
+
+<AlgorithmModel algorithm="maximum" />
+
+## Onderzoek
+
+Speel met de code. Probeer in elk geval:
+
+1. Wat gebeurt er op een **lege** lijst `[]`?
+2. Wat gebeurt er op een lijst van **strings**: `["banaan", "appel", "kers"]`?
+3. Wat gebeurt er op een **gemengde** lijst: `[1, "twee", 3]`?
+
+<PyRunner initialCode={`def vind_maximum(lijst):
+    maximum = lijst[0]
+    for waarde in lijst:
+        if waarde > maximum:
+            maximum = waarde
+    return maximum
+
+# Experimenteer
+print(vind_maximum(["banaan", "appel", "kers"]))
+# Verwijder de # om de crash-cases te zien:
+# print(vind_maximum([]))
+# print(vind_maximum([1, "twee", 3]))`} />
+
+<details>
+<summary>Wat zie je?</summary>
+
+- Strings → werkt. Alfabetisch vergelijken: `'k' > 'b' > 'a'`, dus
+  "kers" > "banaan" > "appel" → output `kers`. Python kan strings
+  vergelijken met `<` en `>` (alfabetisch).
+- Lege lijst → `IndexError` op `lijst[0]`. Ons algoritme heeft geen
+  bescherming.
+- Gemengd → `TypeError: '>' not supported between instances of 'str' and
+  'int'`. Je kunt 1 niet met "twee" vergelijken.
+
+</details>
+
+## Hoeveel werk doet dit?
+
+Voor `n` elementen doet ons algoritme **`n` vergelijkingen** (we
+vergelijken óók `lijst[0]` met zichzelf, één extra). Dat is **O(n)** —
+lineair in de lijstgrootte.
+
+Wil je écht minimaal werk? Sla de eerste over (zie [stap 5](./05-bouwen-initialisatie)
+voor `lijst[1:]`). Dan zijn het `n − 1` vergelijkingen. Maar O(n) blijft
+O(n) — die ene vergelijking maakt geen verschil voor de groeisnelheid.
+
+## Een korte reflectie
+
+Met drie bouwstenen heb je iets gemaakt dat:
+
+- Werkt op elke niet-lege lijst van vergelijkbare elementen.
+- Geen aanname maakt over volgorde (gesorteerd of niet).
+- Crasht bij een lege lijst (geen `lijst[0]` mogelijk).
+
+Tijd om er een variant van te maken.
+
+Door naar [stap 7: aanpassen](./07-aanpassen).

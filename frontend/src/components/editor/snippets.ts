@@ -9,7 +9,8 @@ export function siteSnippets(site: string): Snippet[] {
   const snippets: Snippet[] = [
     {
       label: ':::info',
-      content: ':::info\nIn deze opdracht gebruik je … (zie [sectie](/docs/...)).\n:::\n',
+      content:
+        ':::info\nIn deze opdracht gebruik je … (zie [sectie](/docs/...)).\n:::\n',
     },
     { label: ':::tip', content: ':::tip\n…\n:::\n' },
     { label: ':::caution', content: ':::caution\n**Let op:** …\n:::\n' },
@@ -33,11 +34,12 @@ export function siteSnippets(site: string): Snippet[] {
   ];
 
   // TryButton bestaat per site onder @site/src/components; alleen tonen waar relevant.
-  if (['python', 'play'].includes(site)) {
+  if (site === 'play') {
     snippets.push(
       {
         label: 'TryButton-import',
-        content: "import TryButton from '@site/src/components/CodeRunner/TryButton';\n",
+        content:
+          "import TryButton from '@site/src/components/CodeRunner/TryButton';\n",
       },
       {
         label: 'TryButton',
@@ -48,7 +50,10 @@ export function siteSnippets(site: string): Snippet[] {
   return snippets;
 }
 
-export function newPageTemplate(title: string, sidebarPosition: number): string {
+export function newPageTemplate(
+  title: string,
+  sidebarPosition: number,
+): string {
   return `---
 sidebar_position: ${sidebarPosition}
 hide_table_of_contents: true

@@ -1,10 +1,9 @@
 """Sites- en content-endpoints: lijst, boom, pagina lezen/schrijven, aanmaken."""
 
-import posixpath
 import re
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +12,7 @@ from app.auth.deps import CurrentUser, require_csrf, user_github_token
 from app.config import get_settings
 from app.db.models import Site
 from app.db.session import get_db
+from app.github.assets import MAX_IMAGE_BYTES, read_image, write_image
 from app.github.client import GitHubClient
 from app.github.commits import multi_file_commit
 from app.github.contents import get_file_text, get_tree, read_page, safe_page_path, write_page
@@ -45,9 +45,7 @@ async def list_sites(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[dict]:
     sites = (await db.scalars(select(Site).where(Site.enabled).order_by(Site.slug))).all()
-    return [
-        {"slug": s.slug, "domain": s.domain, "display_name": s.display_name} for s in sites
-    ]
+    return [{"slug": s.slug, "domain": s.domain, "display_name": s.display_name} for s in sites]
 
 
 class SiteCreate(BaseModel):
@@ -99,12 +97,10 @@ async def create_site(
     await create_branch(client, branch)
     build_yml = await get_file_text(client, ".github/workflows/build.yml", branch)
     docs_files = scaffold_files(slug, title, tagline, domain, description)
-    docs_files[".github/workflows/build.yml"] = add_site_to_build_matrix(
-        build_yml, slug
-    ).encode("utf-8")
-    await multi_file_commit(
-        client, branch, f"Nieuwe site '{slug}' toevoegen", add=docs_files
+    docs_files[".github/workflows/build.yml"] = add_site_to_build_matrix(build_yml, slug).encode(
+        "utf-8"
     )
+    await multi_file_commit(client, branch, f"Nieuwe site '{slug}' toevoegen", add=docs_files)
     docs_pr = await create_pr(
         client,
         branch,
@@ -123,9 +119,7 @@ async def create_site(
         ).encode("utf-8"),
         "compose.yml": add_domain_to_traefik(compose_yml, domain).encode("utf-8"),
     }
-    await multi_file_commit(
-        client, branch, f"Site '{slug}' registreren", add=mgmt_files, repo=mgmt
-    )
+    await multi_file_commit(client, branch, f"Site '{slug}' registreren", add=mgmt_files, repo=mgmt)
     mgmt_pr = await create_pr(
         client,
         branch,
@@ -256,25 +250,31 @@ async def upload_asset(
     user: CurrentUser,
     site_obj: Annotated[Site, Depends(valid_site)],
     branch: Annotated[str, Form()],
-    directory: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
+    directory: Annotated[str, Form()] = "",
 ) -> dict:
-    """Upload een afbeelding naast de pagina (zelfde map, conform schrijfgids)."""
+    """Commit een afbeelding naast de les, zonder bestaande bestanden te overschrijven."""
     if branch == "main":
         raise HTTPException(status_code=400, detail="Rechtstreeks naar main schrijven mag niet")
-    filename = posixpath.basename(file.filename or "")
-    allowed = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
-    if not filename or not filename.lower().endswith(allowed):
-        raise HTTPException(status_code=400, detail="Alleen afbeeldingsbestanden")
-    target = safe_page_path(site_obj.slug, f"{directory}/{filename}")
-    content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Afbeelding groter dan 5 MB")
+    content = await file.read(MAX_IMAGE_BYTES + 1)
     client = GitHubClient(user_github_token(user))
-    sha = await multi_file_commit(
-        client,
-        branch,
-        f"Afbeelding {filename} toegevoegd",
-        add={target: content},
+    return await write_image(client, site_obj.slug, directory, file.filename or "", branch, content)
+
+
+@router.get("/{site}/assets")
+async def preview_asset(
+    user: CurrentUser,
+    site_obj: Annotated[Site, Depends(valid_site)],
+    path: str,
+    ref: str = "main",
+) -> Response:
+    client = GitHubClient(user_github_token(user))
+    content, media_type = await read_image(client, site_obj.slug, path, ref)
+    return Response(
+        content,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "private, no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
-    return {"commit_sha": sha, "path": f"{directory}/{filename}"}

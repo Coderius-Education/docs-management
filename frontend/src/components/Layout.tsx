@@ -51,30 +51,50 @@ export function Layout() {
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Group>
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Title order={4}>Coderius Docs Beheer</Title>
+            <Burger
+              opened={opened}
+              onClick={toggle}
+              hiddenFrom="sm"
+              size="sm"
+            />
+            <Title order={4} style={{ fontSize: 'clamp(14px, 3vw, 18px)' }}>
+              Coderius Docs Beheer
+            </Title>
           </Group>
           <Group gap="xs">
-            <ActionIcon variant="subtle" onClick={toggleColorScheme} aria-label="Kleurschema wisselen">
-              {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+            <ActionIcon
+              variant="subtle"
+              onClick={toggleColorScheme}
+              aria-label="Kleurschema wisselen"
+            >
+              {colorScheme === 'dark' ? (
+                <IconSun size={18} />
+              ) : (
+                <IconMoon size={18} />
+              )}
             </ActionIcon>
             {me && (
-            <Menu position="bottom-end">
-              <Menu.Target>
-                <UnstyledButton>
-                  <Group gap="xs">
-                    <Avatar src={me.avatar_url} size="sm" radius="xl" />
-                    <Text size="sm">{me.name ?? me.login}</Text>
-                    <IconChevronDown size={14} />
-                  </Group>
-                </UnstyledButton>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item leftSection={<IconLogout size={14} />} onClick={logout}>
-                  Uitloggen
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
+              <Menu position="bottom-end">
+                <Menu.Target>
+                  <UnstyledButton>
+                    <Group gap="xs">
+                      <Avatar src={me.avatar_url} size="sm" radius="xl" />
+                      <Text size="sm" visibleFrom="sm">
+                        {me.name ?? me.login}
+                      </Text>
+                      <IconChevronDown size={14} />
+                    </Group>
+                  </UnstyledButton>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item
+                    leftSection={<IconLogout size={14} />}
+                    onClick={logout}
+                  >
+                    Uitloggen
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
             )}
           </Group>
         </Group>
@@ -106,7 +126,11 @@ export function Layout() {
             active={location.pathname.startsWith('/experiments')}
             onClick={() => navigate('/experiments')}
           />
-          <MantineNavLink label="Sites" leftSection={<IconWorldWww size={16} />} defaultOpened>
+          <MantineNavLink
+            label="Sites"
+            leftSection={<IconWorldWww size={16} />}
+            defaultOpened
+          >
             {sites?.map((site) => (
               <MantineNavLink
                 key={site.slug}
