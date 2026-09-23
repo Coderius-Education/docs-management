@@ -1,0 +1,304 @@
+.homepage-studio {
+  min-width: 0;
+}
+.homepage-studio-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.homepage-canvas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px;
+}
+.homepage-canvas-surround {
+  background: light-dark(#f2f4f7, #141519);
+  padding: 24px;
+  border-radius: 12px;
+  min-width: 0;
+}
+.homepage-selection-toolbar {
+  position: sticky;
+  top: 64px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--mantine-color-body);
+  padding: 8px 12px;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px #00000008;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.homepage-selection-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.homepage-drag-handle {
+  display: flex;
+  cursor: grab;
+  color: var(--mantine-color-dimmed);
+}
+.homepage-section {
+  position: relative;
+  min-width: 0;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  cursor: pointer;
+}
+.homepage-section:hover {
+  outline-color: #228be666;
+}
+.homepage-section.is-selected {
+  outline: 2px solid #228be6;
+  outline-offset: -2px;
+}
+.homepage-section:focus-visible {
+  outline: 3px solid #228be6;
+}
+.homepage-section-hint {
+  pointer-events: none;
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 1px 7px;
+  border-radius: 0 0 5px 0;
+  background: #228be6;
+  color: white;
+  font: 500 10px system-ui;
+  z-index: 2;
+}
+.homepage-section.is-selected > .homepage-section-hint {
+  display: block;
+}
+.homepage-inline-text {
+  display: block;
+  min-width: 1em;
+  min-height: 1.3em;
+  outline: 0;
+  cursor: text;
+  border-radius: 3px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.homepage-inline-text:empty:before {
+  content: attr(data-placeholder);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.homepage-inline-text:hover {
+  box-shadow: 0 0 0 1px #ffffff55;
+}
+.homepage-inline-text:focus {
+  box-shadow: 0 0 0 2px #70b8fc;
+  background: #82bbef0a;
+}
+.homepage-image-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  position: relative;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+.homepage-image-select img {
+  max-height: 500px;
+}
+.homepage-image-action {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 12px;
+  background: #fff;
+  color: #202635;
+  border: 1px solid #dce0e6;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px #0002;
+  font-size: 13px;
+}
+.homepage-markdown-edit .lesson-editor {
+  background: transparent;
+  color: inherit;
+}
+.homepage-markdown-edit .milkdown {
+  --crepe-color-background: transparent;
+  --crepe-color-on-background: currentColor;
+  --crepe-color-on-surface: currentColor;
+  --crepe-font-default: var(--ifm-font-family-base);
+  --crepe-font-title: var(--ifm-font-family-base);
+  color: inherit;
+}
+.homepage-markdown-edit .milkdown .ProseMirror {
+  padding: 8px 18px;
+  min-height: 40px;
+  color: inherit;
+}
+.homepage-text-preview {
+  padding: 8px 18px;
+  min-height: 32px;
+}
+.homepage-empty-content {
+  width: 100%;
+  padding: 18px;
+  border: 1px dashed currentColor;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.homepage-section.is-button {
+  display: inline-block;
+}
+.course-buttons > .homepage-section:not(.is-button) {
+  min-width: 40px;
+}
+.homepage-section-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.homepage-gallery-item {
+  font: inherit;
+  text-align: left;
+  border: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  padding: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.homepage-gallery-item:hover,
+.homepage-gallery-item:focus-visible {
+  border-color: var(--mantine-color-blue-5);
+  background: var(--mantine-color-blue-light);
+}
+.homepage-gallery-item strong,
+.homepage-gallery-item > span {
+  display: block;
+}
+.homepage-gallery-item > span {
+  font-size: 12px;
+  opacity: 0.65;
+  margin-top: 4px;
+}
+.homepage-miniature {
+  height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: light-dark(#f2eff8, #282438);
+  border-radius: 6px;
+  color: #9773b9;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+.homepage-miniature i {
+  display: block;
+  width: 60%;
+  height: 5px;
+  background: currentColor;
+  border-radius: 3px;
+  opacity: 0.5;
+}
+.homepage-miniature > i:first-child {
+  height: 9px;
+  width: 45%;
+  opacity: 0.9;
+}
+.homepage-miniature > div {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.homepage-miniature > div i {
+  width: 20%;
+  height: 18px;
+  background: white;
+  border: 1px solid #9773b94d;
+}
+.miniature-hero {
+  background: #8860a2;
+  color: white;
+}
+.miniature-button > i:first-child,
+.miniature-buttons > div i {
+  width: 35%;
+  height: 20px;
+  background: #8860a2;
+}
+.miniature-button > i:not(:first-child),
+.miniature-button > div,
+.miniature-divider > i {
+  display: none;
+}
+.miniature-columns > i,
+.miniature-buttons > i {
+  display: none;
+}
+.miniature-columns > div i {
+  height: 50px;
+  width: 30%;
+}
+.miniature-divider hr {
+  width: 80%;
+  border: 0;
+  border-top: 2px solid currentColor;
+}
+@media (max-width: 600px) {
+  .homepage-canvas-surround {
+    padding: 6px;
+    border-radius: 8px;
+  }
+  .homepage-selection-toolbar {
+    top: 60px;
+    padding: 6px;
+    gap: 4px;
+  }
+  .homepage-selection-toolbar p {
+    font-size: 12px;
+  }
+  .homepage-section-gallery {
+    gap: 8px;
+  }
+  .homepage-studio-topbar > .mantine-Group-root {
+    gap: 6px;
+  }
+}
+
+.homepage-section:not(.is-selected)
+  > .course-section
+  > .course-container
+  > .homepage-optional-field:empty {
+  display: none;
+}
+
+.homepage-section:not(.is-selected)
+  > .course-card
+  > .homepage-optional-field:empty {
+  display: none;
+}

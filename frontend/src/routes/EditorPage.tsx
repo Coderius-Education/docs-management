@@ -11,48 +11,48 @@ import {
   Stack,
   Text,
   Title,
-} from "@mantine/core";
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+} from '@mantine/core';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useBlocker,
   useLocation,
   useNavigate,
   useParams,
   useSearchParams,
-} from "react-router";
-import { pageKey, useMe, usePage, useSites, usePreviews } from "../api/hooks";
-import { uploadImage, useCreateBranch } from "../api/git";
-import { FrontmatterForm } from "../components/editor/FrontmatterForm";
-import { contentScope, scopedKey, type ContentScope } from "../api/types";
+} from 'react-router';
+import { pageKey, useMe, usePage, useSites, usePreviews } from '../api/hooks';
+import { uploadImage, useCreateBranch } from '../api/git';
+import { FrontmatterForm } from '../components/editor/FrontmatterForm';
+import { contentScope, scopedKey, type ContentScope } from '../api/types';
 import {
   MetadataEditor,
   readMetadata,
-} from "../components/editor/MetadataEditor";
-import { HomepageEditor } from "../components/editor/HomepageEditor";
-import { validateProperties } from "../lib/authoring/properties";
-import { LessonEditor } from "../components/editor/LessonEditor";
-import { RawEditor } from "../components/editor/RawEditor";
-import { SaveModal, type SavedPage } from "../components/SaveModal";
-import { joinFrontmatter, splitFrontmatter } from "../lib/frontmatter";
-import { MdxPreview } from "../lib/mdx-preview/MdxPreview";
+} from '../components/editor/MetadataEditor';
+import { HomepageEditor } from '../components/editor/HomepageEditor';
+import { validateProperties } from '../lib/authoring/properties';
+import { LessonEditor } from '../components/editor/LessonEditor';
+import { RawEditor } from '../components/editor/RawEditor';
+import { SaveModal, type SavedPage } from '../components/SaveModal';
+import { joinFrontmatter, splitFrontmatter } from '../lib/frontmatter';
+import { MdxPreview } from '../lib/mdx-preview/MdxPreview';
 import {
   readRecovery,
   recoveryKey,
   writeRecovery,
   clearRecovery,
-} from "../lib/authoring/session";
-import { imageProblems } from "../lib/authoring/assets";
-import { parseLesson } from "../lib/authoring/document";
+} from '../lib/authoring/session';
+import { imageProblems } from '../lib/authoring/assets';
+import { parseLesson } from '../lib/authoring/document';
 
 export function EditorPage() {
-  const { site = "" } = useParams();
+  const { site = '' } = useParams();
   const [params] = useSearchParams();
   const location = useLocation();
-  const path = params.get("path") ?? "";
-  const branch = params.get("ref") ?? "main";
-  const scope = contentScope(params.get("scope"));
-  const isNew = params.get("nieuw") === "1";
+  const path = params.get('path') ?? '';
+  const branch = params.get('ref') ?? 'main';
+  const scope = contentScope(params.get('scope'));
+  const isNew = params.get('nieuw') === '1';
   const {
     data: page,
     isLoading,
@@ -66,15 +66,15 @@ export function EditorPage() {
   if (!isNew && (!page || error))
     return (
       <Alert color="red" title="Pagina niet geladen">
-        <Text>{String(error ?? "Pagina niet gevonden.")}</Text>
+        <Text>{String(error ?? 'Pagina niet gevonden.')}</Text>
         <Button onClick={() => void refetch()}>Opnieuw proberen</Button>
       </Alert>
     );
-  let template = "";
+  let template = '';
   if (isNew) {
     try {
       template =
-        sessionStorage.getItem(`nieuw:${site}:${scopedKey(scope, path)}`) ?? "";
+        sessionStorage.getItem(`nieuw:${site}:${scopedKey(scope, path)}`) ?? '';
     } catch {
       return (
         <Alert color="orange">
@@ -91,7 +91,7 @@ export function EditorPage() {
     <EditorSession
       key={identity}
       identity={identity}
-      user={me?.login ?? "unknown"}
+      user={me?.login ?? 'unknown'}
       site={site}
       path={path}
       scope={scope}
@@ -131,7 +131,7 @@ function EditorSession({
   const current = useRef(content);
   current.current = content;
   const [baseline, setBaseline] = useState({
-    content: isNew ? "" : initialContent,
+    content: isNew ? '' : initialContent,
     sha: initialSha,
     branch: initialBranch,
   });
@@ -139,8 +139,8 @@ function EditorSession({
   const [uploading, setUploading] = useState(false);
   const imageBranch = useRef<string | null>(null);
   const createBranch = useCreateBranch();
-  const [mode, setMode] = useState("visual");
-  const [storageError, setStorageError] = useState("");
+  const [mode, setMode] = useState('visual');
+  const [storageError, setStorageError] = useState('');
   const key = recoveryKey(user, site, baseline.branch, scopedKey(scope, path));
   const [recovery, setRecovery] = useState(() => {
     try {
@@ -152,13 +152,13 @@ function EditorSession({
   });
   const split = useMemo(
     () =>
-      scope === "metadata"
-        ? { ...splitFrontmatter(""), body: content }
+      scope === 'metadata'
+        ? { ...splitFrontmatter(''), body: content }
         : splitFrontmatter(content),
     [content, scope],
   );
   const parseError = useMemo(() => {
-    if (scope === "metadata") {
+    if (scope === 'metadata') {
       try {
         readMetadata(content, path);
         return undefined;
@@ -170,24 +170,24 @@ function EditorSession({
   }, [split.body, split.error, site, scope, content, path]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const propertyErrors =
-    scope === "metadata"
+    scope === 'metadata'
       ? {}
       : validateProperties(
           split.frontmatter,
-          scope === "docs" ? "docs" : "pages",
+          scope === 'docs' ? 'docs' : 'pages',
         );
   const homepageUnsupported =
-    scope === "homepage" &&
+    scope === 'homepage' &&
     (split.frontmatter.draft === true || split.frontmatter.unlisted === true);
   const invalid =
     homepageUnsupported ||
     !!split.error ||
-    (scope === "metadata" && !!parseError) ||
+    (scope === 'metadata' && !!parseError) ||
     Object.keys(propertyErrors).length > 0 ||
     Object.keys(formErrors).length > 0 ||
-    (scope === "homepage" &&
+    (scope === 'homepage' &&
       split.frontmatter.slug !== undefined &&
-      split.frontmatter.slug !== "/");
+      split.frontmatter.slug !== '/');
   const dirty = content !== baseline.content;
   const imagesInvalid = useMemo(
     () => imageProblems(split.body).length > 0,
@@ -200,8 +200,8 @@ function EditorSession({
       (dirty || uploading) &&
       !(
         nextLocation.state?.editorSession === identity &&
-        params.get("ref") === adoptedBranch.current &&
-        params.get("path") === path
+        params.get('ref') === adoptedBranch.current &&
+        params.get('path') === path
       )
     );
   });
@@ -209,21 +209,21 @@ function EditorSession({
     function beforeUnload(event: BeforeUnloadEvent) {
       if (dirty || uploading) {
         event.preventDefault();
-        event.returnValue = "";
+        event.returnValue = '';
       }
     }
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => window.removeEventListener("beforeunload", beforeUnload);
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
   }, [dirty, uploading]);
   useEffect(() => {
     if (recovery) return;
     try {
       if (dirty) writeRecovery(localStorage, key, content, baseline.sha);
       else clearRecovery(localStorage, key, content);
-      setStorageError("");
+      setStorageError('');
     } catch {
       setStorageError(
-        "Automatisch herstel opslaan lukt niet in deze browser. Bewaar je wijzigingen met Opslaan.",
+        'Automatisch herstel opslaan lukt niet in deze browser. Bewaar je wijzigingen met Opslaan.',
       );
     }
   }, [key, content, dirty, baseline.sha, recovery]);
@@ -231,11 +231,11 @@ function EditorSession({
     setUploading(true);
     try {
       let branch = baseline.branch;
-      if (branch === "main") {
+      if (branch === 'main') {
         if (!imageBranch.current) {
           const created = await createBranch.mutateAsync({
             name: `docs/${site}-${crypto.randomUUID()}`,
-            from_branch: "main",
+            from_branch: 'main',
           });
           imageBranch.current = created.name;
         }
@@ -253,7 +253,7 @@ function EditorSession({
           clearRecovery(localStorage, key, current.current);
         } catch {
           setStorageError(
-            "De afbeelding is opgeslagen, maar de lokale herstelkopie kon niet worden bijgewerkt.",
+            'De afbeelding is opgeslagen, maar de lokale herstelkopie kon niet worden bijgewerkt.',
           );
         }
         setBaseline((previous) => ({ ...previous, branch }));
@@ -265,7 +265,7 @@ function EditorSession({
         });
         adoptedBranch.current = branch;
         const params = new URLSearchParams({ path, ref: branch, scope });
-        if (baseline.sha === null) params.set("nieuw", "1");
+        if (baseline.sha === null) params.set('nieuw', '1');
         navigate(
           { pathname: `/sites/${site}/edit`, search: `?${params}` },
           { replace: true, state: { editorSession: identity } },
@@ -294,7 +294,7 @@ function EditorSession({
       sessionStorage.removeItem(`nieuw:${site}:${scopedKey(scope, path)}`);
     } catch {
       setStorageError(
-        "Het concept is opgeslagen, maar de lokale herstelkopie kon niet worden bijgewerkt.",
+        'Het concept is opgeslagen, maar de lokale herstelkopie kon niet worden bijgewerkt.',
       );
     }
     setBaseline(result);
@@ -318,9 +318,9 @@ function EditorSession({
     (p) => p.site === site && p.branch === baseline.branch,
   )?.url;
   const preview =
-    scope === "metadata" ? (
+    scope === 'metadata' ? (
       <Paper p="md">
-        <pre style={{ whiteSpace: "pre-wrap" }}>{content}</pre>
+        <pre style={{ whiteSpace: 'pre-wrap' }}>{content}</pre>
       </Paper>
     ) : split.error ? (
       <Alert color="orange">{split.error}</Alert>
@@ -334,7 +334,7 @@ function EditorSession({
         branch={baseline.branch}
         previewOrigin={previewOrigin}
         title={
-          typeof split.frontmatter.title === "string"
+          typeof split.frontmatter.title === 'string'
             ? split.frontmatter.title
             : undefined
         }
@@ -345,19 +345,28 @@ function EditorSession({
       <Group justify="space-between" className="editor-toolbar">
         <div>
           <Title order={3}>
-            {scope === "homepage"
-              ? "Homepage bewerken"
-              : scope === "metadata"
-                ? "Categorieën en tags"
-                : scope === "pages"
-                  ? "Pagina bewerken"
-                  : "Lesmateriaal bewerken"}
+            {scope === 'homepage'
+              ? 'Homepage bewerken'
+              : scope === 'metadata'
+                ? 'Categorieën en tags'
+                : scope === 'pages'
+                  ? 'Pagina bewerken'
+                  : 'Lesmateriaal bewerken'}
           </Title>
           <Text size="xs" c="dimmed" className="editor-path">
             {siteInfo?.display_name ?? site} / {path}
           </Text>
         </div>
         <Group gap="xs">
+          {scope === 'homepage' && (
+            <Button
+              size="xs"
+              variant="subtle"
+              onClick={() => setMode(mode === 'raw' ? 'visual' : 'raw')}
+            >
+              {mode === 'raw' ? 'Terug naar pagina' : 'Broncode'}
+            </Button>
+          )}
           {previewOrigin && (
             <Button
               size="xs"
@@ -372,7 +381,7 @@ function EditorSession({
           )}
           <Badge variant="light">{baseline.branch}</Badge>
           <Text size="sm" role="status">
-            {dirty ? "Niet opgeslagen" : "Opgeslagen"}
+            {dirty ? 'Niet opgeslagen' : 'Opgeslagen'}
           </Text>
           <Button
             disabled={
@@ -403,8 +412,8 @@ function EditorSession({
         <Alert color="blue" title="Er is een herstelkopie beschikbaar">
           <Text size="sm">
             {recovery.baseSha !== initialSha
-              ? "De opgeslagen pagina is intussen gewijzigd. Controleer je herstelkopie voor je opslaat."
-              : "Wil je verdergaan met je niet-opgeslagen wijzigingen?"}
+              ? 'De opgeslagen pagina is intussen gewijzigd. Controleer je herstelkopie voor je opslaat.'
+              : 'Wil je verdergaan met je niet-opgeslagen wijzigingen?'}
           </Text>
           <Group mt="xs">
             <Button
@@ -423,7 +432,7 @@ function EditorSession({
                 try {
                   clearRecovery(localStorage, key, recovery.content);
                 } catch {
-                  setStorageError("Herstelkopie kon niet worden verwijderd.");
+                  setStorageError('Herstelkopie kon niet worden verwijderd.');
                 }
                 setRecovery(null);
               }}
@@ -433,76 +442,92 @@ function EditorSession({
           </Group>
         </Alert>
       )}
-      {!split.error && scope !== "metadata" && (
+      {!split.error && scope !== 'metadata' && (
         <Paper withBorder p="sm">
-          <FrontmatterForm
-            kind={scope === "docs" ? "docs" : "pages"}
-            allowedKeys={
-              scope === "homepage"
-                ? [
-                    "title",
-                    "description",
-                    "keywords",
-                    "image",
-                    "slug",
-                    "wrapperClassName",
-                  ]
-                : undefined
-            }
-            onValidationChange={setFormErrors}
-            rawFrontmatter={split.rawFrontmatter}
-            value={split.frontmatter}
-            onChange={(fm) =>
-              setContent(joinFrontmatter(split, fm, split.body))
-            }
-          />
-          {scope === "homepage" && (
-            <Group mt="sm">
-              {[
-                ["noFooter", "Voettekst verbergen"],
-                ["fullscreen", "Volledige schermhoogte"],
-              ].map(([key, label]) => (
-                <Checkbox
-                  key={key}
-                  label={label}
-                  checked={split.frontmatter[key] === true}
-                  onChange={(e) =>
-                    setContent(
-                      joinFrontmatter(
-                        split,
-                        {
-                          ...split.frontmatter,
-                          [key]: e.currentTarget.checked,
-                        },
-                        split.body,
-                      ),
-                    )
-                  }
-                />
-              ))}
-            </Group>
-          )}
+          <details open={scope !== 'homepage'}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+              Pagina-instellingen
+            </summary>
+            <FrontmatterForm
+              kind={scope === 'docs' ? 'docs' : 'pages'}
+              allowedKeys={
+                scope === 'homepage'
+                  ? [
+                      'title',
+                      'description',
+                      'keywords',
+                      'image',
+                      'slug',
+                      'wrapperClassName',
+                    ]
+                  : undefined
+              }
+              onValidationChange={setFormErrors}
+              rawFrontmatter={split.rawFrontmatter}
+              value={split.frontmatter}
+              onChange={(fm) =>
+                setContent(joinFrontmatter(split, fm, split.body))
+              }
+            />
+            {scope === 'homepage' && (
+              <Group mt="sm">
+                {[
+                  ['noFooter', 'Voettekst verbergen'],
+                  ['fullscreen', 'Volledige schermhoogte'],
+                ].map(([key, label]) => (
+                  <Checkbox
+                    key={key}
+                    label={label}
+                    checked={split.frontmatter[key] === true}
+                    onChange={(e) =>
+                      setContent(
+                        joinFrontmatter(
+                          split,
+                          {
+                            ...split.frontmatter,
+                            [key]: e.currentTarget.checked,
+                          },
+                          split.body,
+                        ),
+                      )
+                    }
+                  />
+                ))}
+              </Group>
+            )}
+          </details>
         </Paper>
       )}
-      <SegmentedControl
-        disabled={uploading}
-        aria-label="Editorweergave"
-        value={mode}
-        onChange={setMode}
-        data={[
-          { value: "visual", label: "Bewerken" },
-          { value: "preview", label: "Voorbeeld" },
-          { value: "raw", label: "Broncode" },
-        ]}
-      />
+      {scope !== 'homepage' && (
+        <SegmentedControl
+          disabled={uploading}
+          aria-label="Editorweergave"
+          value={mode}
+          onChange={setMode}
+          data={[
+            { value: 'visual', label: 'Bewerken' },
+            { value: 'preview', label: 'Voorbeeld' },
+            { value: 'raw', label: 'Broncode' },
+          ]}
+        />
+      )}
       {!recovery && (
-        <div className={mode === "preview" ? "" : "editor-workspace"}>
-          <Paper withBorder className="editor-pane">
-            {mode === "preview" ? (
+        <div
+          className={
+            mode === 'preview' || scope === 'homepage' ? '' : 'editor-workspace'
+          }
+        >
+          <Paper
+            withBorder={scope !== 'homepage'}
+            className={
+              scope === 'homepage' ? 'homepage-page-pane' : 'editor-pane'
+            }
+          >
+            {mode === 'preview' ? (
               preview
-            ) : mode === "raw" ? (
+            ) : mode === 'raw' ? (
               <RawEditor value={content} onChange={setContent} />
-            ) : scope === "metadata" ? (
+            ) : scope === 'metadata' ? (
               <MetadataEditor
                 value={content}
                 path={path}
@@ -514,13 +539,13 @@ function EditorSession({
                 title="Open de broncode om deze pagina te corrigeren"
               >
                 <Text size="sm">{parseError}</Text>
-                <Button size="xs" mt="xs" onClick={() => setMode("raw")}>
+                <Button size="xs" mt="xs" onClick={() => setMode('raw')}>
                   Broncode openen
                 </Button>
               </Alert>
             ) : (
               <ContentEditor
-                homepage={scope === "homepage"}
+                homepage={scope === 'homepage'}
                 onUploadImage={upload}
                 assetContext={{
                   site,
@@ -538,7 +563,7 @@ function EditorSession({
               />
             )}
           </Paper>
-          {mode !== "preview" && (
+          {mode !== 'preview' && scope !== 'homepage' && (
             <Paper withBorder className="editor-pane editor-preview-secondary">
               {preview}
             </Paper>
@@ -560,27 +585,27 @@ function EditorSession({
         />
       )}
       <Modal
-        opened={blocker.state === "blocked"}
-        onClose={() => blocker.state === "blocked" && blocker.reset()}
+        opened={blocker.state === 'blocked'}
+        onClose={() => blocker.state === 'blocked' && blocker.reset()}
         title="Niet-opgeslagen wijzigingen"
       >
         <Stack>
           <Text>
             Je wijzigingen zijn nog niet op de server opgeslagen.
             {!storageError &&
-              " Een herstelkopie blijft in deze browser beschikbaar."}
+              ' Een herstelkopie blijft in deze browser beschikbaar.'}
           </Text>
           <Group>
             <Button
               variant="default"
-              onClick={() => blocker.state === "blocked" && blocker.reset()}
+              onClick={() => blocker.state === 'blocked' && blocker.reset()}
             >
               Verder bewerken
             </Button>
             <Button
               color="orange"
               disabled={uploading}
-              onClick={() => blocker.state === "blocked" && blocker.proceed()}
+              onClick={() => blocker.state === 'blocked' && blocker.proceed()}
             >
               Pagina verlaten
             </Button>
