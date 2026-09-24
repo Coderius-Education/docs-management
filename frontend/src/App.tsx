@@ -15,7 +15,7 @@ const EditorPage = lazy(() =>
 );
 import { PrDetail } from "./routes/PrDetail";
 import { PrList } from "./routes/PrList";
-import { SettingsPage } from "./routes/SettingsPage";
+import { SettingsRedirect } from "./routes/SettingsRedirect";
 import { SiteBrowser } from "./routes/SiteBrowser";
 
 export default function App() {
@@ -40,7 +40,7 @@ export default function App() {
               </Suspense>
             }
           />
-          <Route path="/sites/:site/settings" element={<SettingsPage />} />
+          <Route path="/sites/:site/settings" element={<SettingsRedirect />} />
           <Route
             path="/sites/:site/metadata"
             element={

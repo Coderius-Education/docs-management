@@ -7,10 +7,12 @@ import {
 } from '../../lib/authoring/homepage';
 import { parseTree, range, type LessonNode } from '../../lib/authoring/syntax';
 import { readSetting, type SiteSettings } from '../../lib/authoring/settings';
+import { asFooterColumns } from '../../lib/authoring/navigation';
 import { MdxPreview } from '../../lib/mdx-preview/MdxPreview';
 import './CourseCanvas.css';
 
-export type CanvasRegion = 'navbar' | 'hero' | 'content' | 'footer';
+export type CanvasRegion =
+  'navbar' | 'hero' | 'content' | 'footer' | 'announcement';
 export type SectionProps = Record<string, string | number | boolean>;
 const text = (value: unknown, fallback = '') =>
   typeof value === 'string' ? value : fallback;
@@ -29,6 +31,8 @@ export function CourseCanvas({
   colorMode = 'light',
   device = 'desktop',
   onSelectRegion,
+  onSelectNavItem,
+  selectedRegion,
   children,
 }: {
   body: string;
@@ -39,6 +43,9 @@ export function CourseCanvas({
   colorMode?: 'light' | 'dark';
   device?: 'desktop' | 'mobile';
   onSelectRegion?: (region: CanvasRegion) => void;
+  /** A single menu link was clicked; the index follows the navbar items. */
+  onSelectNavItem?: (index: number) => void;
+  selectedRegion?: CanvasRegion;
   children?: ReactNode;
 }) {
   const get = (path: string) => settings && readSetting(settings, path);
@@ -75,11 +82,14 @@ export function CourseCanvas({
           },
           tabIndex: 0,
           role: 'button',
-          'aria-label': `${{ navbar: 'Koptekst', hero: 'Pagina', content: 'Pagina', footer: 'Voettekst' }[name]} aanpassen`,
+          'aria-label': `${{ navbar: 'Koptekst', hero: 'Pagina', content: 'Pagina', footer: 'Voettekst', announcement: 'Mededeling' }[name]} aanpassen`,
+          'data-selected': selectedRegion === name || undefined,
         }
       : {};
   const links = Array.isArray(navbar.items) ? navbar.items.map(object) : [];
-  const groups = Array.isArray(footer.links) ? footer.links.map(object) : [];
+  const groups = asFooterColumns(
+    Array.isArray(footer.links) ? footer.links.map(object) : [],
+  );
   const announcement = object(get('themeConfig.announcementBar'));
   return (
     <div className="course-canvas-frame" data-device={device}>
@@ -93,6 +103,7 @@ export function CourseCanvas({
         {!!announcement.content && (
           <div
             className="course-announcement"
+            {...region('announcement')}
             style={{
               background: text(announcement.backgroundColor) || undefined,
               color: text(announcement.textColor) || undefined,
@@ -110,12 +121,25 @@ export function CourseCanvas({
             <strong>{text(navbar.title, courseTitle)}</strong>
           </div>
           <div className="course-navlinks">
-            {links.slice(0, 8).map((link, index) => (
-              <span key={index}>
-                {text(link.label, text(link.docId, 'Link'))}
-                {Array.isArray(link.items) ? ' ▾' : ''}
-              </span>
-            ))}
+            {links.slice(0, 8).map((link, index) => {
+              const label = `${text(link.label, text(link.docId, 'Link'))}${Array.isArray(link.items) ? ' ▾' : ''}`;
+              return onSelectNavItem ? (
+                <button
+                  type="button"
+                  key={index}
+                  className="course-navlink"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectNavItem(index);
+                  }}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  {label}
+                </button>
+              ) : (
+                <span key={index}>{label}</span>
+              );
+            })}
           </div>
           <span className="course-mode-symbol" aria-hidden="true">
             {colorMode === 'light' ? '☀' : '☾'}

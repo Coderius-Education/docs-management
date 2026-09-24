@@ -1,4 +1,9 @@
-"""Read only a matching, clean build's public effective-settings manifest."""
+"""Read a clean build's public effective-settings manifest.
+
+The build for exactly the requested head is preferred. Without one, the newest ready build of
+the branch (or of main) is used and marked `stale`, so editors still start from the course's
+real navigation instead of an empty list.
+"""
 
 import json
 from pathlib import Path
@@ -12,23 +17,20 @@ from app.config import get_settings
 from app.db.models import Build, BuildStatus, Site
 
 MAX_MANIFEST_BYTES = 1024 * 1024
+FALLBACK_CANDIDATES = 5
+PUBLIC_FIELDS = (
+    "version",
+    "commit",
+    "dirty",
+    "settings",
+    "capabilities",
+    "unresolved",
+    "inherited_navigation",
+)
 
 
-async def read_effective_settings(
-    db: AsyncSession, site: Site, branch: str, head_sha: str
-) -> dict | None:
-    build = await db.scalar(
-        select(Build)
-        .where(
-            Build.site_id == site.id,
-            Build.branch == branch,
-            Build.head_sha == head_sha,
-            Build.status == BuildStatus.ready,
-        )
-        .order_by(Build.created_at.desc())
-        .limit(1)
-    )
-    if build is None or not build.path:
+def _read_manifest(site: Site, build: Build) -> dict | None:
+    if not build.path:
         return None
     try:
         volume = Path(get_settings().builds_dir).resolve()
@@ -48,7 +50,7 @@ async def read_effective_settings(
     if (
         not isinstance(manifest, dict)
         or manifest.get("version") != 1
-        or manifest.get("commit") != head_sha
+        or manifest.get("commit") != build.head_sha
         or manifest.get("dirty") is not False
     ):
         return None
@@ -59,16 +61,34 @@ async def read_effective_settings(
         not isinstance(settings.get(key), dict) for key in ("site", "themeConfig", "tokens", "docs")
     ):
         return None
-    public_fields = (
-        "version",
-        "commit",
-        "dirty",
-        "settings",
-        "capabilities",
-        "unresolved",
-        "inherited_navigation",
+    return {key: manifest[key] for key in PUBLIC_FIELDS if key in manifest}
+
+
+async def read_effective_settings(
+    db: AsyncSession, site: Site, branch: str, head_sha: str
+) -> dict | None:
+    ready = select(Build).where(Build.site_id == site.id, Build.status == BuildStatus.ready)
+    exact = await db.scalars(
+        ready.where(Build.branch == branch, Build.head_sha == head_sha)
+        .order_by(Build.created_at.desc())
+        .limit(1)
     )
-    return {
-        **{key: manifest[key] for key in public_fields if key in manifest},
-        "build_id": build.id,
-    }
+    candidates = [(build, False) for build in exact]
+    for fallback_branch in dict.fromkeys((branch, "main")):
+        builds = await db.scalars(
+            ready.where(Build.branch == fallback_branch)
+            .order_by(Build.created_at.desc())
+            .limit(FALLBACK_CANDIDATES)
+        )
+        candidates += [(build, True) for build in builds if build.head_sha != head_sha]
+    for build, stale in candidates:
+        manifest = _read_manifest(site, build)
+        if manifest is not None:
+            return {
+                **manifest,
+                "build_id": build.id,
+                "build_branch": build.branch,
+                "built_at": build.created_at.isoformat() if build.created_at else None,
+                "stale": stale,
+            }
+    return None

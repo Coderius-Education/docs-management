@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.deps import CurrentUser, require_csrf, user_github_token
 from app.authoring.content import validate_content
 from app.authoring.effective import read_effective_settings
+from app.authoring.homepage import read_homepage, save_homepage
 from app.authoring.settings import capabilities, read_settings, save_settings
 from app.config import get_settings
 from app.db.models import Site
@@ -334,6 +335,46 @@ async def update_settings(
         payload.expected_head,
         payload.settings,
         payload.message,
+    )
+
+
+class HomepageWrite(BaseModel):
+    branch: str
+    expected_head: str
+    message: str
+    content: str | None = None
+    settings: dict | None = None
+
+
+@router.get("/{site}/homepage")
+async def site_homepage(
+    user: CurrentUser,
+    site_obj: Annotated[Site, Depends(valid_site)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    ref: str = "main",
+) -> dict:
+    result = await read_homepage(GitHubClient(user_github_token(user)), site_obj.slug, ref)
+    effective = await read_effective_settings(db, site_obj, ref, result["head_sha"])
+    if effective is not None:
+        result["effective"] = effective
+    return result
+
+
+@router.put("/{site}/homepage", dependencies=[Depends(require_csrf)])
+async def update_homepage(
+    payload: HomepageWrite, user: CurrentUser, site_obj: Annotated[Site, Depends(valid_site)]
+) -> dict:
+    """Commit the homepage and its appearance together, so they never drift apart."""
+    if payload.branch == "main":
+        raise HTTPException(status_code=400, detail="Rechtstreeks naar main schrijven mag niet")
+    return await save_homepage(
+        GitHubClient(user_github_token(user)),
+        site_obj.slug,
+        payload.branch,
+        payload.expected_head,
+        payload.message,
+        payload.content,
+        payload.settings,
     )
 
 

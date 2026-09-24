@@ -438,7 +438,8 @@ async def test_metadata_write_preserves_comments_null_and_unknown_properties(api
     "variant,available",
     [
         ("matching", True),
-        ("old-build", False),
+        ("old-build", True),
+        ("main-build", True),
         ("wrong-branch", False),
         ("failed", False),
         ("dirty", False),
@@ -448,7 +449,7 @@ async def test_metadata_write_preserves_comments_null_and_unknown_properties(api
     ],
 )
 @respx.mock
-async def test_settings_only_expose_effective_manifest_for_exact_clean_build(
+async def test_settings_expose_newest_clean_manifest_and_mark_fallbacks_stale(
     api_client, builds_dir, tmp_path, variant, available
 ):
     from sqlalchemy import select
@@ -478,6 +479,8 @@ async def test_settings_only_expose_effective_manifest_for_exact_clean_build(
         "inherited_navigation": ["/privacy"],
         "private_extra": "not an editor field",
     }
+    build_head = "b" * 40 if variant in ("old-build", "main-build") else head
+    manifest["commit"] = build_head
     if variant == "wrong-manifest-commit":
         manifest["commit"] = "b" * 40
     (build_path / "effective-settings.json").write_text(
@@ -487,9 +490,9 @@ async def test_settings_only_expose_effective_manifest_for_exact_clean_build(
         site = await db.scalar(select(Site).where(Site.slug == "python"))
         build = Build(
             site_id=site.id,
-            branch="different" if variant == "wrong-branch" else "draft",
+            branch={"wrong-branch": "different", "main-build": "main"}.get(variant, "draft"),
             branch_slug="draft",
-            head_sha="b" * 40 if variant == "old-build" else head,
+            head_sha=build_head,
             run_id=123,
             status=BuildStatus.failed if variant == "failed" else BuildStatus.ready,
             path=str(build_path),
@@ -504,7 +507,8 @@ async def test_settings_only_expose_effective_manifest_for_exact_clean_build(
     assert ("effective" in result) is available
     if available:
         assert result["effective"]["settings"]["site"]["title"] == "Inherited course"
-        assert result["effective"]["commit"] == head
+        assert result["effective"]["commit"] == build_head
+        assert result["effective"]["stale"] is (variant != "matching")
         assert result["effective"]["unresolved"] == ["inherited_css_tokens"]
         assert "private_extra" not in result["effective"]
 

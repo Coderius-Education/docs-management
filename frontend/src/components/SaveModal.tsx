@@ -33,6 +33,8 @@ export function SaveModal({
   currentBranch,
   onSaved,
   saveResource,
+  files,
+  defaultMessage,
   title = 'Lesmateriaal opslaan',
   summary = 'Sla eerst een concept op. Publiceren gebeurt later via een pull request.',
   continueLabel = 'Verder bewerken',
@@ -47,7 +49,14 @@ export function SaveModal({
   sha: string | null;
   currentBranch: string;
   onSaved: (result: SavedPage) => void;
-  saveResource?: (branch: string, snapshot: string) => Promise<string>;
+  saveResource?: (
+    branch: string,
+    snapshot: string,
+    message: string,
+  ) => Promise<string>;
+  /** One diff per file, for resources that span several files. */
+  files?: { path: string; before: string; after: string }[];
+  defaultMessage?: string;
   title?: string;
   summary?: string;
   continueLabel?: string;
@@ -62,22 +71,29 @@ export function SaveModal({
   const [newBranch, setNewBranch] = useState(
     `docs/${site}-${Date.now().toString(36)}`,
   );
-  const [message, setMessage] = useState(`Lesmateriaal bijwerken: ${path}`);
+  const [message, setMessage] = useState(
+    defaultMessage ?? `Lesmateriaal bijwerken: ${path}`,
+  );
   const [saving, setSaving] = useState(false);
   const [savedToBranch, setSavedToBranch] = useState<string | null>(null);
   const [error, setError] = useState('');
   const created = useRef(new Set<string>());
   const diff = useMemo(
     () =>
-      createTwoFilesPatch(
-        path,
-        path,
-        originalContent,
-        newContent,
-        'voor',
-        'na',
-      ),
-    [path, originalContent, newContent],
+      (files ?? [{ path, before: originalContent, after: newContent }])
+        .filter((file) => file.before !== file.after)
+        .map((file) =>
+          createTwoFilesPatch(
+            file.path,
+            file.path,
+            file.before,
+            file.after,
+            'voor',
+            'na',
+          ),
+        )
+        .join('\n'),
+    [files, path, originalContent, newContent],
   );
   const target = selection === '__new__' ? newBranch.trim() : (selection ?? '');
   async function save() {
@@ -94,7 +110,7 @@ export function SaveModal({
         created.current.add(target);
       }
       const result = saveResource
-        ? { content_sha: await saveResource(target, snapshot) }
+        ? { content_sha: await saveResource(target, snapshot, message.trim()) }
         : await savePage.mutateAsync({
             path,
             scope,
