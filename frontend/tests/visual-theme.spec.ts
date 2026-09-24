@@ -94,9 +94,7 @@ test('menu links start from the course, keep shared links and save as overrides'
   const panel = page.getByRole('complementary', { name: 'Koptekst' });
   await expect(panel.getByLabel('Link 1 — tekst')).toHaveValue('Lessen');
   await expect(panel.getByLabel('Zijmenu-ID')).toHaveValue('tutorialSidebar');
-  await expect(
-    panel.getByText(/Automatisch toegevoegd door Coderius: Docenten/),
-  ).toBeVisible();
+  await expect(panel.locator('.studio-shared-link')).toHaveText([/Docenten/]);
   await panel
     .getByRole('button', { name: 'Link toevoegen', exact: true })
     .click();
@@ -275,4 +273,66 @@ test('old Vormgeving links open the style panel of the homepage editor', async (
   await page.goto('/sites/python/settings?ref=lesson');
   await expect(page).toHaveURL(/scope=homepage.*ref=lesson.*panel=style/);
   await expect(page.getByLabel('Cursuskleur', { exact: true })).toBeVisible();
+});
+
+test('every menu link of a large course is shown, left and right like the course', async ({
+  page,
+}) => {
+  const items = [
+    {
+      type: 'docSidebar',
+      sidebarId: 'tutorialSidebar',
+      label: 'Tutorial',
+      position: 'left',
+    },
+    { to: '/playground', label: 'Playground', position: 'left' },
+    { to: '/cheatsheet', label: 'Cheatsheet', position: 'left' },
+    { to: '/begrippenlijst', label: 'Begrippenlijst', position: 'left' },
+    { to: '/hulp', label: 'Hulp', position: 'left' },
+    { to: '/speeltuin', label: 'Speeltuin', position: 'left' },
+    { to: '/spel-checken', label: 'Spel checken', position: 'left' },
+    {
+      href: 'https://github.com/Coderius-Education/play',
+      label: 'GitHub',
+      position: 'right',
+    },
+    { to: '/docenten', label: 'Docenten', position: 'right' },
+    { type: 'dropdown', label: 'Cursussen', position: 'right', items: [] },
+  ];
+  await mockStudio(page, {
+    content: homepage,
+    effective: {
+      commit: 'head-1',
+      settings: {
+        ...inherited,
+        themeConfig: { navbar: { title: 'Python', items } },
+      },
+    },
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(studioUrl());
+  const navbar = canvasOf(page).locator('header');
+  for (const item of items)
+    await expect(
+      navbar.getByRole('button', { name: item.label, exact: false }),
+    ).toBeVisible();
+  const right = navbar.locator('.course-navlinks-right');
+  await expect(right.getByRole('button')).toHaveText([
+    'GitHub',
+    'Docenten',
+    'Cursussen ▾',
+  ]);
+  await navbar.getByRole('button', { name: 'Docenten', exact: true }).click();
+  const panel = page.getByRole('complementary', { name: 'Koptekst' });
+  await expect(panel.getByLabel('Link 8 — tekst')).toHaveValue('GitHub');
+  await expect(panel.locator('.studio-shared-link.is-highlighted')).toHaveText(
+    /Docenten/,
+  );
+  await panel
+    .getByRole('button', { name: 'Link toevoegen', exact: true })
+    .click();
+  await expect(panel.locator('.studio-shared-link')).toHaveCount(2);
+  await expect(
+    navbar.getByRole('button', { name: 'Cursussen ▾' }),
+  ).toBeVisible();
 });

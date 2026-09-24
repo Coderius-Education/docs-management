@@ -120,27 +120,39 @@ export function CourseCanvas({
             {logoUrl && <img src={logoUrl} alt={text(logo.alt, 'Logo')} />}
             <strong>{text(navbar.title, courseTitle)}</strong>
           </div>
-          <div className="course-navlinks">
-            {links.slice(0, 8).map((link, index) => {
-              const label = `${text(link.label, text(link.docId, 'Link'))}${Array.isArray(link.items) ? ' ▾' : ''}`;
-              return onSelectNavItem ? (
-                <button
-                  type="button"
-                  key={index}
-                  className="course-navlink"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelectNavItem(index);
-                  }}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  {label}
-                </button>
-              ) : (
-                <span key={index}>{label}</span>
-              );
-            })}
-          </div>
+          {(['left', 'right'] as const).map((side) => (
+            <div
+              className={`course-navlinks course-navlinks-${side}`}
+              key={side}
+            >
+              {links.map((link, index) => {
+                if ((link.position === 'right' ? 'right' : 'left') !== side)
+                  return null;
+                const label = `${text(link.label, text(link.docId, text(link.sidebarId, 'Link')))}${Array.isArray(link.items) ? ' ▾' : ''}`;
+                return onSelectNavItem ? (
+                  <button
+                    type="button"
+                    key={index}
+                    className="course-navlink"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectNavItem(index);
+                    }}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    {label}
+                  </button>
+                ) : (
+                  <span key={index}>{label}</span>
+                );
+              })}
+            </div>
+          ))}
+          {links.length > 0 && (
+            <span className="course-menu-symbol" aria-hidden="true">
+              ☰
+            </span>
+          )}
           <span className="course-mode-symbol" aria-hidden="true">
             {colorMode === 'light' ? '☀' : '☾'}
           </span>

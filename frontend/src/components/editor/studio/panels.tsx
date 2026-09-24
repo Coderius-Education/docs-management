@@ -6,10 +6,11 @@ import {
   Stack,
   Text,
 } from '@mantine/core';
-import { IconPlus } from '@tabler/icons-react';
+import { IconLock, IconPlus } from '@tabler/icons-react';
 import { readSetting } from '../../../lib/authoring/settings';
 import {
   asFooterColumns,
+  displayLinks,
   isLinkList,
   splitLinks,
   type LinkKind,
@@ -48,7 +49,12 @@ function LinksSetting({
 }) {
   const { merged, inherited, overridden, set } = useSettings();
   const current = readSetting(merged, path);
-  const { own, shared } = splitLinks(current, kind);
+  const { own } = splitLinks(current, kind);
+  // The build adds these again, so show them even when the course overrides the list.
+  const { shared } = splitLinks(
+    displayLinks(current, inherited && readSetting(inherited, path), kind),
+    kind,
+  );
   const change = (next: unknown[]) => set(path, next);
   return (
     <Origin path={path} label={label}>
@@ -78,13 +84,25 @@ function LinksSetting({
           <FooterLinks value={asFooterColumns(own)} onChange={change} />
         )}
         {shared.length > 0 && (
-          <Text size="xs" c="dimmed">
-            Automatisch toegevoegd door Coderius:{' '}
-            {shared
-              .map((item) => String(item.label ?? item.title ?? ''))
-              .join(', ')}
-            .
-          </Text>
+          <Stack gap={4}>
+            <Text size="xs" c="dimmed">
+              Altijd aanwezig, toegevoegd door Coderius:
+            </Text>
+            {shared.map((item, index) => (
+              <div
+                key={index}
+                className={`studio-shared-link${highlight === own.length + index ? ' is-highlighted' : ''}`}
+              >
+                <IconLock size={14} aria-hidden="true" />
+                <span>{String(item.label ?? item.title ?? '')}</span>
+                {kind === 'navbar' && (
+                  <Text span size="xs" c="dimmed" ml="auto">
+                    {item.position === 'right' ? 'Rechts' : 'Links'}
+                  </Text>
+                )}
+              </div>
+            ))}
+          </Stack>
         )}
       </Stack>
     </Origin>
