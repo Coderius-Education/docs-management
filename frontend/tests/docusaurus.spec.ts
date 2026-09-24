@@ -50,6 +50,16 @@ async function portal(page: Page, initial: string) {
             ref: url.searchParams.get('ref'),
           };
       }
+      if (path.endsWith('/homepage')) {
+        if (route.request().method() === 'PUT') {
+          const data = route.request().postDataJSON();
+          writes.push(data);
+          if (data.content !== undefined) content = data.content;
+          if (data.settings !== undefined) settings = data.settings;
+          head = `head-${writes.length + 1}`;
+          result = { head_sha: head };
+        } else result = { head_sha: head, page: { content, sha }, settings };
+      }
       if (path.endsWith('/settings')) {
         if (route.request().method() === 'PUT') {
           const data = route.request().postDataJSON();
@@ -93,7 +103,7 @@ test('homepage edits and section order survive repeated scoped saves', async ({
     .first()
     .click();
   await save(page);
-  expect(writes[0].scope).toBe('homepage');
+  expect(writes[0].expected_head).toBe('head-1');
   expect(String(writes[0].content).indexOf('<InteractiveTool')).toBeLessThan(
     String(writes[0].content).indexOf('<Section'),
   );
@@ -102,32 +112,37 @@ test('homepage edits and section order survive repeated scoped saves', async ({
     .getByLabel('Titel', { exact: true })
     .fill('Welkom terug');
   await save(page);
-  expect(writes[1].sha).toBe('file-2');
+  expect(writes[1].expected_head).toBe('head-2');
   expect(writes[1].content).toContain('Welkom terug');
   await page.reload();
   await expect(
     page.locator('.homepage-section').getByLabel('Titel', { exact: true }),
   ).toHaveText('Welkom terug');
 });
-test('theme saves retain unrelated configuration and use updated head', async ({
+test('appearance saves retain unrelated configuration and use updated head', async ({
   page,
 }) => {
   const writes = await portal(page, '');
-  await page.goto('/sites/python/settings?ref=lesson');
-  await page.getByLabel('Sitetitel', { exact: true }).fill('Nieuwe cursus');
+  const url = '/sites/python/edit?scope=homepage&path=homepage.mdx&ref=lesson';
+  const courseName = () =>
+    page.getByLabel('Naam van de cursus', { exact: true });
+  await page.goto(url);
+  await page.getByRole('button', { name: 'Site', exact: true }).click();
+  await courseName().fill('Nieuwe cursus');
   await save(page);
   expect(writes[0].expected_head).toBe('head-1');
+  expect(writes[0].content).toBeUndefined();
   expect((writes[0].settings as { themeConfig: unknown }).themeConfig).toEqual({
     navbar: { title: 'Bestaand', items: [{ to: '/docs', label: 'Lessen' }] },
   });
-  await page.getByLabel('Sitetitel', { exact: true }).fill('Nieuwe cursus 2');
+  await courseName().fill('Nieuwe cursus 2');
   await save(page);
   expect(writes[1].expected_head).toBe('head-2');
   let releaseRefresh!: () => void;
   const refreshGate = new Promise<void>((resolve) => {
     releaseRefresh = resolve;
   });
-  await page.route('**/api/sites/python/settings?ref=lesson', async (route) => {
+  await page.route('**/api/sites/python/homepage?ref=lesson', async (route) => {
     await refreshGate;
     await route.fallback();
   });
@@ -136,19 +151,19 @@ test('theme saves retain unrelated configuration and use updated head', async ({
   await expect(
     page.getByRole('heading', { name: 'Sites', exact: true }),
   ).toBeVisible();
-  await page.evaluate(() => {
-    history.pushState(null, '', '/sites/python/settings?ref=lesson');
+  await page.evaluate((target) => {
+    history.pushState(null, '', target);
     window.dispatchEvent(new PopStateEvent('popstate'));
-  });
+  }, url);
   try {
-    await expect(page.getByLabel('Sitetitel', { exact: true })).toHaveValue(
-      'Nieuwe cursus 2',
-      { timeout: 2000 },
-    );
+    await page.getByRole('button', { name: 'Site', exact: true }).click();
+    await expect(courseName()).toHaveValue('Nieuwe cursus 2', {
+      timeout: 2000,
+    });
   } finally {
     releaseRefresh();
   }
-  await page.getByLabel('Sitetitel', { exact: true }).fill('Na terugkeer');
+  await courseName().fill('Na terugkeer');
   await save(page);
   expect(writes[2].expected_head).toBe('head-3');
 });

@@ -1,7 +1,6 @@
 import {
   Alert,
   Badge,
-  Checkbox,
   Button,
   Group,
   Loader,
@@ -29,7 +28,7 @@ import {
   MetadataEditor,
   readMetadata,
 } from '../components/editor/MetadataEditor';
-import { HomepageEditor } from '../components/editor/HomepageEditor';
+import { HomepageStudio } from './HomepageStudio';
 import { validateProperties } from '../lib/authoring/properties';
 import { LessonEditor } from '../components/editor/LessonEditor';
 import { RawEditor } from '../components/editor/RawEditor';
@@ -46,6 +45,21 @@ import { imageProblems } from '../lib/authoring/assets';
 import { parseLesson } from '../lib/authoring/document';
 
 export function EditorPage() {
+  const { site = '' } = useParams();
+  const [params] = useSearchParams();
+  // The homepage and the course appearance are edited together.
+  if (params.get('scope') === 'homepage')
+    return (
+      <HomepageStudio
+        site={site}
+        branch={params.get('ref') ?? 'main'}
+        panel={params.get('panel')}
+      />
+    );
+  return <PageEditor />;
+}
+
+function PageEditor() {
   const { site = '' } = useParams();
   const [params] = useSearchParams();
   const location = useLocation();
@@ -176,18 +190,11 @@ function EditorSession({
           split.frontmatter,
           scope === 'docs' ? 'docs' : 'pages',
         );
-  const homepageUnsupported =
-    scope === 'homepage' &&
-    (split.frontmatter.draft === true || split.frontmatter.unlisted === true);
   const invalid =
-    homepageUnsupported ||
     !!split.error ||
     (scope === 'metadata' && !!parseError) ||
     Object.keys(propertyErrors).length > 0 ||
-    Object.keys(formErrors).length > 0 ||
-    (scope === 'homepage' &&
-      split.frontmatter.slug !== undefined &&
-      split.frontmatter.slug !== '/');
+    Object.keys(formErrors).length > 0;
   const dirty = content !== baseline.content;
   const imagesInvalid = useMemo(
     () => imageProblems(split.body).length > 0,
@@ -345,28 +352,17 @@ function EditorSession({
       <Group justify="space-between" className="editor-toolbar">
         <div>
           <Title order={3}>
-            {scope === 'homepage'
-              ? 'Homepage bewerken'
-              : scope === 'metadata'
-                ? 'Categorieën en tags'
-                : scope === 'pages'
-                  ? 'Pagina bewerken'
-                  : 'Lesmateriaal bewerken'}
+            {scope === 'metadata'
+              ? 'Categorieën en tags'
+              : scope === 'pages'
+                ? 'Pagina bewerken'
+                : 'Lesmateriaal bewerken'}
           </Title>
           <Text size="xs" c="dimmed" className="editor-path">
             {siteInfo?.display_name ?? site} / {path}
           </Text>
         </div>
         <Group gap="xs">
-          {scope === 'homepage' && (
-            <Button
-              size="xs"
-              variant="subtle"
-              onClick={() => setMode(mode === 'raw' ? 'visual' : 'raw')}
-            >
-              {mode === 'raw' ? 'Terug naar pagina' : 'Broncode'}
-            </Button>
-          )}
           {previewOrigin && (
             <Button
               size="xs"
@@ -395,9 +391,7 @@ function EditorSession({
       </Group>
       {invalid && (
         <Alert color="orange">
-          Controleer de pagina-instellingen voordat je opslaat. Homepages
-          gebruiken /; concept en niet-vermelden worden alleen voor gewone
-          pagina’s ondersteund.
+          Controleer de pagina-instellingen voordat je opslaat.
         </Alert>
       )}
       {imagesInvalid && (
@@ -444,24 +438,12 @@ function EditorSession({
       )}
       {!split.error && scope !== 'metadata' && (
         <Paper withBorder p="sm">
-          <details open={scope !== 'homepage'}>
+          <details open>
             <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
               Pagina-instellingen
             </summary>
             <FrontmatterForm
               kind={scope === 'docs' ? 'docs' : 'pages'}
-              allowedKeys={
-                scope === 'homepage'
-                  ? [
-                      'title',
-                      'description',
-                      'keywords',
-                      'image',
-                      'slug',
-                      'wrapperClassName',
-                    ]
-                  : undefined
-              }
               onValidationChange={setFormErrors}
               rawFrontmatter={split.rawFrontmatter}
               value={split.frontmatter}
@@ -469,60 +451,23 @@ function EditorSession({
                 setContent(joinFrontmatter(split, fm, split.body))
               }
             />
-            {scope === 'homepage' && (
-              <Group mt="sm">
-                {[
-                  ['noFooter', 'Voettekst verbergen'],
-                  ['fullscreen', 'Volledige schermhoogte'],
-                ].map(([key, label]) => (
-                  <Checkbox
-                    key={key}
-                    label={label}
-                    checked={split.frontmatter[key] === true}
-                    onChange={(e) =>
-                      setContent(
-                        joinFrontmatter(
-                          split,
-                          {
-                            ...split.frontmatter,
-                            [key]: e.currentTarget.checked,
-                          },
-                          split.body,
-                        ),
-                      )
-                    }
-                  />
-                ))}
-              </Group>
-            )}
           </details>
         </Paper>
       )}
-      {scope !== 'homepage' && (
-        <SegmentedControl
-          disabled={uploading}
-          aria-label="Editorweergave"
-          value={mode}
-          onChange={setMode}
-          data={[
-            { value: 'visual', label: 'Bewerken' },
-            { value: 'preview', label: 'Voorbeeld' },
-            { value: 'raw', label: 'Broncode' },
-          ]}
-        />
-      )}
+      <SegmentedControl
+        disabled={uploading}
+        aria-label="Editorweergave"
+        value={mode}
+        onChange={setMode}
+        data={[
+          { value: 'visual', label: 'Bewerken' },
+          { value: 'preview', label: 'Voorbeeld' },
+          { value: 'raw', label: 'Broncode' },
+        ]}
+      />
       {!recovery && (
-        <div
-          className={
-            mode === 'preview' || scope === 'homepage' ? '' : 'editor-workspace'
-          }
-        >
-          <Paper
-            withBorder={scope !== 'homepage'}
-            className={
-              scope === 'homepage' ? 'homepage-page-pane' : 'editor-pane'
-            }
-          >
+        <div className={mode === 'preview' ? '' : 'editor-workspace'}>
+          <Paper withBorder className="editor-pane">
             {mode === 'preview' ? (
               preview
             ) : mode === 'raw' ? (
@@ -544,8 +489,7 @@ function EditorSession({
                 </Button>
               </Alert>
             ) : (
-              <ContentEditor
-                homepage={scope === 'homepage'}
+              <LessonEditor
                 onUploadImage={upload}
                 assetContext={{
                   site,
@@ -563,7 +507,7 @@ function EditorSession({
               />
             )}
           </Paper>
-          {mode !== 'preview' && scope !== 'homepage' && (
+          {mode !== 'preview' && (
             <Paper withBorder className="editor-pane editor-preview-secondary">
               {preview}
             </Paper>
@@ -614,11 +558,4 @@ function EditorSession({
       </Modal>
     </Stack>
   );
-}
-
-function ContentEditor({
-  homepage,
-  ...props
-}: React.ComponentProps<typeof LessonEditor> & { homepage: boolean }) {
-  return homepage ? <HomepageEditor {...props} /> : <LessonEditor {...props} />;
 }

@@ -1,175 +1,213 @@
 import { expect, test, type Page } from '@playwright/test';
+import {
+  EMPTY_SETTINGS,
+  mockStudio,
+  saveStudio,
+  studioUrl,
+} from './studio-mock';
 
-async function themePortal(page: Page, commit = 'head-1') {
-  const writes: Record<string, unknown>[] = [];
-  await page.route(
-    (url) => url.pathname.startsWith('/api/'),
-    async (route) => {
-      const url = new URL(route.request().url());
-      const path = url.pathname;
-      let result: unknown = [];
-      if (path === '/api/auth/me')
-        result = { login: 'teacher', csrf_token: 'token' };
-      if (path === '/api/sites')
-        result = [
-          {
-            slug: 'python',
-            display_name: 'Python',
-            domain: 'python.coderius.nl',
-          },
-        ];
-      if (path.endsWith('/capabilities'))
-        result = {
-          framework: 'docusaurus',
-          managed_homepage: true,
-          settings_runtime: true,
-        };
-      if (path.endsWith('/page')) {
-        if (
-          url.searchParams.get('scope') !== 'homepage' ||
-          url.searchParams.get('path') !== 'homepage.mdx' ||
-          url.searchParams.get('ref') !== 'lesson'
-        ) {
-          await route.fulfill({
-            status: 404,
-            json: { detail: 'Wrong homepage identity' },
-          });
-          return;
-        }
-        result = {
-          content:
-            'import { Hero, Section } from "@coderius/shared/components/HomepageSections";\n\n<Hero title="Leren programmeren" subtitle="Begin vandaag" />\n\n<Section title="Jouw eerste programma">\n\nDeze tekst komt van de cursusbranch.\n\n</Section>',
-          sha: 'page-1',
-          path: 'homepage.mdx',
-          ref: 'lesson',
-        };
-      }
-      if (path.endsWith('/settings')) {
-        if (route.request().method() === 'PUT') {
-          writes.push(route.request().postDataJSON());
-          result = { head_sha: 'head-2', commit_sha: 'head-2' };
-        } else
-          result = {
-            settings: {
-              version: 1,
-              site: {},
-              themeConfig: {},
-              tokens: {},
-              docs: {},
-            },
-            head_sha: 'head-1',
-            effective: {
-              commit,
-              settings: {
-                version: 1,
-                site: { title: 'Python' },
-                themeConfig: { navbar: { title: 'Informatica' } },
-                tokens: { light: { '--ifm-color-primary': '#225588' } },
-                docs: {},
-              },
-              unresolved: [],
-            },
-          };
-      }
-      await route.fulfill({ json: result });
+const homepage =
+  'import { Hero, Section } from "@coderius/shared/components/HomepageSections";\n\n<Hero title="Leren programmeren" subtitle="Begin vandaag" />\n\n<Section title="Jouw eerste programma">\n\nDeze tekst komt van de cursusbranch.\n\n</Section>\n';
+const inherited = {
+  version: 1,
+  site: { title: 'Python' },
+  themeConfig: {
+    navbar: {
+      title: 'Informatica',
+      items: [
+        {
+          type: 'docSidebar',
+          sidebarId: 'tutorialSidebar',
+          label: 'Lessen',
+          position: 'left',
+        },
+        { to: '/docenten', label: 'Docenten', position: 'right' },
+      ],
     },
-  );
-  return writes;
+  },
+  tokens: { light: { '--ifm-color-primary': '#225588' } },
+  docs: {},
+};
+function studio(page: Page, effective: Record<string, unknown> | null = {}) {
+  return mockStudio(page, {
+    content: homepage,
+    effective:
+      effective === null
+        ? undefined
+        : { commit: 'head-1', settings: inherited, stale: false, ...effective },
+  });
 }
+const canvasOf = (page: Page) =>
+  page.getByRole('region', { name: 'Cursuspagina', exact: true });
 
-test('theme edits the branch homepage live and restores inherited color without losing other changes', async ({
+test('style edits show live and an inherited colour can be restored', async ({
   page,
 }) => {
-  const writes = await themePortal(page);
-  await page.goto('/sites/python/settings?ref=lesson');
-  const canvas = page.getByTestId('theme-canvas');
+  const writes = await studio(page);
+  await page.goto(studioUrl());
+  const canvas = canvasOf(page);
   await expect(
     canvas.getByText('Deze tekst komt van de cursusbranch.'),
   ).toBeVisible();
   await expect(canvas.getByText('Informatica', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Kleuren', exact: true }).click();
-  await page.getByText('Donker', { exact: true }).click();
-  await expect(canvas.locator('.course-canvas')).toHaveCSS(
-    '--ifm-color-primary',
+  await expect(page.getByText('Cursusbuild actueel')).toBeVisible();
+  await page.getByRole('button', { name: 'Stijl', exact: true }).click();
+  await page.getByText('Donkere weergave', { exact: true }).click();
+  await expect(canvas).toHaveCSS('--ifm-color-primary', '#225588');
+  await expect(page.getByLabel('Cursuskleur', { exact: true })).toHaveValue(
     '#225588',
   );
-  await expect(page.getByLabel('Primaire kleur', { exact: true })).toHaveValue(
-    '#225588',
-  );
-  await page.getByLabel('Primaire kleur', { exact: true }).fill('#ab77ee');
-  await expect(canvas.locator('.course-canvas')).toHaveCSS(
-    '--ifm-color-primary',
-    '#ab77ee',
-  );
-  await page.getByText('Licht', { exact: true }).click();
-  await page.getByLabel('Primaire kleur', { exact: true }).fill('#e04040');
-  await expect(canvas.locator('.course-canvas')).toHaveCSS(
-    '--ifm-color-primary',
-    '#e04040',
-  );
+  await page.getByLabel('Cursuskleur', { exact: true }).fill('#ab77ee');
+  await expect(canvas).toHaveCSS('--ifm-color-primary', '#ab77ee');
+  await page.getByText('Lichte weergave', { exact: true }).click();
+  await page.getByLabel('Cursuskleur', { exact: true }).fill('#e04040');
+  await expect(canvas).toHaveCSS('--ifm-color-primary', '#e04040');
   await canvas.getByText('Informatica', { exact: true }).click();
   await page.getByLabel('Navigatietitel', { exact: true }).fill('Mijn cursus');
   await expect(canvas.getByText('Mijn cursus', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Kleuren', exact: true }).click();
+  await page.getByRole('button', { name: 'Stijl', exact: true }).click();
   await page
-    .getByRole('button', { name: 'Primaire kleur overnemen', exact: true })
+    .getByRole('button', { name: 'Cursuskleur overnemen', exact: true })
     .click();
-  await expect(canvas.locator('.course-canvas')).toHaveCSS(
-    '--ifm-color-primary',
-    '#225588',
-  );
-  await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Concept opslaan', exact: true })
-    .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(canvas).toHaveCSS('--ifm-color-primary', '#225588');
+  await saveStudio(page);
+  expect(writes).toHaveLength(1);
   expect(writes[0].expected_head).toBe('head-1');
-  const settings = writes[0].settings as {
-    themeConfig: unknown;
-    tokens: unknown;
-    site: unknown;
-  };
-  expect(settings.themeConfig).toEqual({ navbar: { title: 'Mijn cursus' } });
-  expect(settings.site).toEqual({});
-  expect(settings.tokens).toEqual({
+  expect(writes[0].content).toBeUndefined();
+  expect(writes[0].settings!.themeConfig).toEqual({
+    navbar: { title: 'Mijn cursus' },
+  });
+  expect(writes[0].settings!.site).toEqual({});
+  expect(writes[0].settings!.tokens).toEqual({
     light: {},
     dark: { '--ifm-color-primary': '#ab77ee' },
   });
 });
 
-test('stale build settings are excluded and mobile controls keep edits when closed', async ({
+test('menu links start from the course, keep shared links and save as overrides', async ({
+  page,
+}) => {
+  const writes = await studio(page);
+  await page.goto(studioUrl());
+  const canvas = canvasOf(page);
+  await canvas.getByRole('button', { name: 'Lessen', exact: true }).click();
+  const panel = page.getByRole('complementary', { name: 'Koptekst' });
+  await expect(panel.getByLabel('Link 1 — tekst')).toHaveValue('Lessen');
+  await expect(panel.getByLabel('Zijmenu-ID')).toHaveValue('tutorialSidebar');
+  await expect(
+    panel.getByText(/Automatisch toegevoegd door Coderius: Docenten/),
+  ).toBeVisible();
+  await panel
+    .getByRole('button', { name: 'Link toevoegen', exact: true })
+    .click();
+  await panel.getByLabel('Link 2 — tekst').fill('Oefeningen');
+  await panel.getByLabel('Link 2 — bestemming').fill('/oefeningen');
+  await expect(
+    canvas.getByRole('button', { name: 'Oefeningen', exact: true }),
+  ).toBeVisible();
+  await expect(
+    canvas.getByRole('button', { name: 'Docenten', exact: true }),
+  ).toBeVisible();
+  await saveStudio(page);
+  expect(writes[0].settings!.themeConfig.navbar.items).toEqual([
+    {
+      type: 'docSidebar',
+      sidebarId: 'tutorialSidebar',
+      label: 'Lessen',
+      position: 'left',
+    },
+    { label: 'Oefeningen', to: '/oefeningen' },
+  ]);
+  await panel
+    .getByRole('button', { name: 'Menu overnemen', exact: true })
+    .click();
+  await expect(
+    canvas.getByRole('button', { name: 'Oefeningen', exact: true }),
+  ).toHaveCount(0);
+});
+
+test('page text and appearance are saved together in one commit', async ({
+  page,
+}) => {
+  const writes = await studio(page);
+  await page.goto(studioUrl());
+  const canvas = canvasOf(page);
+  await canvas
+    .getByRole('textbox', { name: 'Titel', exact: true })
+    .first()
+    .fill('Welkom');
+  await canvas.locator('footer').click();
+  await page
+    .getByRole('complementary', { name: 'Voettekst' })
+    .getByLabel('Copyrighttekst', { exact: true })
+    .fill('Coderius 2026');
+  await expect(canvas.locator('footer')).toContainText('Coderius 2026');
+  await saveStudio(page);
+  expect(writes).toHaveLength(1);
+  expect(writes[0].content).toContain('title={"Welkom"}');
+  expect(writes[0].settings!.themeConfig).toEqual({
+    footer: { copyright: 'Coderius 2026' },
+  });
+  await canvas
+    .getByRole('textbox', { name: 'Titel', exact: true })
+    .first()
+    .fill('Welkom terug');
+  await saveStudio(page);
+  expect(writes[1].expected_head).toBe('head-2');
+  expect(writes[1].settings).toBeUndefined();
+});
+
+test('without a build the editor says so and mobile panels keep edits when closed', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await themePortal(page, 'old-head');
-  await page.goto('/sites/python/settings?ref=lesson');
-  const canvas = page.getByTestId('theme-canvas');
+  await studio(page, null);
+  await page.goto(studioUrl());
+  const canvas = canvasOf(page);
   await expect(canvas.getByText('Jouw eerste programma')).toBeVisible();
   await expect(canvas.getByText('Informatica', { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Geen passende build/)).toBeVisible();
-  await page.getByRole('button', { name: 'Koptekst', exact: true }).click();
-  const drawer = page.getByRole('dialog');
-  await expect(drawer).toBeVisible();
+  await expect(page.getByText('Geen cursusbuild')).toBeVisible();
+  await canvas.getByRole('button', { name: 'Koptekst aanpassen' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Koptekst' });
+  await expect(
+    drawer.getByText(/Er is nog geen cursusvoorbeeld/),
+  ).toBeVisible();
   await drawer
     .getByLabel('Navigatietitel', { exact: true })
     .fill('Mobiele cursus');
-  await drawer.getByRole('button', { name: 'Bediening sluiten' }).click();
+  await drawer.getByRole('button', { name: 'Paneel sluiten' }).click();
   await expect(
     canvas.getByText('Mobiele cursus', { exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Koptekst', exact: true }).click();
+  await canvas.getByRole('button', { name: 'Koptekst aanpassen' }).click();
   await expect(page.getByLabel('Navigatietitel', { exact: true })).toHaveValue(
     'Mobiele cursus',
   );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+    ),
+  ).toBe(true);
 });
 
-test('typography changes appear on the page and survive advanced view changes', async ({
+test('an older build is used but marked as possibly outdated', async ({
   page,
 }) => {
-  await themePortal(page);
-  await page.goto('/sites/python/settings?ref=lesson');
-  const canvas = page.getByTestId('theme-canvas').locator('.course-canvas');
-  await page.getByRole('button', { name: 'Lettertypen', exact: true }).click();
+  await studio(page, { stale: true, built_at: '2026-09-01T10:00:00Z' });
+  await page.goto(studioUrl());
+  await expect(
+    canvasOf(page).getByText('Informatica', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/mogelijk verouderd/)).toBeVisible();
+});
+
+test('typography and site settings survive switching panels', async ({
+  page,
+}) => {
+  await studio(page);
+  await page.goto(studioUrl());
+  const canvas = canvasOf(page);
+  await page.getByRole('button', { name: 'Stijl', exact: true }).click();
   await page.getByRole('textbox', { name: 'Lettertype', exact: true }).click();
   await page
     .getByRole('option', { name: 'Georgia — klassiek', exact: true })
@@ -179,29 +217,48 @@ test('typography changes appear on the page and survive advanced view changes', 
     .press('End');
   await expect(canvas).toHaveCSS('font-family', 'Georgia, serif');
   await expect(canvas).toHaveCSS('font-size', '24px');
-  await page.getByRole('button', { name: 'Geavanceerd', exact: true }).click();
-  const advanced = page.getByRole('dialog', {
-    name: 'Geavanceerde vormgeving',
-  });
-  await advanced
-    .getByLabel('Beschrijving', { exact: true })
+  await page.getByRole('button', { name: 'Site', exact: true }).click();
+  await page
+    .getByLabel('Beschrijving voor zoekmachines', { exact: true })
     .fill('Een toegankelijke cursus');
-  await advanced.getByRole('button', { name: 'Geavanceerd sluiten' }).click();
+  await page.getByRole('button', { name: 'Stijl', exact: true }).click();
   await expect(canvas).toHaveCSS('font-family', 'Georgia, serif');
-  await page.getByRole('button', { name: 'Geavanceerd', exact: true }).click();
+  await page.getByRole('button', { name: 'Site', exact: true }).click();
   await expect(
-    advanced.getByLabel('Beschrijving', { exact: true }),
+    page.getByLabel('Beschrijving voor zoekmachines', { exact: true }),
   ).toHaveValue('Een toegankelijke cursus');
 });
 
-test('content width changes the actual homepage layout', async ({ page }) => {
+test('invalid sizes are reported next to the field and block saving', async ({
+  page,
+}) => {
+  await studio(page);
+  await page.goto(studioUrl());
+  await page.getByRole('button', { name: 'Site', exact: true }).click();
+  await page.getByRole('button', { name: 'Broncode', exact: true }).click();
+  const editor = page.locator('.studio-source .cm-content');
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.insertText(
+    JSON.stringify({
+      ...EMPTY_SETTINGS,
+      tokens: { light: { '--ifm-font-size-base': '16' } },
+    }),
+  );
+  await expect(
+    page.getByRole('button', { name: 'Opslaan…', exact: true }),
+  ).toBeDisabled();
+  await page.getByRole('button', { name: 'Stijl', exact: true }).click();
+  await expect(
+    page.getByText('Gebruik een maat met eenheid, zoals 16px of 1rem.'),
+  ).toBeVisible();
+});
+
+test('content width changes the homepage layout', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await themePortal(page);
-  await page.goto('/sites/python/settings?ref=lesson');
-  const container = page
-    .getByTestId('theme-canvas')
-    .locator('.course-container')
-    .first();
+  await studio(page);
+  await page.goto(studioUrl('lesson', 'style'));
+  const container = canvasOf(page).locator('.course-container').first();
   await expect(container).toBeVisible();
   const before = await container.boundingBox();
   await page
@@ -209,4 +266,13 @@ test('content width changes the actual homepage layout', async ({ page }) => {
     .press('Home');
   await expect(container).toHaveCSS('max-width', '720px');
   expect((await container.boundingBox())!.width).toBeLessThan(before!.width);
+});
+
+test('old Vormgeving links open the style panel of the homepage editor', async ({
+  page,
+}) => {
+  await studio(page);
+  await page.goto('/sites/python/settings?ref=lesson');
+  await expect(page).toHaveURL(/scope=homepage.*ref=lesson.*panel=style/);
+  await expect(page.getByLabel('Cursuskleur', { exact: true })).toBeVisible();
 });

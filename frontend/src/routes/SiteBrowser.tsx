@@ -197,28 +197,16 @@ export function SiteBrowser() {
           ]}
         />
         {site !== 'home' && (
-          <>
-            <Button
-              variant="light"
-              onClick={() =>
-                navigate(
-                  `/sites/${site}/edit?${new URLSearchParams({ scope: 'homepage', path: 'homepage.mdx', ref })}`,
-                )
-              }
-            >
-              Homepage
-            </Button>
-            <Button
-              variant="light"
-              onClick={() =>
-                navigate(
-                  `/sites/${site}/settings?${new URLSearchParams({ ref })}`,
-                )
-              }
-            >
-              Vormgeving
-            </Button>
-          </>
+          <Button
+            variant="light"
+            onClick={() =>
+              navigate(
+                `/sites/${site}/edit?${new URLSearchParams({ scope: 'homepage', path: 'homepage.mdx', ref })}`,
+              )
+            }
+          >
+            Startpagina en vormgeving
+          </Button>
         )}
       </Group>
       {scope === 'metadata' && (

@@ -30,8 +30,11 @@ import {
   IconArrowBackUp,
   IconArrowForwardUp,
   IconCode,
+  IconPalette,
+  IconAdjustments,
+  IconX,
 } from '@tabler/icons-react';
-import { useQuery } from '@tanstack/react-query';
+import { useMediaQuery } from '@mantine/hooks';
 import {
   createElement,
   useLayoutEffect,
@@ -40,7 +43,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api } from '../../api/client';
 import {
   addSection,
   insertSectionInParent,
@@ -59,22 +61,56 @@ import {
 } from '../../lib/authoring/syntax';
 import { attributes, insertComponent } from '../../lib/authoring/components';
 import { insertTabs } from '../../lib/authoring/content';
-import { previewSettings } from '../../lib/authoring/appearance';
 import { resolveAsset } from '../../lib/authoring/assets';
 import { type SiteSettings } from '../../lib/authoring/settings';
 import { MdxPreview } from '../../lib/mdx-preview/MdxPreview';
-import { CourseCanvas, SectionVisual, toolLabel } from './CourseCanvas';
+import {
+  CourseCanvas,
+  SectionVisual,
+  toolLabel,
+  type CanvasRegion,
+} from './CourseCanvas';
 import { LessonEditor } from './LessonEditor';
 import { RawEditor } from './RawEditor';
 import './HomepageEditor.css';
 
-type Props = React.ComponentProps<typeof LessonEditor>;
+export type StudioPanel =
+  'section' | 'navbar' | 'footer' | 'announcement' | 'style' | 'site';
+export interface PanelContext {
+  colorMode: 'light' | 'dark';
+  setColorMode: (mode: 'light' | 'dark') => void;
+  /** Index of the menu link clicked on the page. */
+  navItem?: number;
+  open: (panel: StudioPanel) => void;
+}
+type Props = React.ComponentProps<typeof LessonEditor> & {
+  /** Course appearance as the page shows it: inherited values plus the course's own. */
+  settings?: SiteSettings;
+  title?: string;
+  tagline?: string;
+  /** Content of the panels for everything around the page content. */
+  renderPanel?: (
+    panel: Exclude<StudioPanel, 'section'>,
+    context: PanelContext,
+  ) => ReactNode;
+  initialPanel?: StudioPanel | null;
+  /** Extra status next to the canvas toolbar, e.g. where inherited values come from. */
+  status?: ReactNode;
+};
+const panelTitles: Record<Exclude<StudioPanel, 'section'>, string> = {
+  navbar: 'Koptekst',
+  footer: 'Voettekst',
+  announcement: 'Mededeling',
+  style: 'Stijl',
+  site: 'Site',
+};
 function nodeAt(root: LessonNode, path: string) {
   return path
     .split('.')
-    .reduce<
-      LessonNode | undefined
-    >((node, index) => node && childrenOf(node)[Number(index)], root);
+    .reduce<LessonNode | undefined>(
+      (node, index) => node && childrenOf(node)[Number(index)],
+      root,
+    );
 }
 function InlineText({
   value,
@@ -115,12 +151,24 @@ function InlineText({
   });
 }
 export function HomepageEditor(props: Props) {
-  const { value, onChange, assetContext = {}, site } = props;
+  const {
+    value,
+    onChange,
+    assetContext = {},
+    site,
+    settings,
+    renderPanel,
+  } = props;
   const latest = useRef(value);
   latest.current = value;
   const [selected, setSelected] = useState('0');
-  const [inspector, setInspector] = useState(false),
-    [source, setSource] = useState(false);
+  const [panel, setPanel] = useState<StudioPanel | null>(
+      props.initialPanel ?? null,
+    ),
+    [source, setSource] = useState(false),
+    [navItem, setNavItem] = useState<number>();
+  const narrow = useMediaQuery('(max-width: 900px)');
+  const setInspector = (open: boolean) => setPanel(open ? 'section' : null);
   const [gallery, setGallery] = useState<{ parent?: string } | null>(null);
   const [error, setError] = useState(''),
     [uploading, setUploading] = useState(false);
@@ -131,32 +179,8 @@ export function HomepageEditor(props: Props) {
     redo = useRef<string[]>([]);
   const [, refreshHistory] = useState(0);
   const dragSource = useRef<string | null>(null);
-  const appearance = useQuery({
-    queryKey: ['settings', site, assetContext.branch ?? 'main'],
-    enabled: !!site,
-    queryFn: () =>
-      api<{
-        settings: SiteSettings;
-        head_sha: string;
-        effective?: { commit: string; settings: SiteSettings };
-      }>(`/api/sites/${site}/settings`, {
-        params: { ref: assetContext.branch ?? 'main' },
-      }),
-  });
-  const overrides = appearance.data?.settings;
-  const inherited =
-    appearance.data?.effective?.commit === appearance.data?.head_sha
-      ? appearance.data?.effective?.settings
-      : undefined;
-  const settings = overrides
-    ? previewSettings(inherited, overrides, overrides).settings
-    : undefined;
-  const title = String(
-    settings?.site.title ?? inherited?.site.title ?? site ?? 'Cursus',
-  );
-  const tagline = String(
-    settings?.site.tagline ?? inherited?.site.tagline ?? '',
-  );
+  const title = props.title ?? site ?? 'Cursus';
+  const tagline = props.tagline ?? '';
   const parsed = useMemo(() => {
     try {
       return { tree: parseTree(value), bindings: sectionBindings(value) };
@@ -202,7 +226,7 @@ export function HomepageEditor(props: Props) {
     latest.current = next;
     onChange(next);
     refreshHistory((v) => v + 1);
-    setInspector(false);
+    if (panel === 'section') setInspector(false);
   }
   function updateProp(
     node: LessonNode,
@@ -490,6 +514,13 @@ export function HomepageEditor(props: Props) {
         onClick={(e) => {
           e.stopPropagation();
           setSelected(path);
+          if (
+            panel &&
+            panel !== 'section' &&
+            panel !== 'style' &&
+            panel !== 'site'
+          )
+            setPanel('section');
         }}
         onFocusCapture={(e) => {
           if (
@@ -517,212 +548,37 @@ export function HomepageEditor(props: Props) {
       </div>
     );
   }
-  if (!parsed.tree || !parsed.bindings)
-    return <Alert color="orange">{parsed.error}</Alert>;
-  return (
-    <Stack gap="sm" className="homepage-studio">
-      <div className="homepage-studio-topbar">
-        <div>
-          <Text fw={600}>Maak de pagina van je cursus</Text>
-          <Text size="sm" c="dimmed">
-            Klik op tekst om te schrijven. Kies een onderdeel om het aan te
-            passen.
-          </Text>
-        </div>
-        <Group gap="xs">
-          <Tooltip label="Ongedaan maken">
-            <ActionIcon
-              variant="default"
-              size="lg"
-              aria-label="Ongedaan maken"
-              disabled={!undo.current.length || uploading}
-              onClick={() => timeTravel('undo')}
-            >
-              <IconArrowBackUp size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Opnieuw uitvoeren">
-            <ActionIcon
-              variant="default"
-              size="lg"
-              aria-label="Opnieuw uitvoeren"
-              disabled={!redo.current.length || uploading}
-              onClick={() => timeTravel('redo')}
-            >
-              <IconArrowForwardUp size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Button
-            variant={preview ? 'filled' : 'default'}
-            onClick={() => setPreview((v) => !v)}
-            leftSection={<IconCheck size={16} />}
-          >
-            {preview ? 'Verder bewerken' : 'Bekijken'}
-          </Button>
-          <Button
-            leftSection={<IconPlus size={16} />}
-            onClick={() => setGallery({})}
-          >
-            Sectie toevoegen
-          </Button>
-        </Group>
-      </div>
-      {error && (
-        <Alert color="red" withCloseButton onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
-      <div className="homepage-canvas-toolbar">
-        <Group gap={4}>
-          <ActionIcon
-            variant={device === 'desktop' ? 'light' : 'subtle'}
-            aria-label="Desktopvoorbeeld"
-            onClick={() => setDevice('desktop')}
-          >
-            <IconDeviceDesktop size={19} />
-          </ActionIcon>
-          <ActionIcon
-            variant={device === 'mobile' ? 'light' : 'subtle'}
-            aria-label="Mobielvoorbeeld"
-            onClick={() => setDevice('mobile')}
-          >
-            <IconDeviceMobile size={19} />
-          </ActionIcon>
-          <ActionIcon
-            variant="subtle"
-            aria-label={
-              colorMode === 'light' ? 'Donker voorbeeld' : 'Licht voorbeeld'
-            }
-            onClick={() =>
-              setColorMode((v) => (v === 'light' ? 'dark' : 'light'))
-            }
-          >
-            {colorMode === 'light' ? (
-              <IconMoon size={18} />
-            ) : (
-              <IconSun size={18} />
-            )}
-          </ActionIcon>
-        </Group>
-        <Text size="xs" c="dimmed">
-          {preview ? 'Voorbeeld van je wijzigingen' : 'Bewerken op de pagina'}
-        </Text>
-      </div>
-      {!preview && current && (
-        <div
-          className="homepage-selection-toolbar"
-          role="toolbar"
-          aria-label="Geselecteerd onderdeel"
-        >
-          <span
-            draggable
-            onDragStart={(e) => {
-              dragSource.current = selected;
-              e.dataTransfer.setData('text/plain', selected);
-              e.dataTransfer.effectAllowed = 'move';
-            }}
-            onDragEnd={() => {
-              dragSource.current = null;
-            }}
-            className="homepage-drag-handle"
-            title="Sleep dit onderdeel naar een andere plek"
-          >
-            <IconGripVertical size={17} />
-          </span>
-          <Text size="sm" fw={600}>
-            {label}
-          </Text>
-          {parentPath && (
-            <Button
-              size="compact-xs"
-              variant="subtle"
-              onClick={() => setSelected(parentPath)}
-            >
-              Bovenliggend
-            </Button>
-          )}
-          <div className="homepage-selection-actions">
-            <ActionIcon
-              variant="subtle"
-              aria-label={`Omhoog ${index + 1}`}
-              disabled={index === 0}
-              onClick={() => move(-1)}
-            >
-              <IconArrowUp size={17} />
-            </ActionIcon>
-            <ActionIcon
-              variant="subtle"
-              aria-label={`Omlaag ${index + 1}`}
-              disabled={index === siblings.length - 1}
-              onClick={() => move(1)}
-            >
-              <IconArrowDown size={17} />
-            </ActionIcon>
-            <ActionIcon
-              variant="subtle"
-              aria-label="Dupliceren"
-              onClick={() => {
-                const r = range(current);
-                change(
-                  replaceRange(
-                    value,
-                    { from: r.to, to: r.to },
-                    `\n\n${value.slice(r.from, r.to)}`,
-                  ),
-                );
-              }}
-            >
-              <IconCopy size={17} />
-            </ActionIcon>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              aria-label="Verwijderen"
-              onClick={() => {
-                change(replaceRange(value, range(current), ''));
-                setSelected(parentPath || '0');
-              }}
-            >
-              <IconTrash size={17} />
-            </ActionIcon>
-            <Button
-              size="compact-sm"
-              variant="light"
-              leftSection={<IconSettings size={16} />}
-              onClick={() => {
-                setSource(false);
-                setInspector(true);
-              }}
-            >
-              Aanpassen
-            </Button>
-          </div>
-        </div>
-      )}
-      <div className="homepage-canvas-surround">
-        <CourseCanvas
-          body={value}
-          assetContext={assetContext}
-          settings={settings}
-          title={title}
-          tagline={tagline}
-          device={device}
-          colorMode={colorMode}
-        >
-          {preview
-            ? undefined
-            : childrenOf(parsed.tree).map((node, index) =>
-                render(node, String(index)),
-              )}
-        </CourseCanvas>
-      </div>
-      <Drawer
-        opened={inspector}
-        onClose={() => setInspector(false)}
-        title={`${label} aanpassen`}
-        position="right"
-        size="sm"
-      >
+  function selectRegion(region: CanvasRegion) {
+    if (
+      region === 'navbar' ||
+      region === 'footer' ||
+      region === 'announcement'
+    ) {
+      setNavItem(undefined);
+      setPanel(region);
+    }
+  }
+  const panelContext: PanelContext = {
+    colorMode,
+    setColorMode,
+    navItem,
+    open: setPanel,
+  };
+  const panelTitle =
+    panel === 'section'
+      ? `${label} aanpassen`
+      : panel
+        ? panelTitles[panel]
+        : '';
+  const panelContent =
+    panel === 'section'
+      ? inspectorContent()
+      : panel && renderPanel
+        ? renderPanel(panel, panelContext)
+        : null;
+  function inspectorContent() {
+    return (
+      <>
         {current && (
           <Stack gap="md">
             <Text size="sm" c="dimmed">
@@ -946,10 +802,11 @@ export function HomepageEditor(props: Props) {
               leftSection={<IconCode size={16} />}
               onClick={() => setSource((v) => !v)}
             >
-              Geavanceerd: bron van dit onderdeel
+              Broncode van dit onderdeel
             </Button>
             {source && (
               <RawEditor
+                height="260px"
                 value={value.slice(range(current).from, range(current).to)}
                 onChange={(next) =>
                   change(replaceRange(value, range(current), next))
@@ -958,6 +815,276 @@ export function HomepageEditor(props: Props) {
             )}
           </Stack>
         )}
+      </>
+    );
+  }
+  if (!parsed.tree || !parsed.bindings)
+    return <Alert color="orange">{parsed.error}</Alert>;
+  return (
+    <Stack gap="sm" className="homepage-studio">
+      <div className="homepage-studio-topbar">
+        <div>
+          <Text fw={600}>Maak de pagina van je cursus</Text>
+          <Text size="sm" c="dimmed">
+            Klik op tekst om te schrijven. Klik op een onderdeel, de koptekst of
+            de voettekst om het aan te passen.
+          </Text>
+        </div>
+        <Group gap="xs">
+          <Tooltip label="Ongedaan maken">
+            <ActionIcon
+              variant="default"
+              size="lg"
+              aria-label="Ongedaan maken"
+              disabled={!undo.current.length || uploading}
+              onClick={() => timeTravel('undo')}
+            >
+              <IconArrowBackUp size={18} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Opnieuw uitvoeren">
+            <ActionIcon
+              variant="default"
+              size="lg"
+              aria-label="Opnieuw uitvoeren"
+              disabled={!redo.current.length || uploading}
+              onClick={() => timeTravel('redo')}
+            >
+              <IconArrowForwardUp size={18} />
+            </ActionIcon>
+          </Tooltip>
+          <Button
+            variant={preview ? 'filled' : 'default'}
+            onClick={() => setPreview((v) => !v)}
+            leftSection={<IconCheck size={16} />}
+          >
+            {preview ? 'Verder bewerken' : 'Bekijken'}
+          </Button>
+          {renderPanel && (
+            <>
+              <Button
+                variant={panel === 'style' ? 'light' : 'default'}
+                leftSection={<IconPalette size={16} />}
+                onClick={() => setPanel(panel === 'style' ? null : 'style')}
+              >
+                Stijl
+              </Button>
+              <Button
+                variant={panel === 'site' ? 'light' : 'default'}
+                leftSection={<IconAdjustments size={16} />}
+                onClick={() => setPanel(panel === 'site' ? null : 'site')}
+              >
+                Site
+              </Button>
+            </>
+          )}
+          <Button
+            leftSection={<IconPlus size={16} />}
+            onClick={() => setGallery({})}
+          >
+            Sectie toevoegen
+          </Button>
+        </Group>
+      </div>
+      {error && (
+        <Alert color="red" withCloseButton onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+      <div className="homepage-canvas-toolbar">
+        <Group gap={4}>
+          <ActionIcon
+            variant={device === 'desktop' ? 'light' : 'subtle'}
+            aria-label="Desktopvoorbeeld"
+            onClick={() => setDevice('desktop')}
+          >
+            <IconDeviceDesktop size={19} />
+          </ActionIcon>
+          <ActionIcon
+            variant={device === 'mobile' ? 'light' : 'subtle'}
+            aria-label="Mobielvoorbeeld"
+            onClick={() => setDevice('mobile')}
+          >
+            <IconDeviceMobile size={19} />
+          </ActionIcon>
+          <ActionIcon
+            variant="subtle"
+            aria-label={
+              colorMode === 'light' ? 'Donker voorbeeld' : 'Licht voorbeeld'
+            }
+            onClick={() =>
+              setColorMode((v) => (v === 'light' ? 'dark' : 'light'))
+            }
+          >
+            {colorMode === 'light' ? (
+              <IconMoon size={18} />
+            ) : (
+              <IconSun size={18} />
+            )}
+          </ActionIcon>
+        </Group>
+        <Group gap="xs" className="homepage-canvas-status">
+          {props.status}
+          <Text size="xs" c="dimmed">
+            {preview
+              ? 'Voorbeeld van je wijzigingen'
+              : renderPanel
+                ? 'Klik op de koptekst of voettekst om die aan te passen'
+                : 'Bewerken op de pagina'}
+          </Text>
+        </Group>
+      </div>
+      {!preview && current && (
+        <div
+          className="homepage-selection-toolbar"
+          role="toolbar"
+          aria-label="Geselecteerd onderdeel"
+        >
+          <span
+            draggable
+            onDragStart={(e) => {
+              dragSource.current = selected;
+              e.dataTransfer.setData('text/plain', selected);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragEnd={() => {
+              dragSource.current = null;
+            }}
+            className="homepage-drag-handle"
+            title="Sleep dit onderdeel naar een andere plek"
+          >
+            <IconGripVertical size={17} />
+          </span>
+          <Text size="sm" fw={600}>
+            {label}
+          </Text>
+          {parentPath && (
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={() => setSelected(parentPath)}
+            >
+              Bovenliggend
+            </Button>
+          )}
+          <div className="homepage-selection-actions">
+            <ActionIcon
+              variant="subtle"
+              aria-label={`Omhoog ${index + 1}`}
+              disabled={index === 0}
+              onClick={() => move(-1)}
+            >
+              <IconArrowUp size={17} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              aria-label={`Omlaag ${index + 1}`}
+              disabled={index === siblings.length - 1}
+              onClick={() => move(1)}
+            >
+              <IconArrowDown size={17} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              aria-label="Dupliceren"
+              onClick={() => {
+                const r = range(current);
+                change(
+                  replaceRange(
+                    value,
+                    { from: r.to, to: r.to },
+                    `\n\n${value.slice(r.from, r.to)}`,
+                  ),
+                );
+              }}
+            >
+              <IconCopy size={17} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              aria-label="Verwijderen"
+              onClick={() => {
+                change(replaceRange(value, range(current), ''));
+                setSelected(parentPath || '0');
+              }}
+            >
+              <IconTrash size={17} />
+            </ActionIcon>
+            <Button
+              size="compact-sm"
+              variant="light"
+              leftSection={<IconSettings size={16} />}
+              onClick={() => {
+                setSource(false);
+                setInspector(true);
+              }}
+            >
+              Aanpassen
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className={`homepage-stage${panel && !narrow ? ' has-panel' : ''}`}>
+        <div className="homepage-canvas-surround">
+          <CourseCanvas
+            body={value}
+            assetContext={assetContext}
+            settings={settings}
+            title={title}
+            tagline={tagline}
+            device={device}
+            colorMode={colorMode}
+            selectedRegion={
+              panel && ['navbar', 'footer', 'announcement'].includes(panel)
+                ? (panel as CanvasRegion)
+                : undefined
+            }
+            onSelectRegion={preview || !renderPanel ? undefined : selectRegion}
+            onSelectNavItem={
+              preview || !renderPanel
+                ? undefined
+                : (index) => {
+                    setNavItem(index);
+                    setPanel('navbar');
+                  }
+            }
+          >
+            {preview
+              ? undefined
+              : childrenOf(parsed.tree).map((node, index) =>
+                  render(node, String(index)),
+                )}
+          </CourseCanvas>
+        </div>
+        {panel && !narrow && (
+          <aside className="homepage-panel" aria-label={panelTitle}>
+            <div className="homepage-panel-header">
+              <Text fw={700} size="lg">
+                {panelTitle}
+              </Text>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label="Paneel sluiten"
+                onClick={() => setPanel(null)}
+              >
+                <IconX size={16} />
+              </ActionIcon>
+            </div>
+            {panelContent}
+          </aside>
+        )}
+      </div>
+      <Drawer
+        opened={!!panel && !!narrow}
+        onClose={() => setPanel(null)}
+        title={panelTitle}
+        position="bottom"
+        size="80%"
+        closeButtonProps={{ 'aria-label': 'Paneel sluiten' }}
+      >
+        {panelContent}
       </Drawer>
       <Modal
         opened={gallery !== null}

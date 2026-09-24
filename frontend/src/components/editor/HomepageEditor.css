@@ -302,3 +302,38 @@
   > .homepage-optional-field:empty {
   display: none;
 }
+.homepage-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+.homepage-stage.has-panel {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.homepage-panel {
+  position: sticky;
+  top: 72px;
+  max-height: calc(100vh - 88px);
+  overflow-y: auto;
+  background: var(--mantine-color-body);
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 12px;
+  padding: 14px 16px 18px;
+  min-width: 0;
+}
+.homepage-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.homepage-canvas-status {
+  justify-content: flex-end;
+}
+@media (max-width: 1100px) {
+  .homepage-stage.has-panel {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}

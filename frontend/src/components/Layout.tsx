@@ -36,9 +36,8 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const canvasRoute =
-    location.pathname.endsWith('/settings') ||
-    (location.pathname.endsWith('/edit') &&
-      new URLSearchParams(location.search).get('scope') === 'homepage');
+    location.pathname.endsWith('/edit') &&
+    new URLSearchParams(location.search).get('scope') === 'homepage';
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
 
   async function logout() {

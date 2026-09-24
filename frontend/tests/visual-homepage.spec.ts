@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { EMPTY_SETTINGS, mockStudio, studioUrl } from './studio-mock';
 const original = `import { Hero, Section, Columns, Card, Buttons, Button } from '@coderius/shared/components/HomepageSections';
 import AlgorithmGrid from '@site/src/components/AlgorithmGrid';
 
@@ -16,59 +17,15 @@ import AlgorithmGrid from '@site/src/components/AlgorithmGrid';
 <AlgorithmGrid custom={keepThis()} />
 `;
 async function setup(page: Page) {
-  let content = original;
-  const writes: any[] = [];
-  await page.route(
-    (url) => url.pathname.startsWith('/api/'),
-    async (route) => {
-      const u = new URL(route.request().url());
-      let json: unknown = [];
-      if (u.pathname === '/api/auth/me')
-        json = { login: 'teacher', csrf_token: 'token' };
-      if (u.pathname === '/api/sites')
-        json = [
-          {
-            slug: 'python',
-            display_name: 'Python',
-            domain: 'python.coderius.nl',
-          },
-        ];
-      if (u.pathname.endsWith('/page')) {
-        if (route.request().method() === 'PUT') {
-          const body = route.request().postDataJSON();
-          writes.push(body);
-          content = body.content;
-          json = {
-            content_sha: `file-${writes.length + 1}`,
-            commit_sha: 'commit',
-          };
-        } else
-          json = {
-            content,
-            sha: `file-${writes.length + 1}`,
-            path: 'homepage.mdx',
-            ref: 'lesson',
-          };
-      }
-      if (u.pathname.endsWith('/settings'))
-        json = {
-          settings: {
-            version: 1,
-            site: { title: 'Python' },
-            themeConfig: {},
-            tokens: { light: { '--ifm-color-primary': '#843a7a' } },
-            docs: {},
-          },
-          head_sha: 'head-1',
-        };
-      if (u.pathname.endsWith('/capabilities'))
-        json = { managed_homepage: true, settings_runtime: true };
-      await route.fulfill({ json });
+  const writes = await mockStudio(page, {
+    content: original,
+    settings: {
+      ...EMPTY_SETTINGS,
+      site: { title: 'Python' },
+      tokens: { light: { '--ifm-color-primary': '#843a7a' } },
     },
-  );
-  await page.goto(
-    '/sites/python/edit?scope=homepage&path=homepage.mdx&ref=lesson',
-  );
+  });
+  await page.goto(studioUrl());
   return writes;
 }
 async function save(page: Page) {
@@ -106,7 +63,7 @@ test('edit homepage text directly on the page and preserve nested tools across s
   expect(writes[0].content).toContain('href="/docs/intro"');
   await title.fill('Welkom terug');
   await save(page);
-  expect(writes[1].sha).toBe('file-2');
+  expect(writes[1].expected_head).toBe('head-2');
   await page.reload();
   await expect(title).toHaveText('Welkom terug');
 });
@@ -181,8 +138,8 @@ test('button text edits and dragging preserve valid MDX and existing tools', asy
     canvas.getByRole('textbox', { name: 'Titel', exact: true }).first(),
   ).toHaveText('Ontdek de cursus');
   await save(page);
-  expect(writes[0].content.indexOf('<Section')).toBeLessThan(
-    writes[0].content.indexOf('<Hero'),
+  expect(writes[0].content!.indexOf('<Section')).toBeLessThan(
+    writes[0].content!.indexOf('<Hero'),
   );
   expect(writes[0].content).toContain('<AlgorithmGrid custom={keepThis()} />');
   await page.reload();
