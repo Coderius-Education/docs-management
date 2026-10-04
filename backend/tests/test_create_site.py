@@ -2,7 +2,9 @@
 
 import base64
 import json
+from pathlib import Path
 
+import pytest
 import respx
 from httpx import Response
 
@@ -22,23 +24,8 @@ MGMT = f"{API}/repos/Coderius-Education/docs-management"
 BRANCH = "nieuwe-site-demo"
 
 # Minimale registers met alleen de ankers die de scaffold-mutaties nodig hebben.
-SITES_JS = """const SUBJECTS = [
-  { id: 'informatica', label: 'Informatica', url: 'https://informatica.coderius.nl' },
-];
-
-const SITES = [
-  {
-    id: 'python',
-    subject: 'informatica',
-    path: 'python',
-    label: 'Python',
-    description: 'Leer Python.',
-    requires: [],
-  },
-];
-
-module.exports = { SUBJECTS, SITES };
-"""
+# Kopie van het echte packages/shared/sites.js (docs, branch feat/vakken).
+SITES_JS = (Path(__file__).parent / "fixtures" / "sites.js").read_text(encoding="utf-8")
 SITES_JSON = json.dumps(
     {
         "apex": "coderius.nl",
@@ -46,10 +33,20 @@ SITES_JSON = json.dumps(
             {"slug": "informatica", "domain": "informatica.coderius.nl", "display_name": "Inf"}
         ],
         "sites": [
-            {"slug": "python", "subject": "informatica", "path": "python",
-             "display_name": "Python", "legacy_domains": []},
-            {"slug": "home", "subject": None, "path": "", "display_name": "Home",
-             "legacy_domains": []},
+            {
+                "slug": "python",
+                "subject": "informatica",
+                "path": "python",
+                "display_name": "Python",
+                "legacy_domains": [],
+            },
+            {
+                "slug": "home",
+                "subject": None,
+                "path": "",
+                "display_name": "Home",
+                "legacy_domains": [],
+            },
         ],
     }
 )
@@ -75,9 +72,7 @@ def _mock_repo_write(base: str, pr_number: int, pr_url: str) -> None:
     )
     respx.post(f"{base}/git/blobs").mock(return_value=Response(201, json={"sha": "blob"}))
     respx.post(f"{base}/git/trees").mock(return_value=Response(201, json={"sha": "tree"}))
-    respx.post(f"{base}/git/commits").mock(
-        return_value=Response(201, json={"sha": "commit"})
-    )
+    respx.post(f"{base}/git/commits").mock(return_value=Response(201, json={"sha": "commit"}))
     respx.patch(f"{base}/git/refs/heads/{BRANCH}").mock(return_value=Response(200, json={}))
     respx.post(f"{base}/pulls").mock(
         return_value=Response(
@@ -135,9 +130,11 @@ async def test_create_site_opens_two_prs_and_db_row(api_client):
         if c.request.method == "POST" and c.request.url.path.endswith("/git/blobs")
     ]
     contents = [base64.b64decode(b["content"]).decode() for b in sent]
-    assert any("id: 'demo'" in c and "subject: 'informatica'" in c for c in contents)
+    assert any(
+        "    id: 'demo',\n    label: 'Demo',\n    subject: 'informatica'," in c for c in contents
+    )
     assert any('"slug": "demo", "subject": "informatica"' in c for c in contents)
-    assert any("baseUrl: \"/demo/\"" in c for c in contents)
+    assert any('siteId: "demo"' in c for c in contents)
 
     # De nieuwe site verschijnt meteen in de lijst (DB-rij).
     listing = await api_client.get("/api/sites")
@@ -203,6 +200,21 @@ def test_registry_mutations_keep_one_line_per_entry():
     assert '    {"slug": "lego", "subject": "techniek", "path": "lego"' in out
     js = add_subject_to_sites_js(SITES_JS, "techniek", "techniek.coderius.nl", "Techniek")
     js = add_site_to_sites_js(js, "lego", "techniek", "lego", "Lego", "Bouw 'm zelf")
-    assert "url: 'https://techniek.coderius.nl' }," in js
-    assert "description: 'Bouw \\'m zelf'," in js
-    assert js.index("id: 'lego'") > js.index("id: 'python'")
+    subjects = js[js.index("const SUBJECTS = [") : js.index("\n];")]
+    assert "  { id: 'techniek', label: 'Techniek', url: 'https://techniek.coderius.nl' }," in (
+        subjects
+    )
+    sites = js[js.index("const SITES = defineSites([") : js.index("const DOCENTEN_SITES")]
+    assert "    description: 'Bouw \\'m zelf',\n    requires: [],\n  },\n]);" in sites
+    assert sites.index("id: 'lego'") > sites.index("id: 'ide'")
+    entry = sites[sites.index("id: 'lego'") :]
+    assert "url:" not in entry and "legacyUrl" not in entry
+    # DOCENTEN_SITES blijft onaangeroerd.
+    assert js.count("id: 'lego'") == 1
+
+
+def test_sites_js_without_anchor_fails_in_dutch():
+    with pytest.raises(ValueError, match="Kon 'const SITES = defineSites"):
+        add_site_to_sites_js("const SITES = [\n];\n", "x", "informatica", "x", "X", "d")
+    with pytest.raises(ValueError, match="Kon 'const SUBJECTS = \\['"):
+        add_subject_to_sites_js("module.exports = {};\n", "t", "t.coderius.nl", "T")

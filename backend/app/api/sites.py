@@ -166,9 +166,7 @@ async def create_site(
     sites_js = await get_file_text(client, SITES_JS, branch)
     if new_subject:
         sites_js = add_subject_to_sites_js(sites_js, subject, subject_domain, subject_name)
-    docs_files = scaffold_files(
-        slug, title, tagline, origin, description, subject=subject, path=path
-    )
+    docs_files = scaffold_files(slug, title, tagline, description, subject=subject)
     docs_files[SITES_JS] = add_site_to_sites_js(
         sites_js, slug, subject, path, display_name, description
     ).encode("utf-8")

@@ -54,18 +54,16 @@ def _package_json(slug: str) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
-def _docusaurus_config(
-    slug: str, subject: str, path: str, title: str, tagline: str, origin: str, description: str
-) -> str:
+def _docusaurus_config(slug: str, title: str, tagline: str, description: str) -> str:
     # JSON-dump losse strings zodat aanhalingstekens/quotes veilig ontsnapt zijn.
-    # url/baseUrl staan er expliciet: de site woont op <vak-domein>/<path>/.
+    # url en baseUrl leidt createConfig af uit het register (siteId -> vak + pad).
     return f"""import {{createConfig}} from '@coderius/shared/config';
+import {{repoEditUrl}} from '@coderius/shared/sites';
 
 export default createConfig({{
   title: {json.dumps(title)},
   tagline: {json.dumps(tagline)},
-  url: {json.dumps(origin)},
-  baseUrl: {json.dumps(f"/{path}/")},
+  siteId: {json.dumps(slug)},
   projectName: {json.dumps(f"{slug}-docs")},
 
   description: {json.dumps(description)},
@@ -76,7 +74,7 @@ export default createConfig({{
       {{
         docs: {{
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/Coderius-Education/docs/tree/main/sites/{subject}/{slug}/',
+          editUrl: repoEditUrl({json.dumps(slug)}),
         }},
         blog: false,
       }},
@@ -85,8 +83,6 @@ export default createConfig({{
 
   themeConfig: {{
     navbar: {{
-      title: {json.dumps(title)},
-      logo: {{alt: 'Coderius', src: 'img/logo.svg'}},
       items: [
         {{
           type: 'docSidebar',
@@ -98,15 +94,7 @@ export default createConfig({{
     }},
     footer: {{
       style: 'dark',
-      links: [
-        {{
-          title: 'Meer van Coderius',
-          items: [
-            {{label: 'Alle vakken', href: 'https://coderius.nl'}},
-            {{label: 'Dit vak', href: {json.dumps(origin)}}},
-          ],
-        }},
-      ],
+      links: [],
     }},
   }},
 }});
@@ -194,24 +182,18 @@ def scaffold_files(
     slug: str,
     title: str,
     tagline: str,
-    origin: str,
     description: str,
     *,
     subject: str = "informatica",
-    path: str | None = None,
 ) -> dict[str, bytes]:
     """Pad (in het docs-repo) -> inhoud (bytes) voor een minimale nieuwe site.
 
-    `origin` is het vak-domein met schema (https://informatica.coderius.nl); de
-    site woont op `<origin>/<path>/`.
+    Het adres (<vak-domein>/<path>/) volgt uit de registry-entry in sites.js.
     """
-    path = path or slug
     base = site_dir_for(subject, slug)
     files = {
         f"{base}/package.json": _package_json(slug),
-        f"{base}/docusaurus.config.ts": _docusaurus_config(
-            slug, subject, path, title, tagline, origin, description
-        ),
+        f"{base}/docusaurus.config.ts": _docusaurus_config(slug, title, tagline, description),
         f"{base}/sidebars.ts": _SIDEBARS_TS,
         f"{base}/tsconfig.json": _TSCONFIG_JSON,
         f"{base}/src/pages/index.tsx": _INDEX_TSX,
@@ -283,41 +265,52 @@ def _js_str(value: str) -> str:
     return f"'{escaped}'"
 
 
-def _append_to_js_array(source: str, name: str, entry: str) -> str:
-    """Voegt `entry` toe als laatste element van `const <name> = [ … ];`."""
-    match = re.search(rf"const {name} = \[\n", source)
-    if match is None:
-        raise ValueError(f"Kon `const {name} = [` niet vinden in sites.js")
-    end = source.find("\n];", match.end() - 1)
+def _append_to_js_array(source: str, opening: str, closing: str, name: str, entry: str) -> str:
+    """Voegt `entry` toe als laatste element van het array dat met `opening` begint."""
+    start = source.find(opening)
+    if start == -1:
+        raise ValueError(
+            f"Kon '{opening.strip()}' niet vinden in packages/shared/sites.js; "
+            f"is de opbouw van {name} veranderd?"
+        )
+    end = source.find(closing, start + len(opening) - 1)
     if end == -1:
-        raise ValueError(f"Kon het einde van {name} niet vinden in sites.js")
+        raise ValueError(
+            f"Kon het einde van {name} ('{closing.strip()}') niet vinden in "
+            "packages/shared/sites.js"
+        )
     return source[:end] + "\n" + entry.rstrip("\n") + source[end:]
 
 
 def add_subject_to_sites_js(sites_js: str, subject: str, domain: str, display_name: str) -> str:
+    """Nieuw vak achteraan in `const SUBJECTS = [ … ];` ({ id, label, url })."""
     if re.search(rf"id: '{re.escape(subject)}'", sites_js):
         raise ValueError(f"Vak '{subject}' staat al in sites.js")
     entry = (
         f"  {{ id: {_js_str(subject)}, label: {_js_str(display_name)}, "
         f"url: {_js_str(f'https://{domain}')} }},"
     )
-    return _append_to_js_array(sites_js, "SUBJECTS", entry)
+    return _append_to_js_array(sites_js, "const SUBJECTS = [\n", "\n];", "SUBJECTS", entry)
 
 
 def add_site_to_sites_js(
     sites_js: str, slug: str, subject: str, path: str, label: str, description: str
 ) -> str:
-    """Nieuwe cursus achteraan in SITES (de leerlijn-volgorde zet een docent later goed)."""
+    """Nieuwe cursus achteraan in `const SITES = defineSites([ … ]);`.
+
+    `url` schrijven we niet: defineSites leidt die af uit vak + pad. `legacyUrl`
+    is alleen voor oude subdomeinen. De leerlijn-volgorde zet een docent later goed.
+    """
     if re.search(rf"id: '{re.escape(slug)}'", sites_js):
         raise ValueError(f"Site '{slug}' staat al in sites.js")
     entry = (
         "  {\n"
         f"    id: {_js_str(slug)},\n"
+        f"    label: {_js_str(label)},\n"
         f"    subject: {_js_str(subject)},\n"
         f"    path: {_js_str(path)},\n"
-        f"    label: {_js_str(label)},\n"
         f"    description: {_js_str(description)},\n"
         "    requires: [],\n"
         "  },"
     )
-    return _append_to_js_array(sites_js, "SITES", entry)
+    return _append_to_js_array(sites_js, "const SITES = defineSites([\n", "\n]);", "SITES", entry)
