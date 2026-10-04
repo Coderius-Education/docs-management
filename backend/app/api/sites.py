@@ -27,6 +27,7 @@ from app.github.contents import (
     safe_page_path,
     write_page,
 )
+from app.github.merge import hunks, merge_text
 from app.github.pulls import create_branch, create_pr
 from app.scaffold.site_template import (
     add_site_to_registry,
@@ -288,6 +289,9 @@ class PageWrite(BaseModel):
     content: str
     message: str
     sha: str | None = None  # verplicht bij update; None bij nieuwe pagina
+    # De tekst die de editor laadde. Bij een 409 (iemand anders sloeg intussen
+    # hetzelfde bestand op) voegt de server dan zelf samen.
+    base_text: str | None = None
 
 
 class PageRename(BaseModel):
@@ -309,16 +313,53 @@ async def save_page(
     if payload.branch == "main":
         raise HTTPException(status_code=400, detail="Rechtstreeks naar main schrijven mag niet")
     client = GitHubClient(user_github_token(user))
-    return await write_page(
+    try:
+        return await write_page(
+            client,
+            site_obj.slug,
+            payload.path,
+            payload.branch,
+            payload.content,
+            payload.message,
+            payload.sha,
+            payload.scope,
+        )
+    except HTTPException as exc:
+        if exc.status_code != 409 or payload.base_text is None or payload.sha is None:
+            raise
+    return await _merge_and_save(client, site_obj.slug, payload)
+
+
+async def _merge_and_save(client: GitHubClient, site: str, payload: "PageWrite") -> dict:
+    """3-weg: base = geladen tekst, ours = editortekst, theirs = huidige versie."""
+    current = await read_page(client, site, payload.path, payload.branch, payload.scope)
+    merged, segments = merge_text(payload.base_text, payload.content, current["content"])
+    if merged is None:
+        raise HTTPException(
+            409,
+            detail={
+                "message": "Iemand anders heeft deze pagina in hetzelfde concept gewijzigd. "
+                "Kies per blok welke tekst blijft.",
+                "conflict": {
+                    "file": payload.path,
+                    "segments": segments,
+                    "hunks": hunks(segments),
+                    "current_sha": current["sha"],
+                    "current_content": current["content"],
+                },
+            },
+        )
+    result = await write_page(
         client,
-        site_obj.slug,
+        site,
         payload.path,
         payload.branch,
-        payload.content,
+        merged,
         payload.message,
-        payload.sha,
+        current["sha"],
         payload.scope,
     )
+    return {**result, "merged": True, "content": merged}
 
 
 @router.post("/{site}/page/rename", dependencies=[Depends(require_csrf)])

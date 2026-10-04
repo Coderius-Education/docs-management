@@ -99,7 +99,7 @@ async def test_save_page_conflict_maps_to_409(api_client):
 
 
 @respx.mock
-async def test_pr_lifecycle(api_client):
+async def test_legacy_pr_aliases_still_work(api_client):
     auth = await make_logged_in_user(api_client)
     pr_json = {
         "number": 7,
@@ -114,8 +114,8 @@ async def test_pr_lifecycle(api_client):
     respx.get(f"{REPO}/pulls", params={"state": "open", "per_page": 50}).mock(
         return_value=Response(200, json=[pr_json])
     )
-    respx.put(f"{REPO}/pulls/7/merge").mock(
-        return_value=Response(200, json={"merged": True, "sha": "mergesha"})
+    respx.get(f"{REPO}/commits/headsha/check-runs").mock(
+        return_value=Response(200, json={"check_runs": []})
     )
 
     created = await api_client.post(
@@ -129,12 +129,7 @@ async def test_pr_lifecycle(api_client):
     listed = await api_client.get("/api/prs")
     assert listed.status_code == 200
     assert listed.json()[0]["branch"] == "docs/nieuwe-les"
-
-    merged = await api_client.post(
-        "/api/prs/7/merge", json={}, headers={"X-CSRF-Token": auth["csrf"]}
-    )
-    assert merged.status_code == 200
-    assert merged.json()["merged"] is True
+    assert listed.json()[0]["status"] == "concept"
 
 
 @respx.mock
