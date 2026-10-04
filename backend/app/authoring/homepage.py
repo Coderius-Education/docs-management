@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from app.authoring.content import validate_content
 from app.authoring.settings import generate_css, read_json, validate_settings
+from app.config import site_dir
 from app.github.client import GitHubClient
 from app.github.commits import multi_file_commit
 from app.github.contents import content_root, get_branch_head, read_page, safe_page_path
@@ -14,7 +15,7 @@ HOMEPAGE = "homepage.mdx"
 
 
 def settings_path(site: str) -> str:
-    return f"sites/{site}/site-settings.json"
+    return f"{site_dir(site)}/site-settings.json"
 
 
 async def read_homepage(client: GitHubClient, site: str, ref: str) -> dict:
@@ -64,6 +65,6 @@ async def save_homepage(
         files[settings_path(site)] = (
             json.dumps(value, ensure_ascii=False, indent=2) + "\n"
         ).encode()
-        files[f"sites/{site}/src/css/managed-theme.css"] = generate_css(value).encode()
+        files[f"{site_dir(site)}/src/css/managed-theme.css"] = generate_css(value).encode()
     sha = await multi_file_commit(client, branch, message, expected_head=expected_head, add=files)
     return {"head_sha": sha}

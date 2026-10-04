@@ -81,6 +81,10 @@ class Site(Base):
     domain: Mapped[str] = mapped_column(String(200))
     display_name: Mapped[str] = mapped_column(String(100))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Vak (informatica, wo, …); None voor de apex-homepage.
+    subject: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # URL-segment onder het vak-domein (algorithms -> "algoritmes"); "" voor home.
+    path: Mapped[str] = mapped_column(String(100), default="", server_default="")
 
 
 class Build(Base):

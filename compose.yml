@@ -1,7 +1,8 @@
 # Productie-stack voor Portainer, achter de bestaande Traefik.
 # Vereist: extern Traefik-netwerk (naam via TRAEFIK_NETWORK, default "traefik"),
-# DNS voor de 14 site-domeinen (incl. apex coderius.nl) + admin-domein + *.preview.coderius.nl,
-# en een stack.env met de secrets (zie .env.example).
+# DNS voor coderius.nl, *.coderius.nl (vak-domeinen, oude subdomeinen, admin) en
+# *.preview.coderius.nl, de certresolver `lednsresolver` (DNS-01, Hetzner) op de
+# externe Traefik, en een stack.env met de secrets (zie .env.example).
 
 services:
   api:
@@ -22,6 +23,8 @@ services:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
       - traefik.http.routers.docsadmin.rule=Host(`${ADMIN_DOMAIN:-beheer.coderius.nl}`)
+      # Wint van de wildcard-router van delivery (die ook beheer.coderius.nl matcht).
+      - traefik.http.routers.docsadmin.priority=1000
       - traefik.http.routers.docsadmin.entrypoints=websecure
       - traefik.http.routers.docsadmin.tls.certresolver=leresolver
       - traefik.http.routers.docsadmin.service=docsadmin
@@ -42,85 +45,25 @@ services:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
 
-      - traefik.http.routers.docsite-python-coderius-nl.rule=Host(`python.coderius.nl`)
-      - traefik.http.routers.docsite-python-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-python-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-python-coderius-nl.service=docsdelivery
+      # Eén router voor de apex, elk vak-domein (informatica., wo., …) en de oude
+      # cursus-subdomeinen (python., web., … → 301 naar <vak>/<path>/). Welke
+      # site bij welke host/pad hoort bepaalt de delivery-app uit sites.json, dus
+      # een nieuwe site of een nieuw vak vraagt geen wijziging hier.
+      # Eén wildcard-cert (coderius.nl + *.coderius.nl) via DNS-01 (lednsresolver).
+      # beheer.coderius.nl valt ook onder de regex, maar de docsadmin-router heeft
+      # een hogere prioriteit.
+      - traefik.http.routers.docsite.rule=HostRegexp(`^([a-z0-9-]+\.)?coderius\.nl$`)
+      - traefik.http.routers.docsite.priority=10
+      - traefik.http.routers.docsite.entrypoints=websecure
+      - traefik.http.routers.docsite.tls.certresolver=lednsresolver
+      - traefik.http.routers.docsite.tls.domains[0].main=coderius.nl
+      - traefik.http.routers.docsite.tls.domains[0].sans=*.coderius.nl
+      - traefik.http.routers.docsite.service=docsdelivery
 
-      - traefik.http.routers.docsite-web-coderius-nl.rule=Host(`web.coderius.nl`)
-      - traefik.http.routers.docsite-web-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-web-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-web-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-fullstack-coderius-nl.rule=Host(`fullstack.coderius.nl`)
-      - traefik.http.routers.docsite-fullstack-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-fullstack-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-fullstack-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-robotica-coderius-nl.rule=Host(`robotica.coderius.nl`)
-      - traefik.http.routers.docsite-robotica-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-robotica-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-robotica-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-ctf-coderius-nl.rule=Host(`ctf.coderius.nl`)
-      - traefik.http.routers.docsite-ctf-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-ctf-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-ctf-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-embedded-coderius-nl.rule=Host(`embedded.coderius.nl`)
-      - traefik.http.routers.docsite-embedded-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-embedded-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-embedded-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-editor-coderius-nl.rule=Host(`editor.coderius.nl`)
-      - traefik.http.routers.docsite-editor-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-editor-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-editor-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-godot-coderius-nl.rule=Host(`godot.coderius.nl`)
-      - traefik.http.routers.docsite-godot-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-godot-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-godot-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-dvwa-coderius-nl.rule=Host(`dvwa.coderius.nl`)
-      - traefik.http.routers.docsite-dvwa-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-dvwa-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-dvwa-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-play-coderius-nl.rule=Host(`play.coderius.nl`)
-      - traefik.http.routers.docsite-play-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-play-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-play-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-algoritmes-coderius-nl.rule=Host(`algoritmes.coderius.nl`)
-      - traefik.http.routers.docsite-algoritmes-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-algoritmes-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-algoritmes-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-ide-coderius-nl.rule=Host(`ide.coderius.nl`)
-      - traefik.http.routers.docsite-ide-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-ide-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-ide-coderius-nl.service=docsdelivery
-
-      - traefik.http.routers.docsite-didactiek-coderius-nl.rule=Host(`didactiek.coderius.nl`)
-      - traefik.http.routers.docsite-didactiek-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-didactiek-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-didactiek-coderius-nl.service=docsdelivery
-
-      # Apex-homepage. Anders dan de cursussen geen subdomein, en niet gedekt
-      # door enig *.coderius.nl-wildcard: een eigen router met eigen HTTP-01-cert.
-      # Vereist dat het A/AAAA-record van coderius.nl naar deze Traefik-host wijst.
-      - traefik.http.routers.docsite-coderius-nl.rule=Host(`coderius.nl`)
-      - traefik.http.routers.docsite-coderius-nl.entrypoints=websecure
-      - traefik.http.routers.docsite-coderius-nl.tls.certresolver=leresolver
-      - traefik.http.routers.docsite-coderius-nl.service=docsdelivery
-
-      # Branch-previews: één wildcard-cert (*.preview.coderius.nl) via DNS-01.
-      # Gebruikt de certresolver `lednsresolver` die op de EXTERNE Traefik moet
-      # bestaan (dnsChallenge.provider=hetzner + HETZNER_API_KEY in Traefik's env).
-      # Zie README §Hetzner DNS-01 voor de Traefik-config. DNS-01 heeft geen
-      # A-record nodig, maar wel een wildcard-DNS dat naar de Traefik-host wijst.
+      # Previews: <branch>--<vak>.preview.coderius.nl/<path>/. Eigen wildcard-cert
+      # (*.preview.coderius.nl), want *.coderius.nl dekt maar één label.
       - traefik.http.routers.docspreview.rule=HostRegexp(`^.+\.preview\.coderius\.nl$`)
+      - traefik.http.routers.docspreview.priority=20
       - traefik.http.routers.docspreview.entrypoints=websecure
       - traefik.http.routers.docspreview.tls.certresolver=lednsresolver
       - traefik.http.routers.docspreview.tls.domains[0].main=preview.coderius.nl

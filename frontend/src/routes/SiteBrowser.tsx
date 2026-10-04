@@ -115,7 +115,7 @@ export function SiteBrowser() {
         <div>
           <Title order={3}>{siteInfo?.display_name ?? site}</Title>
           <Text size="sm" c="dimmed">
-            {siteInfo?.domain}
+            {siteInfo?.url?.replace(/^https?:\/\//, "") ?? siteInfo?.domain}
           </Text>
         </div>
         <Group align="flex-end" gap="xs">

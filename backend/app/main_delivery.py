@@ -1,7 +1,10 @@
 """Delivery-app: serveert gebouwde sites op basis van de Host-header.
 
-- Livesites: <site>/main/current van het builds-volume.
-- Previews: {branch}--{site}.<preview-suffix> → <site>/<branch>/current (+ noindex).
+- Livesites: <vak-host>/<path>/… → <site>/main/current van het builds-volume;
+  overige paden op een vak-host en de apex → de home-build.
+- Oude subdomeinen (python.coderius.nl) → 301 naar <vak-host>/<path>/….
+- Previews: {branch}--{vak}.<preview-suffix>/<path>/ → <site>/<branch>/current
+  (+ noindex), met main als terugval: CI bouwt alleen de geraakte sites.
 - A/B (M4): cookie kan de hele site naar een variant-build sturen.
 - HTML krijgt het analytics-snippet geïnjecteerd; assets krijgen immutable caching.
 """
@@ -10,10 +13,11 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import RedirectResponse
 
 from app.db.session import dispose_db, init_db
 from app.delivery import experiments as exp
-from app.delivery.router import resolve_host
+from app.delivery.router import Redirect, resolve_host
 from app.delivery.snippet import SNIPPET_JS, inject_snippet
 from app.delivery.static import not_found_page, resolve_file, serve_file
 from app.ingest.unpack import previous_build, resolve_current
@@ -45,10 +49,16 @@ def create_app() -> FastAPI:
 
     @app.get("/{full_path:path}")
     async def serve(full_path: str, request: Request) -> Response:
-        target = resolve_host(request.headers.get("host"))
+        scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+        target = resolve_host(
+            request.headers.get("host"), full_path, request.url.query, scheme
+        )
         if target is None:
             return Response("Onbekende host", status_code=404)
+        if isinstance(target, Redirect):
+            return RedirectResponse(target.location, status_code=target.status_code)
 
+        full_path = target.rest_path
         extra_headers: dict[str, str] = {}
         if target.is_preview:
             extra_headers["X-Robots-Tag"] = "noindex, nofollow"
@@ -61,11 +71,17 @@ def create_app() -> FastAPI:
             )
             extra_headers.update(variant_headers)
 
-        build_dir = variant_dir or resolve_current(target.site, target.branch_slug)
+        branch_slug = target.branch_slug
+        build_dir = variant_dir or resolve_current(target.site, branch_slug)
+        if build_dir is None and target.is_preview and branch_slug != "main":
+            # CI bouwt alleen geraakte sites; de rest van de preview toont main.
+            branch_slug = "main"
+            build_dir = resolve_current(target.site, branch_slug)
         if build_dir is None:
             if target.is_preview:
                 return Response(
-                    "Nog geen build voor deze branch. Is de CI al klaar?", status_code=404
+                    "Nog geen voorbeeld beschikbaar. Is de controle al klaar?",
+                    status_code=404,
                 )
             return Response("Site nog niet gepubliceerd", status_code=503)
 
@@ -74,7 +90,7 @@ def create_app() -> FastAPI:
         # Asset-fallback: na een main-flip kunnen oude hashed chunks nog opgevraagd
         # worden door open tabs; probeer dan de vorige build.
         if file is None and full_path.startswith("assets/"):
-            prev = await asyncio.to_thread(previous_build, target.site, target.branch_slug)
+            prev = await asyncio.to_thread(previous_build, target.site, branch_slug)
             if prev is not None:
                 fallback = await asyncio.to_thread(resolve_file, prev, full_path)
                 if fallback is not None:

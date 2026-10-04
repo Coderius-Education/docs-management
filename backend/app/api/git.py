@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import CurrentUser, require_csrf, user_github_token
-from app.config import SITES, get_settings
+from app.config import SITES
 from app.db.models import Build, BuildStatus, PrCache, Site, utcnow
 from app.db.session import get_db
 from app.github import pulls
@@ -75,7 +75,6 @@ async def get_pr(
 
     # Preview-links per site waarvoor een build klaarstaat op deze branch.
     slug = pr["preview_branch_slug"]
-    suffix = get_settings().preview_domain_suffix
     builds = (
         await db.execute(
             select(Build.site_id, Site.slug)
@@ -85,12 +84,12 @@ async def get_pr(
         )
     ).all()
     pr["previews"] = [
-        {"site": site_slug, "url": f"https://{slug}--{site_slug}.{suffix}"}
+        {"site": site_slug, "url": pulls.preview_url_for_slug(slug, site_slug)}
         for _, site_slug in builds
     ]
     # Nog geen builds binnen? Toon alvast de verwachte URL's zodra CI klaar is.
     pr["expected_previews"] = [
-        {"site": site_slug, "url": f"https://{slug}--{site_slug}.{suffix}"}
+        {"site": site_slug, "url": pulls.preview_url_for_slug(slug, site_slug)}
         for site_slug in SITES
     ]
     return pr

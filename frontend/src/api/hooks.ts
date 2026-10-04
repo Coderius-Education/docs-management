@@ -8,6 +8,7 @@ import type {
   PageContent,
   SiteCreate,
   SiteInfo,
+  SubjectInfo,
   TreeItem,
 } from "./types";
 
@@ -32,12 +33,23 @@ export function useSites() {
   });
 }
 
+export function useSubjects() {
+  return useQuery({
+    queryKey: ["subjects"],
+    queryFn: () => api<SubjectInfo[]>("/api/subjects"),
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 export function useCreateSite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: SiteCreate) =>
       api<CreateSiteResult>("/api/sites", { method: "POST", body: payload }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sites"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sites"] });
+      qc.invalidateQueries({ queryKey: ["subjects"] });
+    },
   });
 }
 

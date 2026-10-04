@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 from fastapi import HTTPException
 
+from app.config import site_dir
 from app.github.client import GitHubClient, repo_path
 from app.github.contents import ContentScope, content_root, safe_relative_path, validate_branch
 
@@ -17,7 +18,7 @@ def safe_asset_path(site: str, path: str, scope: ContentScope = "docs") -> str:
     if scope == "metadata":
         raise HTTPException(400, "Metadata ondersteunt geen afbeeldingen")
     if scope == "homepage":
-        root = f"sites/{site}/static/managed"
+        root = f"{site_dir(site)}/static/managed"
     return f"{root}/{safe_relative_path(path)}"
 
 

@@ -13,12 +13,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://docsmgmt:docsmgmt@db:5432/docsmgmt
       SECURE_COOKIES: "false"
       BUILDS_DIR: /data/builds
-      SITE_DOMAIN_OVERRIDES: >-
-        python=python.localtest.me,web=web.localtest.me,fullstack=fullstack.localtest.me,
-        robotica=robotica.localtest.me,ctf=ctf.localtest.me,embedded=embedded.localtest.me,
-        editor=editor.localtest.me,godot=godot.localtest.me,dvwa=dvwa.localtest.me,
-        play=play.localtest.me,algorithms=algoritmes.localtest.me,ide=ide.localtest.me,
-        didactiek=didactiek.localtest.me
+      # coderius.nl -> localtest.me: informatica.localtest.me:8001/python/,
+      # wo.localtest.me:8001/onderzoek/, en python.localtest.me:8001 (301).
+      DOMAIN_ROOT: localtest.me
       PREVIEW_DOMAIN_SUFFIX: preview.localtest.me
       ADMIN_DOMAIN: localhost:8000
     env_file:
@@ -39,12 +36,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://docsmgmt:docsmgmt@db:5432/docsmgmt
       SECURE_COOKIES: "false"
       BUILDS_DIR: /data/builds
-      SITE_DOMAIN_OVERRIDES: >-
-        python=python.localtest.me,web=web.localtest.me,fullstack=fullstack.localtest.me,
-        robotica=robotica.localtest.me,ctf=ctf.localtest.me,embedded=embedded.localtest.me,
-        editor=editor.localtest.me,godot=godot.localtest.me,dvwa=dvwa.localtest.me,
-        play=play.localtest.me,algorithms=algoritmes.localtest.me,ide=ide.localtest.me,
-        didactiek=didactiek.localtest.me
+      # coderius.nl -> localtest.me: informatica.localtest.me:8001/python/,
+      # wo.localtest.me:8001/onderzoek/, en python.localtest.me:8001 (301).
+      DOMAIN_ROOT: localtest.me
       PREVIEW_DOMAIN_SUFFIX: preview.localtest.me
     env_file:
       - path: .env

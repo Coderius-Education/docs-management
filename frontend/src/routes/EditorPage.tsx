@@ -23,7 +23,7 @@ import {
 import { pageKey, useMe, usePage, useSites, usePreviews } from '../api/hooks';
 import { uploadImage, useCreateBranch } from '../api/git';
 import { FrontmatterForm } from '../components/editor/FrontmatterForm';
-import { contentScope, scopedKey, type ContentScope } from '../api/types';
+import { contentScope, scopedKey, siteHost, type ContentScope } from '../api/types';
 import {
   MetadataEditor,
   readMetadata,
@@ -336,7 +336,7 @@ function EditorSession({
         body={split.body}
         site={site}
         scope={scope}
-        domain={siteInfo?.domain}
+        domain={siteHost(siteInfo)}
         path={path}
         branch={baseline.branch}
         previewOrigin={previewOrigin}
@@ -494,7 +494,7 @@ function EditorSession({
                 assetContext={{
                   site,
                   scope,
-                  domain: siteInfo?.domain,
+                  domain: siteHost(siteInfo),
                   path,
                   branch: baseline.branch,
                   previewOrigin,

@@ -19,7 +19,7 @@ BLOB_SHA = hashlib.sha1(b"blob " + str(len(PNG)).encode() + b"\0" + PNG).hexdige
 @respx.mock
 async def test_upload_commits_bytes_to_draft_without_overwriting_and_retry_reuses_file(api_client):
     auth = await make_logged_in_user(api_client)
-    target = f"{REPO}/contents/sites/python/docs/01-basis/{NAME}"
+    target = f"{REPO}/contents/sites/informatica/python/docs/01-basis/{NAME}"
     lookup = respx.get(target).mock(return_value=Response(404, json={"message": "Not Found"}))
     write = respx.put(target).mock(
         return_value=Response(
@@ -91,7 +91,8 @@ async def test_upload_requires_login_and_csrf(api_client):
 async def test_preview_reads_branch_blob_without_waiting_for_build(api_client):
     await make_logged_in_user(api_client)
     respx.get(
-        f"{REPO}/contents/sites/python/docs/01-basis/{NAME}", params={"ref": "docs/lesson"}
+        f"{REPO}/contents/sites/informatica/python/docs/01-basis/{NAME}",
+        params={"ref": "docs/lesson"},
     ).mock(
         return_value=Response(
             200, json={"type": "file", "sha": BLOB_SHA, "size": len(PNG), "encoding": "none"}
@@ -130,7 +131,8 @@ async def test_preview_restricts_path_and_file_type(api_client):
 async def test_preview_treats_reserved_path_characters_as_filenames(api_client):
     await make_logged_in_user(api_client)
     respx.get(
-        f"{REPO}/contents/sites/python/docs/part%23one/diagram.png", params={"ref": "lesson"}
+        f"{REPO}/contents/sites/informatica/python/docs/part%23one/diagram.png",
+        params={"ref": "lesson"},
     ).mock(
         return_value=Response(
             200,

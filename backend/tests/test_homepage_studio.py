@@ -9,7 +9,7 @@ from tests.helpers import make_logged_in_user
 
 REPO = "https://api.github.com/repos/Coderius-Education/docs"
 EMPTY = {"version": 1, "site": {}, "themeConfig": {}, "tokens": {}, "docs": {}}
-PAGE = "sites/python/src/content/homepage.mdx"
+PAGE = "sites/informatica/python/src/content/homepage.mdx"
 
 
 def contents(value: str, sha: str = "blob") -> Response:
@@ -44,9 +44,9 @@ async def test_homepage_read_pins_page_and_settings_to_one_head(api_client):
     page = respx.get(f"{REPO}/contents/{PAGE}", params={"ref": "head"}).mock(
         return_value=contents("# Welkom\n", "pageblob")
     )
-    respx.get(f"{REPO}/contents/sites/python/site-settings.json", params={"ref": "head"}).mock(
-        return_value=contents(json.dumps({**EMPTY, "site": {"title": "Python"}}))
-    )
+    respx.get(
+        f"{REPO}/contents/sites/informatica/python/site-settings.json", params={"ref": "head"}
+    ).mock(return_value=contents(json.dumps({**EMPTY, "site": {"title": "Python"}})))
     response = await api_client.get("/api/sites/python/homepage", params={"ref": "draft"})
     assert response.status_code == 200, response.text
     assert response.json() == {
@@ -67,9 +67,9 @@ async def test_homepage_read_keeps_invalid_settings_repairable(api_client):
         return_value=Response(404, json={"message": "Not Found"})
     )
     broken = {**EMPTY, "site": {"url": "https://elsewhere.example"}}
-    respx.get(f"{REPO}/contents/sites/python/site-settings.json", params={"ref": "head"}).mock(
-        return_value=contents(json.dumps(broken))
-    )
+    respx.get(
+        f"{REPO}/contents/sites/informatica/python/site-settings.json", params={"ref": "head"}
+    ).mock(return_value=contents(json.dumps(broken)))
     response = await api_client.get("/api/sites/python/homepage", params={"ref": "draft"})
     assert response.status_code == 200, response.text
     result = response.json()
@@ -99,8 +99,8 @@ async def test_homepage_and_appearance_save_in_one_commit(api_client):
     paths = [item["path"] for item in json.loads(tree.calls[0].request.content)["tree"]]
     assert paths == [
         PAGE,
-        "sites/python/site-settings.json",
-        "sites/python/src/css/managed-theme.css",
+        "sites/informatica/python/site-settings.json",
+        "sites/informatica/python/src/css/managed-theme.css",
     ]
     written = [
         base64.b64decode(json.loads(c.request.content)["content"]).decode() for c in blobs.calls

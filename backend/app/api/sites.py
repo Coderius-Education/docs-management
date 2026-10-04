@@ -13,7 +13,7 @@ from app.authoring.content import validate_content
 from app.authoring.effective import read_effective_settings
 from app.authoring.homepage import read_homepage, save_homepage
 from app.authoring.settings import capabilities, read_settings, save_settings
-from app.config import get_settings
+from app.config import SUBJECTS, get_settings, register_site_subject, site_dir_for
 from app.db.models import Site
 from app.db.session import get_db
 from app.github.assets import MAX_IMAGE_BYTES, read_image, write_image
@@ -29,9 +29,10 @@ from app.github.contents import (
 )
 from app.github.pulls import create_branch, create_pr
 from app.scaffold.site_template import (
-    add_domain_to_traefik,
-    add_site_to_build_matrix,
     add_site_to_registry,
+    add_site_to_sites_js,
+    add_subject_to_registry,
+    add_subject_to_sites_js,
     scaffold_files,
 )
 
@@ -50,21 +51,57 @@ async def valid_site(
     return found
 
 
+def _site_url(site: Site) -> str:
+    return f"https://{site.domain}/{site.path}/" if site.path else f"https://{site.domain}/"
+
+
 @router.get("")
 async def list_sites(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[dict]:
     sites = (await db.scalars(select(Site).where(Site.enabled).order_by(Site.slug))).all()
-    return [{"slug": s.slug, "domain": s.domain, "display_name": s.display_name} for s in sites]
+    return [
+        {
+            "slug": s.slug,
+            "domain": s.domain,
+            "display_name": s.display_name,
+            "subject": s.subject,
+            "path": s.path,
+            "url": _site_url(s),
+        }
+        for s in sites
+    ]
+
+
+subjects_router = APIRouter(prefix="/subjects", tags=["sites"])
+
+
+@subjects_router.get("")
+async def list_subjects(user: CurrentUser) -> list[dict]:
+    domains = get_settings().subject_domains()
+    return [
+        {"slug": slug, "display_name": s["display_name"], "domain": domains[slug]}
+        for slug, s in SUBJECTS.items()
+    ]
+
+
+class NewSubject(BaseModel):
+    slug: str
+    display_name: str
+    domain: str
 
 
 class SiteCreate(BaseModel):
     slug: str
     display_name: str
-    domain: str
     title: str
     tagline: str = ""
+    # Vak waaronder de site komt; of een nieuw vak via `new_subject`.
+    subject: str = ""
+    new_subject: NewSubject | None = None
+    # URL-segment onder het vak-domein; standaard de slug.
+    path: str = ""
 
 
 @router.post("", dependencies=[Depends(require_csrf)])
@@ -74,107 +111,150 @@ async def create_site(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Maakt een nieuwe docs-site aan via twee PR's: één in het docs-repo met de
-    gescaffolde Docusaurus-site + CI-matrix, en één in het beheer-repo met de
-    registratie (sites.json + Traefik-routing). Plus een DB-rij zodat de site
-    meteen in de UI verschijnt voor content-bewerking."""
+    gescaffolde Docusaurus-site + registry-entry (packages/shared/sites.js), en
+    één in het beheer-repo met de registratie in sites.json. Plus een DB-rij
+    zodat de site meteen in de UI verschijnt voor content-bewerking.
+
+    Geen CI-matrix- of Traefik-wijziging meer: de matrix volgt uit de gewijzigde
+    packages en één wildcard-router dekt elk vak-domein."""
     slug = payload.slug.strip().lower()
-    domain = payload.domain.strip().lower()
+    path = (payload.path or slug).strip().lower().strip("/")
     title = payload.title.strip()
     display_name = payload.display_name.strip()
     tagline = payload.tagline.strip()
+    new_subject = payload.new_subject
+    subject = (new_subject.slug if new_subject else payload.subject).strip().lower()
 
-    if not SLUG_RE.match(slug):
+    if not SLUG_RE.match(slug) or not SLUG_RE.match(path):
         raise HTTPException(
             status_code=400,
-            detail="Slug mag alleen kleine letters, cijfers en koppeltekens bevatten",
+            detail="Slug en pad mogen alleen kleine letters, cijfers en koppeltekens bevatten",
         )
-    if not domain or "." not in domain:
-        raise HTTPException(status_code=400, detail="Geef een geldig domein op")
     if not title or not display_name:
         raise HTTPException(status_code=400, detail="Titel en weergavenaam zijn verplicht")
+    if not SLUG_RE.match(subject):
+        raise HTTPException(status_code=400, detail="Kies een vak")
+    if new_subject:
+        if subject in SUBJECTS:
+            raise HTTPException(status_code=409, detail=f"Vak '{subject}' bestaat al")
+        subject_domain = new_subject.domain.strip().lower()
+        subject_name = new_subject.display_name.strip()
+        if "." not in subject_domain or not subject_name:
+            raise HTTPException(status_code=400, detail="Geef het nieuwe vak een naam en domein")
+    elif subject not in SUBJECTS:
+        raise HTTPException(status_code=400, detail=f"Onbekend vak '{subject}'")
+    else:
+        subject_domain = SUBJECTS[subject]["domain"]
 
     existing = (await db.scalars(select(Site))).all()
     if any(s.slug == slug for s in existing):
         raise HTTPException(status_code=409, detail=f"Site '{slug}' bestaat al")
-    if any(s.domain == domain for s in existing):
-        raise HTTPException(status_code=409, detail=f"Domein '{domain}' is al in gebruik")
+    if any(s.subject == subject and s.path == path for s in existing):
+        raise HTTPException(
+            status_code=409, detail=f"Pad '/{path}/' is al in gebruik binnen dit vak"
+        )
 
     settings = get_settings()
     client = GitHubClient(user_github_token(user))
     branch = f"nieuwe-site-{slug}"
     description = tagline or f"Leermateriaal: {title}"
+    origin = f"https://{subject_domain}"
 
-    # 1) docs-repo: scaffold + CI-matrix in één PR.
+    # 1) docs-repo: scaffold + registry-entry in één PR.
     await create_branch(client, branch)
-    build_yml = await get_file_text(client, ".github/workflows/build.yml", branch)
-    docs_files = scaffold_files(slug, title, tagline, domain, description)
-    docs_files[".github/workflows/build.yml"] = add_site_to_build_matrix(build_yml, slug).encode(
-        "utf-8"
+    sites_js = await get_file_text(client, SITES_JS, branch)
+    if new_subject:
+        sites_js = add_subject_to_sites_js(sites_js, subject, subject_domain, subject_name)
+    docs_files = scaffold_files(
+        slug, title, tagline, origin, description, subject=subject, path=path
     )
+    docs_files[SITES_JS] = add_site_to_sites_js(
+        sites_js, slug, subject, path, display_name, description
+    ).encode("utf-8")
     await multi_file_commit(client, branch, f"Nieuwe site '{slug}' toevoegen", add=docs_files)
     docs_pr = await create_pr(
         client,
         branch,
         f"Nieuwe site: {display_name}",
-        _docs_pr_body(slug, display_name, domain),
+        _docs_pr_body(slug, subject, path, display_name, subject_domain),
     )
 
-    # 2) beheer-repo: registratie (sites.json) + Traefik-routing (compose.yml).
+    # 2) beheer-repo: registratie in sites.json.
     mgmt = settings.management_repo_full
     await create_branch(client, branch, repo=mgmt)
     sites_json = await get_file_text(client, "backend/app/sites.json", branch, repo=mgmt)
-    compose_yml = await get_file_text(client, "compose.yml", branch, repo=mgmt)
+    if new_subject:
+        sites_json = add_subject_to_registry(sites_json, subject, subject_domain, subject_name)
     mgmt_files = {
         "backend/app/sites.json": add_site_to_registry(
-            sites_json, slug, domain, display_name
+            sites_json, slug, subject, path, display_name
         ).encode("utf-8"),
-        "compose.yml": add_domain_to_traefik(compose_yml, domain).encode("utf-8"),
     }
     await multi_file_commit(client, branch, f"Site '{slug}' registreren", add=mgmt_files, repo=mgmt)
     mgmt_pr = await create_pr(
         client,
         branch,
         f"Site registreren: {display_name}",
-        _mgmt_pr_body(slug, domain),
+        _mgmt_pr_body(slug, subject, path, subject_domain),
         repo=mgmt,
     )
 
     # 3) DB-rij zodat de site meteen zichtbaar/bewerkbaar is in de UI.
-    db.add(Site(slug=slug, domain=domain, display_name=display_name, enabled=True))
+    db.add(
+        Site(
+            slug=slug,
+            domain=settings.localize(subject_domain),
+            display_name=display_name,
+            subject=subject,
+            path=path,
+            enabled=True,
+        )
+    )
     await db.commit()
+    register_site_subject(slug, subject)
 
+    steps = [
+        f"Keur beide voorstellen goed: {docs_pr.get('html_url')} en "
+        f"{mgmt_pr.get('html_url')}.",
+        "Trek het docs-voorstel lokaal binnen, draai `pnpm install` om "
+        "pnpm-lock.yaml bij te werken en push (anders faalt de controle op "
+        "--frozen-lockfile).",
+        "Redeploy de docs-management-stack zodat sites.json actief wordt.",
+    ]
+    if new_subject:
+        steps.insert(
+            2,
+            f"Zorg dat {subject_domain} naar de server wijst (DNS-record, of het "
+            "*.coderius.nl-wildcardrecord).",
+        )
     return {
         "slug": slug,
+        "url": f"{origin}/{path}/",
         "docs_pr": docs_pr.get("html_url"),
         "management_pr": mgmt_pr.get("html_url"),
-        "manual_steps": [
-            f"Merge beide PR's: {docs_pr.get('html_url')} en {mgmt_pr.get('html_url')}.",
-            "Trek de docs-PR-branch lokaal binnen, draai `pnpm install` om "
-            "pnpm-lock.yaml bij te werken en push (anders faalt de CI op "
-            "--frozen-lockfile).",
-            f"Voeg een DNS-record toe voor {domain} (naar de Traefik-host).",
-            "Herstart/redeploy de docs-management-stack zodat de nieuwe "
-            "Traefik-routing en sites.json actief worden.",
-        ],
+        "manual_steps": steps,
     }
 
 
-def _docs_pr_body(slug: str, display_name: str, domain: str) -> str:
+SITES_JS = "packages/shared/sites.js"
+
+
+def _docs_pr_body(slug: str, subject: str, path: str, display_name: str, domain: str) -> str:
     return (
-        f"Scaffold voor de nieuwe site **{display_name}** (`sites/{slug}`), "
-        f"bedoeld voor https://{domain}.\n\n"
-        "Bevat de minimale Docusaurus-bestanden en een entry in de CI-matrix.\n\n"
-        "> ⚠️ Draai na het binnenhalen `pnpm install` om `pnpm-lock.yaml` bij te "
-        "werken — de CI gebruikt `--frozen-lockfile`."
+        f"Scaffold voor de nieuwe site **{display_name}** (`{site_dir_for(subject, slug)}`), "
+        f"bedoeld voor https://{domain}/{path}/.\n\n"
+        "Bevat de minimale Docusaurus-bestanden en een entry in `packages/shared/sites.js`.\n\n"
+        "> Draai na het binnenhalen `pnpm install` om `pnpm-lock.yaml` bij te "
+        "werken; de CI gebruikt `--frozen-lockfile`."
     )
 
 
-def _mgmt_pr_body(slug: str, domain: str) -> str:
+def _mgmt_pr_body(slug: str, subject: str, path: str, domain: str) -> str:
     return (
-        f"Registreert site `{slug}` ({domain}):\n\n"
-        "- `backend/app/sites.json` — register voor DB-seed en routing.\n"
-        f"- `compose.yml` — eigen Traefik-router (+ certresolver) voor `{domain}`.\n\n"
-        "> Vereist een redeploy en een DNS-record voor het nieuwe domein."
+        f"Registreert site `{slug}` op https://{domain}/{path}/ (vak `{subject}`) in "
+        "`backend/app/sites.json`, het register voor DB-seed en routing.\n\n"
+        "> Vereist een redeploy. Geen Traefik-wijziging nodig: de wildcard-router dekt elk "
+        "vak-domein."
     )
 
 

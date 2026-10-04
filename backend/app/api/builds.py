@@ -7,9 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import CurrentUser, require_csrf
-from app.config import get_settings
 from app.db.models import Build, BuildStatus, PrCache, Site
 from app.db.session import get_db
+from app.github.pulls import preview_url_for_slug
 from app.ingest import prune
 from app.ingest.worker import IngestJob, enqueue
 
@@ -58,7 +58,6 @@ async def list_previews(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[dict]:
     """Actieve branch-previews: nieuwste ready-build per (branch, site), zonder main."""
-    suffix = get_settings().preview_domain_suffix
     rows = (
         await db.execute(
             select(Build, Site.slug)
@@ -81,7 +80,7 @@ async def list_previews(
             {
                 "site": site_slug,
                 "branch": build.branch,
-                "url": f"https://{build.branch_slug}--{site_slug}.{suffix}",
+                "url": preview_url_for_slug(build.branch_slug, site_slug),
                 "pr_number": pr.number if pr and pr.state == "open" else None,
                 "pr_title": pr.title if pr and pr.state == "open" else None,
                 "created_at": build.created_at.isoformat(),

@@ -16,11 +16,11 @@ EMPTY = {"version": 1, "site": {}, "themeConfig": {}, "tokens": {}, "docs": {}}
 @pytest.mark.parametrize(
     "scope,path,want",
     [
-        ("docs", "lesson.mdx", "sites/python/docs/lesson.mdx"),
-        ("pages", "about.md", "sites/python/src/pages/about.md"),
-        ("homepage", "homepage.mdx", "sites/python/src/content/homepage.mdx"),
-        ("metadata", "unit/_category_.yaml", "sites/python/docs/unit/_category_.yaml"),
-        ("metadata", "tags.yml", "sites/python/docs/tags.yml"),
+        ("docs", "lesson.mdx", "sites/informatica/python/docs/lesson.mdx"),
+        ("pages", "about.md", "sites/informatica/python/src/pages/about.md"),
+        ("homepage", "homepage.mdx", "sites/informatica/python/src/content/homepage.mdx"),
+        ("metadata", "unit/_category_.yaml", "sites/informatica/python/docs/unit/_category_.yaml"),
+        ("metadata", "tags.yml", "sites/informatica/python/docs/tags.yml"),
     ],
 )
 def test_scope_resolves_only_its_content_root(scope, path, want):
@@ -52,7 +52,9 @@ def test_scope_rejects_traversal_and_executable_paths(scope, path):
 @respx.mock
 async def test_page_read_uses_scope_and_selected_branch(api_client):
     await make_logged_in_user(api_client)
-    respx.get(f"{REPO}/contents/sites/python/src/pages/about.md", params={"ref": "draft"}).mock(
+    respx.get(
+        f"{REPO}/contents/sites/informatica/python/src/pages/about.md", params={"ref": "draft"}
+    ).mock(
         return_value=Response(
             200,
             json={"type": "file", "sha": "blob", "content": base64.b64encode(b"# About").decode()},
@@ -78,9 +80,9 @@ async def test_settings_read_pins_content_to_head(api_client):
     respx.get(f"{REPO}/git/ref/heads/draft").mock(
         return_value=Response(200, json={"object": {"sha": "oldhead"}})
     )
-    respx.get(f"{REPO}/contents/sites/python/site-settings.json", params={"ref": "oldhead"}).mock(
-        return_value=Response(404, json={"message": "Not Found"})
-    )
+    respx.get(
+        f"{REPO}/contents/sites/informatica/python/site-settings.json", params={"ref": "oldhead"}
+    ).mock(return_value=Response(404, json={"message": "Not Found"}))
     response = await api_client.get("/api/sites/python/settings", params={"ref": "draft"})
     assert response.status_code == 200
     assert response.json() == {"settings": EMPTY, "head_sha": "oldhead"}
@@ -164,7 +166,10 @@ async def test_settings_save_commits_json_and_css_atomically(api_client):
     assert "--ifm-color-primary: #123456;" in content[1]
     assert '[data-theme="dark"]' in content[1]
     paths = [item["path"] for item in json.loads(tree.calls[0].request.content)["tree"]]
-    assert paths == ["sites/python/site-settings.json", "sites/python/src/css/managed-theme.css"]
+    assert paths == [
+        "sites/informatica/python/site-settings.json",
+        "sites/informatica/python/src/css/managed-theme.css",
+    ]
     assert json.loads(update.calls[0].request.content).get("force", False) is False
 
 
@@ -184,7 +189,8 @@ async def test_capabilities_read_selected_branch_manifest(api_client):
         "math": False,
     }
     respx.get(
-        f"{REPO}/contents/sites/python/authoring-capabilities.json", params={"ref": "head"}
+        f"{REPO}/contents/sites/informatica/python/authoring-capabilities.json",
+        params={"ref": "head"},
     ).mock(
         return_value=Response(
             200,
@@ -238,9 +244,21 @@ async def test_page_tree_hides_executable_files_and_other_site(api_client):
             200,
             json={
                 "tree": [
-                    {"path": "sites/python/src/pages/about.md", "type": "blob", "sha": "a"},
-                    {"path": "sites/python/src/pages/index.tsx", "type": "blob", "sha": "b"},
-                    {"path": "sites/web/src/pages/about.md", "type": "blob", "sha": "c"},
+                    {
+                        "path": "sites/informatica/python/src/pages/about.md",
+                        "type": "blob",
+                        "sha": "a",
+                    },
+                    {
+                        "path": "sites/informatica/python/src/pages/index.tsx",
+                        "type": "blob",
+                        "sha": "b",
+                    },
+                    {
+                        "path": "sites/informatica/web/src/pages/about.md",
+                        "type": "blob",
+                        "sha": "c",
+                    },
                 ]
             },
         )
@@ -263,7 +281,7 @@ async def test_scoped_assets_use_publishable_paths(api_client, scope, root, url_
     from tests.test_assets import NAME, PNG
 
     auth = await make_logged_in_user(api_client)
-    target = f"{REPO}/contents/sites/python/{root}/{NAME}"
+    target = f"{REPO}/contents/sites/informatica/python/{root}/{NAME}"
     respx.get(target).mock(return_value=Response(404, json={"message": "Not Found"}))
     respx.put(target).mock(return_value=Response(201, json={"commit": {"sha": "image"}}))
     response = await api_client.post(
@@ -399,7 +417,7 @@ async def test_branch_advancing_during_commit_returns_conflict():
             GitHubClient("token"),
             "draft",
             "Edit",
-            delete=["sites/python/docs/a.md"],
+            delete=["sites/informatica/python/docs/a.md"],
             expected_head="head",
         )
     assert error.value.status_code == 409
@@ -413,7 +431,7 @@ async def test_metadata_write_preserves_comments_null_and_unknown_properties(api
         "# Keep this explanation\nlabel: Course\nlink: null\n"
         "customProps:\n  tracking: false\nunknown: [a, b]\n"
     )
-    target = respx.put(f"{REPO}/contents/sites/python/docs/unit/_category_.yaml").mock(
+    target = respx.put(f"{REPO}/contents/sites/informatica/python/docs/unit/_category_.yaml").mock(
         return_value=Response(200, json={"commit": {"sha": "saved"}, "content": {"sha": "blob"}})
     )
     response = await api_client.put(
@@ -462,9 +480,9 @@ async def test_settings_expose_newest_clean_manifest_and_mark_fallbacks_stale(
     respx.get(f"{REPO}/git/ref/heads/draft").mock(
         return_value=Response(200, json={"object": {"sha": head}})
     )
-    respx.get(f"{REPO}/contents/sites/python/site-settings.json", params={"ref": head}).mock(
-        return_value=Response(404, json={"message": "Not Found"})
-    )
+    respx.get(
+        f"{REPO}/contents/sites/informatica/python/site-settings.json", params={"ref": head}
+    ).mock(return_value=Response(404, json={"message": "Not Found"}))
     build_path = builds_dir / "python" / "draft" / head[:12]
     if variant == "escaped-path":
         build_path = tmp_path / "elsewhere"

@@ -15,6 +15,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { api } from '../api/client';
 import { uploadImage, useCreateBranch } from '../api/git';
 import { useMe, usePreviews, useSites } from '../api/hooks';
+import { siteHost } from '../api/types';
 import { SaveModal } from '../components/SaveModal';
 import { FrontmatterForm } from '../components/editor/FrontmatterForm';
 import {
@@ -445,7 +446,7 @@ function StudioSession({
             assetContext={{
               site,
               scope: 'homepage',
-              domain: siteInfo?.domain,
+              domain: siteHost(siteInfo),
               path: 'homepage.mdx',
               branch: draft.base.branch,
               previewOrigin,

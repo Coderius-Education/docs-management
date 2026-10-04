@@ -1,6 +1,5 @@
 """Branches en pull requests via de GitHub API."""
 
-from app.config import get_settings
 from app.github.client import GitHubClient, repo_path
 
 
@@ -148,5 +147,11 @@ def branch_slug(branch: str) -> str:
 
 
 def preview_url(branch: str, site_slug: str) -> str:
-    s = get_settings()
-    return f"https://{branch_slug(branch)}--{site_slug}.{s.preview_domain_suffix}"
+    """https://<branch>--<vak>.<preview-suffix>/<path>/ voor een site op een branch."""
+    return preview_url_for_slug(branch_slug(branch), site_slug)
+
+
+def preview_url_for_slug(slug: str, site_slug: str) -> str:
+    from app.delivery.router import preview_host
+
+    return f"https://{preview_host(slug, site_slug)}"

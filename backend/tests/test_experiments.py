@@ -8,9 +8,7 @@ from tests.helpers import make_logged_in_user
 from tests.test_delivery import make_build
 
 
-async def seed_build(
-    builds_dir: Path, site_slug: str, branch: str, slug: str, sha: str
-) -> int:
+async def seed_build(builds_dir: Path, site_slug: str, branch: str, slug: str, sha: str) -> int:
     """Maakt een build op disk + in de DB; retourneert build-id."""
     path = make_build(builds_dir, site_slug, slug, sha[:12])
     async with get_sessionmaker()() as db:
@@ -95,22 +93,22 @@ async def test_cookie_assignment_on_target_page(api_client, delivery_client, bui
     exp_id = await create_running_experiment(api_client, builds_dir, split_pct=100)
     # split 100% -> iedereen B
     resp = await delivery_client.get(
-        "/docs/intro/", headers={"host": "python.coderius.nl"}
+        "/python/docs/intro/", headers={"host": "informatica.coderius.nl"}
     )
     assert resp.status_code == 200
     cookie = resp.headers.get("set-cookie", "")
     assert f"cdx_exp_{exp_id}=B" in cookie
     # met cookie B wordt de héle site uit de variant-build geserveerd
     resp2 = await delivery_client.get(
-        "/",
-        headers={"host": "python.coderius.nl", "cookie": f"cdx_exp_{exp_id}=B"},
+        "/python/",
+        headers={"host": "informatica.coderius.nl", "cookie": f"cdx_exp_{exp_id}=B"},
     )
     assert "bbbbbbbbbbbb" in resp2.text  # sha-marker van de variant-build
 
 
 async def test_no_assignment_off_target_page(api_client, delivery_client, builds_dir):
     await create_running_experiment(api_client, builds_dir, split_pct=100)
-    resp = await delivery_client.get("/", headers={"host": "python.coderius.nl"})
+    resp = await delivery_client.get("/python/", headers={"host": "informatica.coderius.nl"})
     assert "set-cookie" not in resp.headers
     assert "mainsha12345" in resp.text
 
@@ -118,8 +116,8 @@ async def test_no_assignment_off_target_page(api_client, delivery_client, builds
 async def test_control_cookie_serves_main(api_client, delivery_client, builds_dir):
     exp_id = await create_running_experiment(api_client, builds_dir)
     resp = await delivery_client.get(
-        "/",
-        headers={"host": "python.coderius.nl", "cookie": f"cdx_exp_{exp_id}=A"},
+        "/python/",
+        headers={"host": "informatica.coderius.nl", "cookie": f"cdx_exp_{exp_id}=A"},
     )
     assert "mainsha12345" in resp.text
 
@@ -133,15 +131,32 @@ async def test_events_ingestion_and_results(api_client, delivery_client, builds_
             json={
                 "anon": anon,
                 "events": [
-                    {"type": "exposure", "path": "/docs/intro/", "exp": exp_id,
-                     "variant": variant, "ts": 1750000000000},
-                    {"type": "heartbeat", "path": "/docs/intro/", "value": seconds,
-                     "exp": exp_id, "variant": variant, "ts": 1750000015000},
-                    {"type": "scroll", "path": "/docs/intro/", "value": 80,
-                     "exp": exp_id, "variant": variant, "ts": 1750000030000},
+                    {
+                        "type": "exposure",
+                        "path": "/python/docs/intro/",
+                        "exp": exp_id,
+                        "variant": variant,
+                        "ts": 1750000000000,
+                    },
+                    {
+                        "type": "heartbeat",
+                        "path": "/python/docs/intro/",
+                        "value": seconds,
+                        "exp": exp_id,
+                        "variant": variant,
+                        "ts": 1750000015000,
+                    },
+                    {
+                        "type": "scroll",
+                        "path": "/python/docs/intro/",
+                        "value": 80,
+                        "exp": exp_id,
+                        "variant": variant,
+                        "ts": 1750000030000,
+                    },
                 ],
             },
-            headers={"host": "python.coderius.nl"},
+            headers={"host": "informatica.coderius.nl"},
         )
         assert resp.json()["accepted"] == 3
 
@@ -166,8 +181,11 @@ async def test_events_rejects_rommel(api_client, delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "mainsha12345")
     resp = await delivery_client.post(
         "/_cdx/events",
-        json={"anon": "x", "events": [{"type": "evil"}, "geen-dict", {"type": "pageview"}]},
-        headers={"host": "python.coderius.nl"},
+        json={
+            "anon": "x",
+            "events": [{"type": "evil", "path": "/python/"}, "geen-dict", {"type": "pageview"}],
+        },
+        headers={"host": "informatica.coderius.nl"},
     )
     assert resp.json()["accepted"] == 1
 
@@ -189,7 +207,7 @@ async def test_split_ratio_about_50_50(api_client, delivery_client, builds_dir):
     assigned_b = 0
     for _ in range(200):
         resp = await delivery_client.get(
-            "/docs/intro/", headers={"host": "python.coderius.nl"}
+            "/python/docs/intro/", headers={"host": "informatica.coderius.nl"}
         )
         cookie = resp.headers.get("set-cookie", "")
         if "=B" in cookie:

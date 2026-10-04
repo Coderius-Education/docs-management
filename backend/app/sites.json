@@ -1,16 +1,24 @@
-[
-  { "slug": "python", "domain": "python.coderius.nl", "display_name": "Python" },
-  { "slug": "web", "domain": "web.coderius.nl", "display_name": "Webdesign" },
-  { "slug": "fullstack", "domain": "fullstack.coderius.nl", "display_name": "Fullstack" },
-  { "slug": "robotica", "domain": "robotica.coderius.nl", "display_name": "Robotica" },
-  { "slug": "ctf", "domain": "ctf.coderius.nl", "display_name": "CTF" },
-  { "slug": "embedded", "domain": "embedded.coderius.nl", "display_name": "Embedded" },
-  { "slug": "editor", "domain": "editor.coderius.nl", "display_name": "Editor" },
-  { "slug": "godot", "domain": "godot.coderius.nl", "display_name": "Godot" },
-  { "slug": "dvwa", "domain": "dvwa.coderius.nl", "display_name": "DVWA" },
-  { "slug": "play", "domain": "play.coderius.nl", "display_name": "Play" },
-  { "slug": "algorithms", "domain": "algoritmes.coderius.nl", "display_name": "Algoritmes" },
-  { "slug": "ide", "domain": "ide.coderius.nl", "display_name": "IDE" },
-  { "slug": "didactiek", "domain": "didactiek.coderius.nl", "display_name": "Didactiek" },
-  { "slug": "home", "domain": "coderius.nl", "display_name": "Home" }
-]
+{
+  "apex": "coderius.nl",
+  "subjects": [
+    { "slug": "informatica", "domain": "informatica.coderius.nl", "display_name": "Informatica" },
+    { "slug": "wo", "domain": "wo.coderius.nl", "display_name": "Wetenschapsoriëntatie" }
+  ],
+  "sites": [
+    { "slug": "python", "subject": "informatica", "path": "python", "display_name": "Python", "legacy_domains": ["python.coderius.nl"] },
+    { "slug": "web", "subject": "informatica", "path": "web", "display_name": "Webdesign", "legacy_domains": ["web.coderius.nl"] },
+    { "slug": "fullstack", "subject": "informatica", "path": "fullstack", "display_name": "Fullstack", "legacy_domains": ["fullstack.coderius.nl"] },
+    { "slug": "robotica", "subject": "informatica", "path": "robotica", "display_name": "Robotica", "legacy_domains": ["robotica.coderius.nl"] },
+    { "slug": "ctf", "subject": "informatica", "path": "ctf", "display_name": "CTF", "legacy_domains": ["ctf.coderius.nl"] },
+    { "slug": "embedded", "subject": "informatica", "path": "embedded", "display_name": "Embedded", "legacy_domains": ["embedded.coderius.nl"] },
+    { "slug": "editor", "subject": "informatica", "path": "editor", "display_name": "Editor", "legacy_domains": ["editor.coderius.nl"] },
+    { "slug": "godot", "subject": "informatica", "path": "godot", "display_name": "Godot", "legacy_domains": ["godot.coderius.nl"] },
+    { "slug": "dvwa", "subject": "informatica", "path": "dvwa", "display_name": "DVWA", "legacy_domains": ["dvwa.coderius.nl"] },
+    { "slug": "play", "subject": "informatica", "path": "play", "display_name": "Play", "legacy_domains": ["play.coderius.nl"] },
+    { "slug": "algorithms", "subject": "informatica", "path": "algoritmes", "display_name": "Algoritmes", "legacy_domains": ["algoritmes.coderius.nl"] },
+    { "slug": "ide", "subject": "informatica", "path": "ide", "display_name": "IDE", "legacy_domains": ["ide.coderius.nl"] },
+    { "slug": "didactiek", "subject": "informatica", "path": "didactiek", "display_name": "Didactiek", "legacy_domains": ["didactiek.coderius.nl"] },
+    { "slug": "onderzoek", "subject": "wo", "path": "onderzoek", "display_name": "Onderzoek", "legacy_domains": [] },
+    { "slug": "home", "subject": null, "path": "", "display_name": "Home", "legacy_domains": [] }
+  ]
+}
