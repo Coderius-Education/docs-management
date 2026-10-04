@@ -231,7 +231,7 @@ const fields: PropertyField[] = [
     'Concept in Docusaurus',
     'boolean',
     'publication',
-    'Ja sluit deze pagina uit van productiebuilds, ook van een productie-preview. Dit staat los van een Git-conceptbranch.',
+    'Ja sluit deze pagina uit van de gepubliceerde site en van voorbeelden. Dit staat los van een concept in deze beheeromgeving.',
   ),
   field(
     'unlisted',

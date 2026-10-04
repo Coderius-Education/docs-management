@@ -21,7 +21,7 @@ import {
   useSearchParams,
 } from 'react-router';
 import { pageKey, useMe, usePage, useSites, usePreviews } from '../api/hooks';
-import { uploadImage, useCreateBranch } from '../api/git';
+import { uploadImage, useConceptTitle, useCreateConcept } from '../api/git';
 import { FrontmatterForm } from '../components/editor/FrontmatterForm';
 import { contentScope, scopedKey, siteHost, type ContentScope } from '../api/types';
 import {
@@ -152,7 +152,8 @@ function EditorSession({
   const [saveOpen, setSaveOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const imageBranch = useRef<string | null>(null);
-  const createBranch = useCreateBranch();
+  const createConcept = useCreateConcept();
+  const conceptTitle = useConceptTitle(baseline.branch);
   const [mode, setMode] = useState('visual');
   const [storageError, setStorageError] = useState('');
   const key = recoveryKey(user, site, baseline.branch, scopedKey(scope, path));
@@ -240,11 +241,12 @@ function EditorSession({
       let branch = baseline.branch;
       if (branch === 'main') {
         if (!imageBranch.current) {
-          const created = await createBranch.mutateAsync({
-            name: `docs/${site}-${crypto.randomUUID()}`,
-            from_branch: 'main',
+          // Uploading from the published version starts a concept for this page.
+          const created = await createConcept.mutateAsync({
+            site,
+            title: `Afbeelding bij ${path.split('/').pop() ?? path}`,
           });
-          imageBranch.current = created.name;
+          imageBranch.current = created.branch;
         }
         branch = imageBranch.current;
       }
@@ -291,7 +293,7 @@ function EditorSession({
       scopedKey(scope, path),
     );
     try {
-      if (current.current !== result.content)
+      if (current.current !== result.content && !result.merged)
         writeRecovery(localStorage, newKey, current.current, result.sha);
       else clearRecovery(localStorage, newKey, result.content);
       if (newKey !== key) {
@@ -304,7 +306,9 @@ function EditorSession({
         'Het concept is opgeslagen, maar de lokale herstelkopie kon niet worden bijgewerkt.',
       );
     }
-    setBaseline(result);
+    setBaseline({ content: result.content, sha: result.sha, branch: result.branch });
+    // The server merged in a parallel save: show the merged text.
+    if (result.merged) setContent(result.content);
     qc.setQueryData(pageKey(site, path, result.branch, scope), {
       content: result.content,
       sha: result.sha,
@@ -375,7 +379,9 @@ function EditorSession({
               Cursusvoorbeeld
             </Button>
           )}
-          <Badge variant="light">{baseline.branch}</Badge>
+          <Badge variant="light" maw={260} title={conceptTitle}>
+            {conceptTitle}
+          </Badge>
           <Text size="sm" role="status">
             {dirty ? 'Niet opgeslagen' : 'Opgeslagen'}
           </Text>

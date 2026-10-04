@@ -10,6 +10,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** The raw `detail` when the server sent structured data (e.g. conflicts). */
+    public detail?: unknown,
   ) {
     super(message);
   }
@@ -47,13 +49,19 @@ export async function api<T>(
     throw new ApiError(401, 'Niet ingelogd');
   }
   if (!resp.ok) {
-    let detail = resp.statusText;
+    let detail: unknown = resp.statusText;
     try {
       detail = (await resp.json()).detail ?? detail;
     } catch {
       // geen JSON-body
     }
-    throw new ApiError(resp.status, detail);
+    const message =
+      typeof detail === 'string'
+        ? detail
+        : typeof (detail as { message?: unknown })?.message === 'string'
+          ? (detail as { message: string }).message
+          : resp.statusText;
+    throw new ApiError(resp.status, message, detail);
   }
   if (resp.status === 204) return undefined as T;
   return resp.json();

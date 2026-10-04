@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 
 import { api } from '../api/client';
+import { useConcepts } from '../api/git';
 
 interface BuildRow {
   id: number;
@@ -33,6 +34,14 @@ interface PreviewRow {
   pr_title: string | null;
   created_at: string;
 }
+
+const statusLabel: Record<string, string> = {
+  ready: 'klaar',
+  pending: 'wacht',
+  downloading: 'ophalen',
+  failed: 'mislukt',
+  pruned: 'opgeruimd',
+};
 
 const statusColor: Record<string, string> = {
   ready: 'green',
@@ -60,26 +69,30 @@ export function BuildsPage() {
     queryFn: () => api<BuildRow[]>('/api/builds'),
     refetchInterval: 30_000,
   });
+  const { data: concepts } = useConcepts('all', false);
+  const versionName = (ref: string) =>
+    ref === 'main'
+      ? 'Gepubliceerde versie'
+      : (concepts?.find((c) => c.branch === ref)?.title ?? 'Concept');
 
   return (
     <Stack>
-      <Title order={3}>Actieve previews</Title>
+      <Title order={3}>Voorbeelden van concepten</Title>
       <Paper withBorder>
         {loadingPreviews ? (
           <Loader m="md" />
         ) : (previews?.length ?? 0) === 0 ? (
           <Text c="dimmed" p="md">
-            Geen actieve branch-previews. Previews verschijnen zodra CI een PR-branch
-            heeft gebouwd.
+            Nog geen voorbeelden. Een voorbeeld verschijnt zodra de controle van
+            een concept klaar is.
           </Text>
         ) : (
           <Table highlightOnHover>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Site</Table.Th>
-                <Table.Th>Branch</Table.Th>
-                <Table.Th>PR</Table.Th>
-                <Table.Th>Preview</Table.Th>
+                <Table.Th>Concept</Table.Th>
+                <Table.Th>Voorbeeld</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -87,13 +100,12 @@ export function BuildsPage() {
                 <Table.Tr key={`${preview.site}-${preview.branch}`}>
                   <Table.Td>{preview.site}</Table.Td>
                   <Table.Td>
-                    <code>{preview.branch}</code>
-                  </Table.Td>
-                  <Table.Td>
-                    {preview.pr_number && (
-                      <Anchor component={Link} to={`/prs/${preview.pr_number}`} size="sm">
-                        #{preview.pr_number} {preview.pr_title}
+                    {preview.pr_number ? (
+                      <Anchor component={Link} to={`/concepten/${preview.pr_number}`} size="sm">
+                        {preview.pr_title}
                       </Anchor>
+                    ) : (
+                      <Text size="sm">{versionName(preview.branch)}</Text>
                     )}
                   </Table.Td>
                   <Table.Td>
@@ -108,7 +120,7 @@ export function BuildsPage() {
         )}
       </Paper>
 
-      <Title order={3}>Recente builds</Title>
+      <Title order={3}>Recent gebouwd</Title>
       <Paper withBorder>
         {loadingBuilds ? (
           <Loader m="md" />
@@ -117,8 +129,8 @@ export function BuildsPage() {
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Site</Table.Th>
-                <Table.Th>Branch</Table.Th>
-                <Table.Th>Commit</Table.Th>
+                <Table.Th>Versie</Table.Th>
+                <Table.Th>Wijziging</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Grootte</Table.Th>
                 <Table.Th>Wanneer</Table.Th>
@@ -129,7 +141,7 @@ export function BuildsPage() {
                 <Table.Tr key={build.id}>
                   <Table.Td>{build.site}</Table.Td>
                   <Table.Td>
-                    <code>{build.branch}</code>
+                    <Text size="sm">{versionName(build.branch)}</Text>
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm" truncate maw={300}>
@@ -138,7 +150,7 @@ export function BuildsPage() {
                   </Table.Td>
                   <Table.Td>
                     <Badge color={statusColor[build.status] ?? 'gray'} variant="light">
-                      {build.status}
+                      {statusLabel[build.status] ?? build.status}
                     </Badge>
                   </Table.Td>
                   <Table.Td>{formatSize(build.size_bytes)}</Table.Td>

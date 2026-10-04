@@ -148,19 +148,33 @@ Via **Blok toevoegen → Afbeelding** kies je een lokaal bestand en alternatieve
 les en voegt een blijvende relatieve verwijzing in. Bestanden mogen maximaal 5 MB
 zijn (PNG, JPEG, GIF of WebP; geen SVG). De bestandsnaam bevat een inhoudshash:
 een bestaande afbeelding wordt niet overschreven en opnieuw uploaden van hetzelfde
-bestand onder dezelfde naam maakt geen extra commit. Vanuit `main` maakt de editor
-automatisch een conceptbranch. Uploaden bewaart de afbeelding meteen; **sla daarna
+bestand onder dezelfde naam maakt geen extra commit. Vanuit de gepubliceerde versie maakt de editor
+automatisch een concept. Uploaden bewaart de afbeelding meteen; **sla daarna
 ook de les op** om de verwijzing te bewaren. Verwijderen uit de les verwijdert het
 gecommitte bestand niet automatisch. Tijdelijke `blob:`- en `data:`-afbeeldingen
 blijven geblokkeerd bij opslaan.
 
-**Opslaan** bewaart een concept op een feature branch. **Controle aanvragen**
-opent daarna een pull request; opslaan publiceert dus niet automatisch. Je kunt
-na elke save verder bewerken. Conflicten behouden je lokale tekst. Een
-herstelkopie wordt per gebruiker, cursus, branch en bestand in deze browser
+**Opslaan** bewaart je wijziging in een **concept**. Kies een bestaand concept
+op titel, of **Nieuw concept** met een titel ("Waar gaat dit over?"). Een concept
+is achter de schermen altijd een branch plus een pull request
+(`concept/<site>-<base36>`, door de server gemaakt), maar die woorden zie je in de
+UI niet. Opslaan publiceert niet: op de conceptpagina (**Concepten**) zie je de
+**Controle** en de voorbeelden, en **Publiceren** kan pas als de controle (`build`)
+op de nieuwste versie geslaagd is en er geen conflict is. De server controleert dat
+zelf nog eens vlak voor het publiceren.
+
+Is de gepubliceerde versie intussen veranderd, dan werkt de conceptpagina het
+concept automatisch bij. Wat niet overlapt wordt samengevoegd; blokken die aan
+beide kanten zijn veranderd kies je per blok (jouw versie, gepubliceerde versie,
+beide, of zelf aanpassen). Hetzelfde gebeurt als iemand anders tegelijk dezelfde
+pagina in hetzelfde concept opslaat.
+
+Een herstelkopie wordt per gebruiker, cursus, concept en bestand in deze browser
 bewaard; bij heropenen kun je haar herstellen of de serverversie gebruiken.
-Opslaan gebruikt de huidige conceptbranch of een nieuwe kopie daarvan, zodat
-afbeeldingen met de les meegaan.
+
+**Tweede slot (handmatig):** zet op GitHub branch protection op `main` aan met de
+verplichte check `build`, zodat ook buiten deze app niets ongecontroleerd op main
+komt.
 
 Extra frontendchecks:
 
@@ -206,11 +220,11 @@ paginatype, inclusief tags, SEO, menu, navigatie, inhoudsopgave en publicatie.
 Onbekende YAML-eigenschappen en opmerkingen blijven behouden; geavanceerde YAML
 kan rechtstreeks worden aangepast. Gewone pagina's ondersteunen Docusaurus
 `draft` en `unlisted`. De beheerde homepage gebruikt een React-omsluiting en
-ondersteunt die twee vlaggen niet; gebruik daar de conceptbranch. Het vaste
+ondersteunt die twee vlaggen niet; gebruik daar een concept. Het vaste
 homepagepad is `/`. Codevoorbeelden hebben velden voor titel, regelnummers en
 markeringen. Tabs en koppen met een vast anker zijn visueel bewerkbaar.
 
-Vormgeving toont de startpagina van de gekozen conceptbranch met directe previews
+Vormgeving toont de startpagina van het gekozen concept met directe previews
 voor kleuren, lettertypen, afmetingen, koptekst en voettekst. Klik een gebied op
 de pagina aan of kies een van de duidelijke categorieën. Extra instellingen staan
 onder **Geavanceerd**.
@@ -225,7 +239,7 @@ instellingen. Bestaande CSS-waarden worden daarbij niet uit stylesheets afgeleid
 Het lokale voorbeeld toont expliciete stijlkeuzes; controleer de volledige
 cursus in het branchvoorbeeld.
 
-Opslaan gebruikt de bestaande conceptbranch/PR-flow. Homepage-, pagina- en
+Opslaan gebruikt de concept-flow. Homepage-, pagina- en
 metadata-assets krijgen een eigen begrensde opslaglocatie; lokale herstelkopieën
 onderscheiden gebruiker, cursus, branch en inhoudstype. Vormgeving en CSS worden
 samen opgeslagen, met een controle op de verwachte branchversie.

@@ -10,8 +10,8 @@ import {
   Paper,
   ScrollArea,
   SegmentedControl,
+  Select,
   Text,
-  TextInput,
   Title,
   Stack,
 } from '@mantine/core';
@@ -21,9 +21,10 @@ import {
   IconPencil,
   IconPlus,
 } from '@tabler/icons-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 
+import { useConcepts } from '../api/git';
 import { usePage, useSites, useTree } from '../api/hooks';
 import { contentScope, scopedKey } from '../api/types';
 import { categoryContent, friendlyName } from '../lib/authoring/folders';
@@ -47,6 +48,15 @@ export function SiteBrowser() {
     setRef(searchParams.get('ref') ?? 'main');
   }, [searchParams]);
   const { data: sites } = useSites();
+  const { data: concepts } = useConcepts('open', false);
+  const versionOptions = useMemo(() => {
+    const own = (concepts ?? [])
+      .filter((c) => c.site === site || c.branch === ref)
+      .map((c) => ({ value: c.branch, label: c.title }));
+    if (ref !== 'main' && !own.some((o) => o.value === ref))
+      own.unshift({ value: ref, label: 'Huidig concept' });
+    return [{ value: 'main', label: 'Gepubliceerde versie' }, ...own];
+  }, [concepts, site, ref]);
   const {
     data: tree,
     isLoading: treeLoading,
@@ -119,11 +129,19 @@ export function SiteBrowser() {
           </Text>
         </div>
         <Group align="flex-end" gap="xs">
-          <TextInput
-            label="Conceptversie (branch)"
+          <Select
+            label="Versie"
+            aria-label="Versie"
             value={ref}
-            onChange={(e) => setRef(e.currentTarget.value)}
-            w={220}
+            onChange={(next) => {
+              if (!next) return;
+              setRef(next);
+              setSearchParams({ ref: next, scope });
+            }}
+            data={versionOptions}
+            allowDeselect={false}
+            searchable
+            w={240}
             size="xs"
           />
           {scope === 'docs' && (

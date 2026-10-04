@@ -16,7 +16,7 @@ import { useDisclosure } from '@mantine/hooks';
 import {
   IconChevronDown,
   IconFlask,
-  IconGitPullRequest,
+  IconFileText,
   IconHome,
   IconLogout,
   IconMoon,
@@ -117,16 +117,16 @@ export function Layout() {
             onClick={() => navigate('/')}
           />
           <MantineNavLink
-            label="Pull requests"
-            leftSection={<IconGitPullRequest size={16} />}
-            active={location.pathname.startsWith('/prs')}
-            onClick={() => navigate('/prs')}
+            label="Concepten"
+            leftSection={<IconFileText size={16} />}
+            active={location.pathname.startsWith('/concepten')}
+            onClick={() => navigate('/concepten')}
           />
           <MantineNavLink
-            label="Builds & previews"
+            label="Voorbeelden"
             leftSection={<IconPackages size={16} />}
-            active={location.pathname.startsWith('/builds')}
-            onClick={() => navigate('/builds')}
+            active={location.pathname.startsWith('/voorbeelden')}
+            onClick={() => navigate('/voorbeelden')}
           />
           <MantineNavLink
             label="Experimenten"

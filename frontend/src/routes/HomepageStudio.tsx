@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { api } from '../api/client';
-import { uploadImage, useCreateBranch } from '../api/git';
+import { uploadImage, useConceptTitle, useCreateConcept } from '../api/git';
 import { useMe, usePreviews, useSites } from '../api/hooks';
 import { siteHost } from '../api/types';
 import { SaveModal } from '../components/SaveModal';
@@ -169,7 +169,7 @@ function StudioSession({
   const qc = useQueryClient();
   const { data: sites } = useSites();
   const { data: previews } = usePreviews();
-  const createBranch = useCreateBranch();
+  const createConcept = useCreateConcept();
   const draft = useResourceDraft(
     user,
     site,
@@ -283,11 +283,11 @@ function StudioSession({
     try {
       let target = draft.base.branch;
       if (target === 'main') {
-        const created = await createBranch.mutateAsync({
-          name: `docs/${site}-${crypto.randomUUID()}`,
-          from_branch: 'main',
+        const created = await createConcept.mutateAsync({
+          site,
+          title: 'Afbeelding op de startpagina',
         });
-        target = created.name;
+        target = created.branch;
       }
       const result = await uploadImage(
         site,
@@ -309,6 +309,7 @@ function StudioSession({
     }
   }
 
+  const conceptTitle = useConceptTitle(draft.base.branch);
   const siteInfo = sites?.find((s) => s.slug === site);
   const previewOrigin = previews?.find(
     (p) => p.site === site && p.branch === draft.base.branch,
@@ -400,7 +401,9 @@ function StudioSession({
               Cursusvoorbeeld ↗
             </Button>
           )}
-          <Badge variant="light">{draft.base.branch}</Badge>
+          <Badge variant="light" maw={260} title={conceptTitle}>
+            {conceptTitle}
+          </Badge>
           <Text size="sm" role="status">
             {draft.dirty ? 'Niet opgeslagen' : 'Opgeslagen'}
           </Text>

@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockConcepts } from './studio-mock';
 
 async function mockCreation(page: Page, conflict = false) {
   const saves: Record<string, any>[] = [];
-  const branches: Record<string, any>[] = [];
   const folders = ['01-basis', '01-basis/02-verdieping'];
   await page.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -13,13 +13,6 @@ async function mockCreation(page: Page, conflict = false) {
         data = { login: 'teacher', csrf_token: 'test' };
       if (url.pathname === '/api/sites')
         data = [{ slug: 'python', display_name: 'Python' }];
-      if (
-        url.pathname === '/api/branches' &&
-        route.request().method() === 'POST'
-      ) {
-        branches.push(route.request().postDataJSON());
-        data = { sha: 'branch' };
-      }
       if (url.pathname.endsWith('/tree'))
         data = [
           ...folders.map((path) => ({ path, type: 'tree', sha: 'tree' })),
@@ -59,13 +52,14 @@ async function mockCreation(page: Page, conflict = false) {
       await route.fulfill({ json: data });
     },
   );
-  return { saves, branches };
+  const { created } = await mockConcepts(page);
+  return { saves, created };
 }
 
 test('nested folder is persisted and its draft branch and location carry into a new lesson', async ({
   page,
 }) => {
-  const { saves, branches } = await mockCreation(page);
+  const { saves, created } = await mockCreation(page);
   await page.goto('/sites/python?ref=main&folder=01-basis/02-verdieping');
   await expect(page.getByLabel('Huidige map')).toContainText('Basis');
   await page.getByRole('button', { name: 'Nieuwe map', exact: true }).click();
@@ -77,17 +71,17 @@ test('nested folder is persisted and its draft branch and location carry into a 
   ).toBeVisible();
   await page.getByRole('button', { name: 'Map aanmaken', exact: true }).click();
   await page
-    .getByLabel('Naam conceptversie', { exact: true })
-    .fill('docs/new-folder');
+    .getByLabel('Waar gaat dit over?')
+    .fill('Nieuwe map');
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
-  expect(branches).toEqual([{ name: 'docs/new-folder', from_branch: 'main' }]);
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
+  expect(created).toEqual([{ site: 'python', title: 'Nieuwe map' }]);
   expect(saves[0]).toMatchObject({
     path: '01-basis/02-verdieping/een-stap-verder/_category_.json',
     scope: 'metadata',
-    branch: 'docs/new-folder',
+    branch: 'concept/python-1',
     sha: null,
   });
   expect(JSON.parse(saves[0].content)).toMatchObject({
@@ -98,7 +92,7 @@ test('nested folder is persisted and its draft branch and location carry into a 
   await page
     .getByRole('button', { name: 'Verder naar map', exact: true })
     .click();
-  await expect(page).toHaveURL(/ref=docs%2Fnew-folder/);
+  await expect(page).toHaveURL(/ref=concept%2Fpython-1/);
   await page.getByRole('button', { name: 'Nieuwe les', exact: true }).click();
   await expect(
     page.getByRole('textbox', { name: 'Map in de cursus', exact: true }),
@@ -119,9 +113,9 @@ test('nested folder is persisted and its draft branch and location carry into a 
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   expect(saves[1]).toMatchObject({
-    branch: 'docs/new-folder',
+    branch: 'concept/python-1',
     scope: 'docs',
     sha: null,
   });
