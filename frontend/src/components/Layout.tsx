@@ -23,6 +23,7 @@ import {
   IconLogout,
   IconMoon,
   IconPackages,
+  IconSchool,
   IconSun,
   IconWorldWww,
 } from '@tabler/icons-react';
@@ -133,6 +134,12 @@ export function Layout() {
             leftSection={<IconPackages size={16} />}
             active={location.pathname.startsWith('/voorbeelden')}
             onClick={() => navigate('/voorbeelden')}
+          />
+          <MantineNavLink
+            label="Klassen"
+            leftSection={<IconSchool size={16} />}
+            active={location.pathname.startsWith('/klassen')}
+            onClick={() => navigate('/klassen')}
           />
           <MantineNavLink
             label="Experimenten"
