@@ -48,8 +48,8 @@ export interface ConceptDetail extends Concept {
   status: ConceptStatus;
   publish_blocked: string | null;
   behind_by: number;
-  previews: { site: string; url: string }[];
-  expected_previews: { site: string; url: string }[];
+  previews: { site: string; label?: string; url: string }[];
+  expected_previews: { site: string; label?: string; url: string }[];
 }
 
 export interface ConceptFile {
