@@ -16,11 +16,12 @@ import {
 import {
   IconChevronRight,
   IconExternalLink,
+  IconLayoutDashboard,
   IconPlus,
   IconSearch,
 } from '@tabler/icons-react';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 import { useSites, useSubjects } from '../api/hooks';
 import type { SiteInfo } from '../api/types';
@@ -29,6 +30,7 @@ import {
   DASHBOARD_CLOSED_KEY,
   filterSites,
   groupSitesBySubject,
+  OTHER_GROUP,
 } from '../lib/subjectGroups';
 import { useClosedSubjects } from '../lib/useClosedSubjects';
 
@@ -61,6 +63,7 @@ export function Dashboard() {
   const [newSiteOpen, setNewSiteOpen] = useState(false);
   const [query, setQuery] = useState('');
   const sections = useClosedSubjects(DASHBOARD_CLOSED_KEY);
+  const navigate = useNavigate();
 
   const searching = query.trim() !== '';
   const allGroups = groupSitesBySubject(sites, subjects);
@@ -112,6 +115,7 @@ export function Dashboard() {
           const panelId = `vak-${group.key}`;
           return (
             <section key={group.key} aria-label={group.title}>
+              <Group justify="space-between" align="center" wrap="nowrap">
               <UnstyledButton
                 onClick={() => sections.toggle(group.key)}
                 disabled={searching}
@@ -141,6 +145,17 @@ export function Dashboard() {
                   )}
                 </Group>
               </UnstyledButton>
+              {group.key !== OTHER_GROUP && (
+                <Button
+                  size="compact-sm"
+                  variant="subtle"
+                  leftSection={<IconLayoutDashboard size={14} />}
+                  onClick={() => navigate(`/vakken/${group.key}/pagina`)}
+                >
+                  Vakpagina
+                </Button>
+              )}
+              </Group>
               <Collapse in={open} id={panelId}>
                 <Grid>
                   {group.sites.map((site) => (

@@ -20,6 +20,7 @@ import {
   IconFolder,
   IconFolderOpen,
   IconHome,
+  IconLayoutDashboard,
   IconLogout,
   IconMoon,
   IconPackages,
@@ -31,7 +32,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router';
 
 import { api } from '../api/client';
 import { useMe, useSites, useSubjects } from '../api/hooks';
-import { SIDEBAR_CLOSED_KEY, groupSitesBySubject } from '../lib/subjectGroups';
+import { OTHER_GROUP, SIDEBAR_CLOSED_KEY, groupSitesBySubject } from '../lib/subjectGroups';
 import { useClosedSubjects } from '../lib/useClosedSubjects';
 
 export function Layout() {
@@ -43,8 +44,9 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const canvasRoute =
-    location.pathname.endsWith('/edit') &&
-    new URLSearchParams(location.search).get('scope') === 'homepage';
+    (location.pathname.endsWith('/edit') &&
+      new URLSearchParams(location.search).get('scope') === 'homepage') ||
+    /^\/vakken\/[^/]+\/pagina$/.test(location.pathname);
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
 
   async function logout() {
@@ -170,6 +172,14 @@ export function Layout() {
                   active={!open && group.sites.some((site) => isCurrent(site.slug))}
                   variant="subtle"
                 >
+                  {group.key !== OTHER_GROUP && (
+                    <MantineNavLink
+                      label="Vakpagina"
+                      leftSection={<IconLayoutDashboard size={14} />}
+                      active={location.pathname === `/vakken/${group.key}/pagina`}
+                      onClick={() => navigate(`/vakken/${group.key}/pagina`)}
+                    />
+                  )}
                   {group.sites.map((site) => (
                     <MantineNavLink
                       key={site.slug}

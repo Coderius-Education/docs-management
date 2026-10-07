@@ -1,0 +1,275 @@
+/* Preview of a vakpagina. Mirrors sites/home (Tailwind, shadcn tokens) closely
+   enough for a teacher to see layout, colours and order; the real page is the
+   concept preview. */
+.vak-canvas-frame {
+  width: 100%;
+  margin-inline: auto;
+  transition: max-width 0.2s;
+  min-width: 0;
+}
+.vak-canvas-frame[data-device='mobile'] {
+  max-width: 390px;
+}
+.vak-canvas {
+  --primary: #007e57;
+  --primary-foreground: #ffffff;
+  --background: #ffffff;
+  --foreground: #1a2420;
+  --muted: #f1f5f3;
+  --muted-foreground: #66746e;
+  --border: #e3e9e6;
+  --card: #ffffff;
+  --kopletter: Georgia, 'Literata', serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, 'Atkinson Hyperlegible Next', sans-serif;
+  border: 1px solid #dce0e6;
+  border-radius: 10px;
+  overflow: hidden;
+  container-type: inline-size;
+  line-height: 1.5;
+}
+.vak-canvas[data-theme='dark'] {
+  --primary: #3ec691;
+  --primary-foreground: #111815;
+  --background: #111a16;
+  --foreground: #f5f8f6;
+  --muted: #26302c;
+  --muted-foreground: #a7b3ad;
+  --border: #ffffff1a;
+  --card: #1d2723;
+  border-color: #3b3d48;
+}
+.vak-canvas h1,
+.vak-canvas h2,
+.vak-canvas h3 {
+  font-family: var(--kopletter);
+  margin: 0;
+  line-height: 1.2;
+}
+.vak-canvas p {
+  margin: 0;
+}
+.vak-canvas a {
+  color: inherit;
+}
+.vak-kop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 60%, var(--background));
+  font-weight: 700;
+  font-size: 15px;
+}
+.vak-kop img {
+  height: 28px;
+}
+.vak-kop span {
+  color: var(--primary);
+  font-weight: 500;
+  font-size: 13px;
+}
+.vak-blok {
+  position: relative;
+  outline: 1px dashed transparent;
+  outline-offset: -1px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.vak-blok:hover {
+  outline-color: color-mix(in srgb, var(--primary) 50%, transparent);
+}
+.vak-blok[data-gekozen='true'] {
+  outline: 2px solid var(--mantine-color-blue-6);
+}
+.vak-blok-label {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 1;
+  font: 600 10px/1 system-ui, sans-serif;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--mantine-color-blue-6);
+  color: white;
+  display: none;
+}
+.vak-blok:hover > .vak-blok-label,
+.vak-blok[data-gekozen='true'] > .vak-blok-label {
+  display: block;
+}
+.vak-buiten {
+  margin-inline: auto;
+  padding-inline: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.vak-buiten[data-width='wide'] {
+  max-width: 100rem;
+}
+.vak-buiten[data-width='normal'] {
+  max-width: 64rem;
+}
+.vak-buiten[data-width='narrow'] {
+  max-width: 48rem;
+}
+.vak-buiten[data-spacing='none'] {
+  padding-block: 0;
+}
+.vak-buiten[data-spacing='small'] {
+  margin-block: 16px;
+}
+.vak-buiten[data-spacing='normal'] {
+  padding-block: 24px;
+}
+.vak-buiten[data-spacing='large'] {
+  padding-block: 48px;
+}
+.vak-binnen[data-align='center'] {
+  text-align: center;
+}
+.vak-binnen[data-align='right'] {
+  text-align: right;
+}
+.vak-binnen[data-background='muted'] {
+  background: var(--muted);
+  border-radius: 12px;
+  padding-inline: 16px;
+}
+.vak-binnen[data-background='primary'] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: 12px;
+  padding-inline: 16px;
+}
+.vak-hero {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.vak-hero[data-variant='compact'] {
+  padding-block: 24px;
+}
+.vak-hero[data-variant='plain'] {
+  background: none;
+  color: inherit;
+  padding-block: 16px;
+}
+.vak-hero h1 {
+  font-size: 2.2rem;
+}
+.vak-hero .vak-tagline {
+  margin-top: 8px;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+.vak-tekst {
+  color: var(--muted-foreground);
+}
+.vak-tekst p + p,
+.vak-tekst ul {
+  margin-top: 8px;
+}
+.vak-tekst ul {
+  padding-left: 20px;
+}
+.vak-tekst a {
+  text-decoration: underline;
+}
+.vak-kolommen {
+  display: grid;
+  gap: 20px;
+}
+@container (min-width: 700px) {
+  .vak-kolommen[data-count='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .vak-kolommen[data-count='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .vak-kolommen[data-count='4'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.vak-kaart {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 14px;
+  box-shadow: 0 1px 2px #0000000d;
+  height: 100%;
+  box-sizing: border-box;
+}
+.vak-kaart h3 {
+  font-family: inherit;
+  font-size: 1rem;
+}
+.vak-kaart .vak-info {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.vak-knoppen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vak-knop {
+  display: inline-flex;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-weight: 500;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.vak-hero:not([data-variant='plain']) .vak-knop {
+  background: var(--background);
+  color: var(--foreground);
+}
+.vak-knop[data-variant='secondary'],
+.vak-hero:not([data-variant='plain']) .vak-knop[data-variant='secondary'] {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+}
+.vak-knop[data-size='sm'] {
+  padding: 4px 12px;
+  font-size: 14px;
+}
+.vak-knop[data-size='lg'] {
+  padding: 12px 24px;
+  font-size: 18px;
+}
+.vak-cursussen {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+@container (min-width: 700px) {
+  .vak-cursussen {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.vak-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.vak-chips span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 13px;
+}
+.vak-leeg {
+  padding: 32px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.vak-klein {
+  font-size: 14px;
+  margin-top: 4px;
+}
