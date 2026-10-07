@@ -45,16 +45,19 @@ async def api_client():
 def builds_dir(tmp_path, monkeypatch):
     """Tijdelijk builds-volume + verse settings/host-caches."""
     from app.delivery import experiments as delivery_experiments
+    from app.delivery import klas as delivery_klas
     from app.delivery import router as delivery_router
 
     monkeypatch.setenv("BUILDS_DIR", str(tmp_path))
     get_settings.cache_clear()
     delivery_router.reset_caches()
     delivery_experiments.reset_cache()
+    delivery_klas.reset_cache()
     yield tmp_path
     get_settings.cache_clear()
     delivery_router.reset_caches()
     delivery_experiments.reset_cache()
+    delivery_klas.reset_cache()
 
 
 @pytest.fixture

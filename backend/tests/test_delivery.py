@@ -182,14 +182,23 @@ def test_resolve_host_unit():
 
     reset_caches()
     assert resolve_host("informatica.coderius.nl", "python/a/b") == HostTarget(
-        site="python", branch_slug="main", is_preview=False, rest_path="a/b"
+        site="python",
+        branch_slug="main",
+        is_preview=False,
+        rest_path="a/b",
+        subject="informatica",
     )
     assert resolve_host("informatica.coderius.nl", "onbekend/x").site == "home"
+    # Het vak reist mee op vak-hosts en vak-previews, niet op de apex.
+    assert resolve_host("wo.coderius.nl", "").subject == "wo"
+    assert resolve_host("b--wo.preview.coderius.nl", "").subject == "wo"
+    assert resolve_host("coderius.nl", "").subject is None
     assert resolve_host("evil.example.com", "") is None
     assert isinstance(resolve_host("ctf.coderius.nl", "x"), Redirect)
     # Oude previewvorm blijft werken.
     old = resolve_host("b--python.preview.coderius.nl", "docs/")
     assert old.site == "python" and old.is_preview and old.rest_path == "docs/"
+    assert old.subject is None
 
 
 def test_dev_domain_root_keeps_numeric_port(monkeypatch):
