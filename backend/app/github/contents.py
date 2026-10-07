@@ -9,11 +9,12 @@ from urllib.parse import quote
 from fastapi import HTTPException
 
 from app.authoring.content import FRONTMATTER_RE, validate_content
+from app.config import site_dir
 from app.github.client import GitHubClient, repo_path
 
 
 def docs_root(site: str) -> str:
-    return f"sites/{site}/docs"
+    return f"{site_dir(site)}/docs"
 
 
 ContentScope = Literal["docs", "pages", "homepage", "metadata"]
@@ -25,7 +26,7 @@ def content_root(site: str, scope: ContentScope = "docs") -> str:
     roots = {"docs": "docs", "pages": "src/pages", "homepage": "src/content", "metadata": "docs"}
     if scope not in roots:
         raise HTTPException(400, "Onbekend inhoudstype")
-    return f"sites/{site}/{roots[scope]}"
+    return f"{site_dir(site)}/{roots[scope]}"
 
 
 def safe_relative_path(path: str) -> str:

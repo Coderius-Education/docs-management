@@ -1,55 +1,56 @@
-"""Tests voor de Traefik-router-mutatie bij het toevoegen van een site.
+"""compose.yml: één wildcard-router voor alle vak-domeinen, en de admin wint.
 
-Elk domein hoort zijn eigen router (en dus eigen certificaataanvraag) te krijgen,
-zodat een mislukt cert voor één domein de andere sites niet meesleurt.
+Welke site bij welke host hoort beslist de delivery-app (sites.json); daardoor
+vraagt een nieuwe site of een nieuw vak geen compose-wijziging meer.
 """
 
-from app.scaffold.site_template import add_domain_to_traefik
+import re
+from pathlib import Path
 
-# Compose-fixture in de nieuwe vorm: één router per domein.
-COMPOSE = (
-    "services:\n  delivery:\n    labels:\n"
-    "      - traefik.enable=true\n"
-    "      - traefik.http.routers.docsite-python-coderius-nl.rule=Host(`python.coderius.nl`)\n"
-    "      - traefik.http.routers.docsite-python-coderius-nl.entrypoints=websecure\n"
-    "      - traefik.http.routers.docsite-python-coderius-nl.tls.certresolver=leresolver\n"
-    "      - traefik.http.routers.docsite-python-coderius-nl.service=docsdelivery\n"
-    "      - traefik.http.services.docsdelivery.loadbalancer.server.port=8000\n"
-)
+import yaml
+
+COMPOSE = Path(__file__).resolve().parents[2] / "compose.yml"
 
 
-def test_adds_separate_router_with_own_certresolver():
-    out = add_domain_to_traefik(COMPOSE, "demo.coderius.nl")
-    name = "docsite-demo-coderius-nl"
-    assert f"traefik.http.routers.{name}.rule=Host(`demo.coderius.nl`)" in out
-    assert f"traefik.http.routers.{name}.entrypoints=websecure" in out
-    assert f"traefik.http.routers.{name}.tls.certresolver=leresolver" in out
-    assert f"traefik.http.routers.{name}.service=docsdelivery" in out
+def _labels(service: str) -> dict[str, str]:
+    data = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
+    labels = data["services"][service]["labels"]
+    return dict(label.split("=", 1) for label in labels)
 
 
-def test_new_router_block_is_separated_by_a_blank_line():
-    out = add_domain_to_traefik(COMPOSE, "demo.coderius.nl")
-    # Volgt de compose-stijl: een lege regel vóór elke router-groep.
-    rule = "traefik.http.routers.docsite-demo-coderius-nl.rule=Host(`demo.coderius.nl`)"
-    assert f"\n\n      - {rule}" in out
+def _rule_regex(rule: str) -> re.Pattern:
+    match = re.fullmatch(r"HostRegexp\(`(.+)`\)", rule)
+    assert match, rule
+    return re.compile(match.group(1))
 
 
-def test_new_router_is_standalone_not_merged_into_a_shared_rule():
-    out = add_domain_to_traefik(COMPOSE, "demo.coderius.nl")
-    # De nieuwe regel is een losse Host()-router, niet ge-OR'd in een bestaande rule.
-    assert "Host(`demo.coderius.nl`) ||" not in out
-    assert "|| Host(`demo.coderius.nl`)" not in out
+def test_single_wildcard_site_router():
+    labels = _labels("delivery")
+    routers = {key.split(".")[3] for key in labels if key.startswith("traefik.http.routers.")}
+    assert routers == {"docsite", "docspreview"}
+    regex = _rule_regex(labels["traefik.http.routers.docsite.rule"])
+    for host in ("coderius.nl", "informatica.coderius.nl", "wo.coderius.nl", "python.coderius.nl"):
+        assert regex.match(host), host
+    assert not regex.match("evilcoderius.nl")
+    assert not regex.match("x--informatica.preview.coderius.nl")
 
 
-def test_existing_routers_are_left_untouched():
-    out = add_domain_to_traefik(COMPOSE, "demo.coderius.nl")
-    # De bestaande python-router blijft een eigen router met eigen certresolver.
-    assert "traefik.http.routers.docsite-python-coderius-nl.rule=Host(`python.coderius.nl`)" in out
-    assert "traefik.http.routers.docsite-python-coderius-nl.tls.certresolver=leresolver" in out
+def test_wildcard_cert_via_dns01():
+    labels = _labels("delivery")
+    assert labels["traefik.http.routers.docsite.tls.certresolver"] == "lednsresolver"
+    assert labels["traefik.http.routers.docsite.tls.domains[0].main"] == "coderius.nl"
+    assert labels["traefik.http.routers.docsite.tls.domains[0].sans"] == "*.coderius.nl"
 
 
-def test_rejects_duplicate_domain():
-    import pytest
+def test_preview_router_matches_subject_previews():
+    labels = _labels("delivery")
+    regex = _rule_regex(labels["traefik.http.routers.docspreview.rule"])
+    assert regex.match("concept-python-1--informatica.preview.coderius.nl")
 
-    with pytest.raises(ValueError):
-        add_domain_to_traefik(COMPOSE, "python.coderius.nl")
+
+def test_admin_router_wins_over_wildcard():
+    admin = _labels("api")
+    delivery = _labels("delivery")
+    assert int(admin["traefik.http.routers.docsadmin.priority"]) > int(
+        delivery["traefik.http.routers.docsite.priority"]
+    )

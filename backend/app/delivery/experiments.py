@@ -134,23 +134,29 @@ async def ingest_events(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    from app.delivery.router import resolve_host
+    from app.delivery.router import HostTarget, resolve_host
 
-    target = resolve_host(request.headers.get("host"))
-    if target is None or target.is_preview:
+    try:
+        body = await request.json()
+    except Exception:
+        return {"status": "ignored"}
+    if not isinstance(body, dict):
+        return {"status": "ignored"}
+
+    # Op een vak-host bepaalt het pad welke site het is; de snippet stuurt het
+    # pad per event mee.
+    events = body.get("events", [])
+    first = events[0] if isinstance(events, list) and events else {}
+    page_path = str(first.get("path", "")) if isinstance(first, dict) else ""
+    target = resolve_host(request.headers.get("host"), page_path.lstrip("/"))
+    if not isinstance(target, HostTarget) or target.is_preview:
         return {"status": "ignored"}
 
     site = await db.scalar(select(Site).where(Site.slug == target.site))
     if site is None:
         return {"status": "ignored"}
 
-    try:
-        body = await request.json()
-    except Exception:
-        return {"status": "ignored"}
-
     anon = str(body.get("anon", ""))[:64]
-    events = body.get("events", [])
     if not isinstance(events, list):
         return {"status": "ignored"}
 

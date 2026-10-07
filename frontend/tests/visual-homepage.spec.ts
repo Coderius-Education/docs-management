@@ -33,7 +33,7 @@ async function save(page: Page) {
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   await page
     .getByRole('button', { name: 'Verder bewerken', exact: true })
     .click();

@@ -4,8 +4,8 @@ Beheer- en hostingplatform voor het [Coderius-Education/docs](https://github.com
 
 - **Inloggen met GitHub** — alleen leden van de Coderius-Education organisatie.
 - **Docs bewerken** — hybride editor (WYSIWYG + raw MDX) met huisstijl-snippets; wijzigingen gaan naar een zelfgekozen branch en een PR die je vanuit de UI kunt mergen.
-- **Hosting** — GitHub Actions bouwt elke site als artifact; deze backend haalt ze op en serveert ze op de site-domeinen (python.coderius.nl, …).
-- **Branch-previews** — elke PR-build is bereikbaar op `{branch}--{site}.preview.coderius.nl`.
+- **Hosting** — GitHub Actions bouwt elke site als artifact; deze backend haalt ze op en serveert ze per vak: `https://<vak>.coderius.nl/<pad>/` (bv. `informatica.coderius.nl/python/`, `wo.coderius.nl/onderzoek/`). De apex `coderius.nl` en de root van elk vak tonen de `home`-build. Oude subdomeinen (`python.coderius.nl/x`) geven een 301 naar de nieuwe URL.
+- **Voorbeelden (previews)** — elk concept is bereikbaar op `{branch}--{vak}.preview.coderius.nl/<pad>/`; sites zonder build op die branch vallen terug op main.
 - **A/B-testen** — verdeel echt verkeer over twee varianten van een pagina en vergelijk engagement-metrics.
 
 ## Architectuur
@@ -50,22 +50,29 @@ cd frontend && pnpm build   # typecheck + build
 
 GitHub-koppeling lokaal testen: maak een *dev* OAuth App met callback `http://localhost:8000/api/auth/callback` en zet de client-id/secret in `.env` (zie `.env.example`). Webhooks lokaal: `gh webhook forward --repo Coderius-Education/docs --events workflow_run,pull_request,delete --url http://localhost:8000/api/webhooks/github`.
 
-Previews lokaal: `*.localtest.me` wijst naar 127.0.0.1, dus `http://python.localtest.me:8001` werkt zonder hosts-bestand.
+Previews lokaal: `*.localtest.me` wijst naar 127.0.0.1. `compose.dev.yml` zet `DOMAIN_ROOT=localtest.me`, dus `http://informatica.localtest.me:8001/python/` en `http://wo.localtest.me:8001/onderzoek/` werken zonder hosts-bestand, en `http://python.localtest.me:8001/` geeft een 301.
+
+### Vakken en sites
+
+`backend/app/sites.json` is het register: `subjects` (slug, domein, naam) en `sites` (slug, vak, pad, naam, oude domeinen). In het docs-repo staat een site in `sites/<vak>/<slug>` (`home` in `sites/home`). Een nieuwe site of een nieuw vak vraagt geen Traefik-wijziging: één wildcard-router stuurt alles naar de delivery-app, die host en pad zelf toewijst. Een nieuw vak heeft alleen een DNS-record nodig (of het `*.coderius.nl`-wildcardrecord).
+
+`LEGACY_REDIRECTS=false` laat oude subdomeinen de site nog zelf serveren in plaats van te 301'en; gebruik dat zolang de docs-builds nog met `baseUrl: '/'` gebouwd zijn.
 
 ## Deploy (Portainer)
 
-1. Zet DNS: A-records voor de site-domeinen (de cursus-subdomeinen plus de apex `coderius.nl`), het admin-domein en `*.preview.coderius.nl` naar de VPS. Let op: de apex `coderius.nl` heeft een eigen A/AAAA-record nodig en valt niet onder een `*.coderius.nl`-wildcard.
+1. Zet DNS: een A/AAAA-record voor de apex `coderius.nl`, een wildcard `*.coderius.nl` (dekt `informatica.`, `wo.`, de oude cursus-subdomeinen en het admin-domein) en `*.preview.coderius.nl` naar de VPS. De apex valt niet onder de wildcard.
 2. Maak in Portainer een stack van `compose.yml` met een `stack.env` op basis van `.env.example`.
-3. Controleer: naam van het externe Traefik-netwerk (`TRAEFIK_NETWORK`), Traefik **v3** (de `HostRegexp`-syntax), en een DNS-01 certresolver (`lednsresolver`) voor het wildcard-preview-certificaat — zie §Hetzner DNS-01 hieronder.
+3. Controleer: naam van het externe Traefik-netwerk (`TRAEFIK_NETWORK`), Traefik **v3** (de `HostRegexp`-syntax), en een DNS-01 certresolver (`lednsresolver`) voor de wildcard-certificaten (`coderius.nl` + `*.coderius.nl`, en `*.preview.coderius.nl`); zie §Hetzner DNS-01 hieronder.
 4. Registreer de webhook op het docs-repo: `https://<admin-domein>/api/webhooks/github`, events `workflow_run`, `pull_request`, `delete`, `push`; secret = `GITHUB_WEBHOOK_SECRET`.
 5. `GET /api/health` toont de status van database, builds-volume en PAT.
 
 ### Hetzner DNS-01 (wildcard preview-cert)
 
-De live-sites en het admin-domein krijgen elk hun eigen cert via HTTP-01
-(`leresolver`). De branch-previews draaien op `*.preview.coderius.nl`; een
-wildcard-cert kan **alleen** via een DNS-01-challenge. De `docspreview`-router
-in `compose.yml` vraagt dat cert aan bij de certresolver **`lednsresolver`**,
+Het admin-domein krijgt een eigen cert via HTTP-01 (`leresolver`). De sites
+draaien achter één router met een wildcard-cert voor `coderius.nl` +
+`*.coderius.nl`, en de previews op `*.preview.coderius.nl`; een wildcard-cert
+kan **alleen** via een DNS-01-challenge. De `docsite`- en `docspreview`-routers
+in `compose.yml` vragen die certs aan bij de certresolver **`lednsresolver`**,
 die je op de **externe Traefik-container** definieert (niet in deze stack).
 
 Voorwaarden:
@@ -103,11 +110,11 @@ certificatesResolvers:
 ```
 
 Na een Traefik-redeploy mét `HETZNER_API_KEY` haalt Traefik het wildcard-cert
-op; de previews zijn dan bereikbaar op `{branch}--{site}.preview.coderius.nl`.
+op; de previews zijn dan bereikbaar op `{branch}--{vak}.preview.coderius.nl/<pad>/`.
 
 ## Database-migraties
 
-Het schema wordt bij het opstarten aangemaakt (idempotent). Voor schemawijzigingen ná de eerste release: `alembic revision --autogenerate` + `alembic upgrade head` (baseline staat in `backend/alembic/versions/0001_initial.py`).
+Het schema wordt bij het opstarten aangemaakt (idempotent); ontbrekende kolommen van `0002_subjects` (`sites.subject`, `sites.path`) worden daarbij ook toegevoegd. Voor schemawijzigingen: `alembic revision --autogenerate` + `alembic upgrade head` (baseline in `backend/alembic/versions/0001_initial.py`).
 
 ## Lesmateriaal maken en bewerken
 
@@ -141,19 +148,33 @@ Via **Blok toevoegen → Afbeelding** kies je een lokaal bestand en alternatieve
 les en voegt een blijvende relatieve verwijzing in. Bestanden mogen maximaal 5 MB
 zijn (PNG, JPEG, GIF of WebP; geen SVG). De bestandsnaam bevat een inhoudshash:
 een bestaande afbeelding wordt niet overschreven en opnieuw uploaden van hetzelfde
-bestand onder dezelfde naam maakt geen extra commit. Vanuit `main` maakt de editor
-automatisch een conceptbranch. Uploaden bewaart de afbeelding meteen; **sla daarna
+bestand onder dezelfde naam maakt geen extra commit. Vanuit de gepubliceerde versie maakt de editor
+automatisch een concept. Uploaden bewaart de afbeelding meteen; **sla daarna
 ook de les op** om de verwijzing te bewaren. Verwijderen uit de les verwijdert het
 gecommitte bestand niet automatisch. Tijdelijke `blob:`- en `data:`-afbeeldingen
 blijven geblokkeerd bij opslaan.
 
-**Opslaan** bewaart een concept op een feature branch. **Controle aanvragen**
-opent daarna een pull request; opslaan publiceert dus niet automatisch. Je kunt
-na elke save verder bewerken. Conflicten behouden je lokale tekst. Een
-herstelkopie wordt per gebruiker, cursus, branch en bestand in deze browser
+**Opslaan** bewaart je wijziging in een **concept**. Kies een bestaand concept
+op titel, of **Nieuw concept** met een titel ("Waar gaat dit over?"). Een concept
+is achter de schermen altijd een branch plus een pull request
+(`concept/<site>-<base36>`, door de server gemaakt), maar die woorden zie je in de
+UI niet. Opslaan publiceert niet: op de conceptpagina (**Concepten**) zie je de
+**Controle** en de voorbeelden, en **Publiceren** kan pas als de controle (`build`)
+op de nieuwste versie geslaagd is en er geen conflict is. De server controleert dat
+zelf nog eens vlak voor het publiceren.
+
+Is de gepubliceerde versie intussen veranderd, dan werkt de conceptpagina het
+concept automatisch bij. Wat niet overlapt wordt samengevoegd; blokken die aan
+beide kanten zijn veranderd kies je per blok (jouw versie, gepubliceerde versie,
+beide, of zelf aanpassen). Hetzelfde gebeurt als iemand anders tegelijk dezelfde
+pagina in hetzelfde concept opslaat.
+
+Een herstelkopie wordt per gebruiker, cursus, concept en bestand in deze browser
 bewaard; bij heropenen kun je haar herstellen of de serverversie gebruiken.
-Opslaan gebruikt de huidige conceptbranch of een nieuwe kopie daarvan, zodat
-afbeeldingen met de les meegaan.
+
+**Tweede slot (handmatig):** zet op GitHub branch protection op `main` aan met de
+verplichte check `build`, zodat ook buiten deze app niets ongecontroleerd op main
+komt.
 
 Extra frontendchecks:
 
@@ -199,11 +220,11 @@ paginatype, inclusief tags, SEO, menu, navigatie, inhoudsopgave en publicatie.
 Onbekende YAML-eigenschappen en opmerkingen blijven behouden; geavanceerde YAML
 kan rechtstreeks worden aangepast. Gewone pagina's ondersteunen Docusaurus
 `draft` en `unlisted`. De beheerde homepage gebruikt een React-omsluiting en
-ondersteunt die twee vlaggen niet; gebruik daar de conceptbranch. Het vaste
+ondersteunt die twee vlaggen niet; gebruik daar een concept. Het vaste
 homepagepad is `/`. Codevoorbeelden hebben velden voor titel, regelnummers en
 markeringen. Tabs en koppen met een vast anker zijn visueel bewerkbaar.
 
-Vormgeving toont de startpagina van de gekozen conceptbranch met directe previews
+Vormgeving toont de startpagina van het gekozen concept met directe previews
 voor kleuren, lettertypen, afmetingen, koptekst en voettekst. Klik een gebied op
 de pagina aan of kies een van de duidelijke categorieën. Extra instellingen staan
 onder **Geavanceerd**.
@@ -218,7 +239,7 @@ instellingen. Bestaande CSS-waarden worden daarbij niet uit stylesheets afgeleid
 Het lokale voorbeeld toont expliciete stijlkeuzes; controleer de volledige
 cursus in het branchvoorbeeld.
 
-Opslaan gebruikt de bestaande conceptbranch/PR-flow. Homepage-, pagina- en
+Opslaan gebruikt de concept-flow. Homepage-, pagina- en
 metadata-assets krijgen een eigen begrensde opslaglocatie; lokale herstelkopieën
 onderscheiden gebruiker, cursus, branch en inhoudstype. Vormgeving en CSS worden
 samen opgeslagen, met een controle op de verwachte branchversie.

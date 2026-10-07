@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockConcepts } from './studio-mock';
 async function portal(page: Page, initial: string) {
   let content = initial,
     sha = 'file-1',
@@ -74,6 +75,9 @@ async function portal(page: Page, initial: string) {
       await route.fulfill({ json: result });
     },
   );
+  await mockConcepts(page, [
+    { number: 7, title: 'Les verbeteren', branch: 'lesson', site: 'python' },
+  ]);
   return writes;
 }
 async function save(page: Page) {
@@ -81,7 +85,7 @@ async function save(page: Page) {
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   await page
     .getByRole('button', { name: 'Verder bewerken', exact: true })
     .click();

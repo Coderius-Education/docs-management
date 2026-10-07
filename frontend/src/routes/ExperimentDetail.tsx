@@ -21,6 +21,8 @@ import {
 } from '@tabler/icons-react';
 import { useParams } from 'react-router';
 
+import { useConcepts } from '../api/git';
+
 import {
   type VariantStats,
   useExperimentResults,
@@ -72,6 +74,9 @@ export function ExperimentDetail() {
   const patch = usePatchExperiment(experimentId);
 
   const experiment = experiments?.find((e) => e.id === experimentId);
+  const { data: concepts } = useConcepts('all', false);
+  const variantTitle =
+    concepts?.find((c) => c.branch === experiment?.variant_branch)?.title ?? 'concept';
 
   async function action(payload: { action: 'start' | 'pause' | 'conclude'; winner?: string }) {
     try {
@@ -91,7 +96,7 @@ export function ExperimentDetail() {
           <Title order={3}>{experiment.name}</Title>
           <Text size="sm" c="dimmed">
             {experiment.site} · <code>{experiment.page_path}</code> · variant:{' '}
-            <code>{experiment.variant_branch}</code> ({experiment.split_pct}% naar B)
+            {variantTitle} ({experiment.split_pct}% naar B)
           </Text>
           {experiment.hypothesis && (
             <Text size="sm" mt={4}>
@@ -156,7 +161,7 @@ export function ExperimentDetail() {
         <Alert color="blue">
           Dit experiment is afgerond; alle bezoekers zien weer de hoofdversie.
           {experiment.winner === 'B' &&
-            ' Winnaar B: merge de variant-branch via een PR om de wijziging permanent te maken.'}
+            ' Winnaar B: publiceer het concept van de variant om de wijziging blijvend te maken.'}
         </Alert>
       )}
 

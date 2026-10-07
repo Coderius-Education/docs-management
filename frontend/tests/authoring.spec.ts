@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { mockConcepts } from './studio-mock';
 import { expect, test, type Page } from '@playwright/test';
 async function mockPortal(page: Page, initial = '# Les\n\nEen gewone les.\n') {
   let content = initial;
@@ -43,6 +44,9 @@ async function mockPortal(page: Page, initial = '# Les\n\nEen gewone les.\n') {
       await route.fulfill({ json: data });
     },
   );
+  await mockConcepts(page, [
+    { number: 7, title: 'Les verbeteren', branch: 'lesson', site: 'python' },
+  ]);
   return saves;
 }
 test('a visual tip survives typing and switching to source', async ({
@@ -98,7 +102,7 @@ test('configures a Python exercise while preserving unknown MDX', async ({
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   expect(saves[0].content).toContain('<Unknown {...props} />');
   expect(saves[0].content).toContain('custom={retain}');
   expect(saves[0].content).toContain('${literal}');
@@ -110,7 +114,7 @@ test('configures a Python exercise while preserving unknown MDX', async ({
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   expect(saves).toHaveLength(2);
   expect(saves[1].sha).toBe('sha-2');
   expect(saves[1].content).toContain('print(2)');
@@ -219,50 +223,54 @@ test('inserts a nested callout without moving preserved siblings outside its par
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   expect(saves[0].content).toContain('::::tip[Outer]');
   expect(saves[0].content).toContain('<Unknown {...props} />');
   expect(saves[0].content).toMatch(/::::\n\nFollowing text$/);
 });
 
-test('saving from main adopts the new branch and content SHA', async ({
+test('saving from main starts a titled concept and adopts it', async ({
   page,
 }) => {
   const saves = await mockPortal(page);
-  const branches: unknown[] = [];
-  await page.route('**/api/branches', async (route) => {
-    if (route.request().method() === 'POST') {
-      branches.push(route.request().postDataJSON());
-      await route.fulfill({ json: { name: 'docs/new-lesson', sha: 'branch' } });
-    } else await route.fulfill({ json: [{ name: 'main', sha: 'main' }] });
-  });
+  const { created } = await mockConcepts(page);
   await page.goto('/sites/python/edit?path=les.mdx');
+  await expect(page.getByText('Gepubliceerde versie')).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Opslaan…', exact: true }),
   ).toBeDisabled();
   await page.getByText('Broncode', { exact: true }).click();
   await page.locator('.cm-content').fill('# Changed');
   await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
-  await page.getByLabel('Naam conceptversie').fill('docs/new-lesson');
+  // A title is required before a new concept can be saved.
+  await expect(
+    page.getByRole('button', { name: 'Concept opslaan', exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel('Waar gaat dit over?').fill('Nieuwe les');
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
-  expect(branches).toEqual([{ name: 'docs/new-lesson', from_branch: 'main' }]);
-  await expect(page).toHaveURL(/ref=docs%2Fnew-lesson/);
+  await expect(
+    page.getByText("Opgeslagen in concept 'Nieuwe les'."),
+  ).toBeVisible();
+  expect(created).toEqual([{ site: 'python', title: 'Nieuwe les' }]);
+  await expect(page).toHaveURL(/ref=concept%2Fpython-1/);
   await page
     .getByRole('button', { name: 'Verder bewerken', exact: true })
     .click();
+  await expect(page.getByText('Concept: Nieuwe les')).toBeVisible();
   await page.locator('.cm-content').fill('# Again');
   await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
+  expect(created).toHaveLength(1);
   expect(saves[1]).toMatchObject({
-    branch: 'docs/new-lesson',
+    branch: 'concept/python-1',
     sha: 'sha-2',
     content: '# Again',
+    base_text: '# Changed',
   });
 });
 
@@ -316,7 +324,7 @@ test('can add a registered component inside a collapsible tip', async ({
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   const text = saves[0].content as string;
   expect(text.indexOf('import CodeExercise')).toBeLessThan(
     text.indexOf('<details>'),
@@ -410,7 +418,7 @@ test('loads a different document when the route changes and retains in-flight ed
   // Model a late input transaction while the save request is outstanding.
   await page.locator('.cm-content').fill('# Newer local change');
   release!();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   await page
     .getByRole('button', { name: 'Verder bewerken', exact: true })
     .click();
@@ -455,7 +463,7 @@ test('creates an exercise lesson through the portal and saves it as a new file',
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   expect(saves[0]).toMatchObject({
     path: '01-mijn-nieuwe-les.mdx',
     branch: 'lesson',
@@ -492,22 +500,9 @@ test('uploads an image to a new draft from main, previews it and saves the lesso
 }) => {
   const saves = await mockPortal(page);
   let uploaded = '';
-  let createdBranch = '';
-  await page.route('**/api/branches', async (route) => {
-    if (route.request().method() === 'POST') {
-      const body = route.request().postDataJSON();
-      expect(body.from_branch).toBe('main');
-      createdBranch = body.name;
-      await route.fulfill({ json: { name: body.name, sha: 'main' } });
-    } else
-      await route.fulfill({
-        json: [
-          { name: 'main', sha: 'main' },
-          { name: createdBranch, sha: 'b' },
-          { name: 'other-draft', sha: 'c' },
-        ],
-      });
-  });
+  const { created } = await mockConcepts(page, [
+    { number: 8, title: 'Andere cursus', branch: 'other-draft', site: 'web' },
+  ]);
   await page.route(
     (url) => url.pathname.endsWith('/assets'),
     async (route) => {
@@ -541,30 +536,29 @@ test('uploads an image to a new draft from main, previews it and saves the lesso
     .getByRole('button', { name: 'Uploaden en invoegen', exact: true })
     .click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  expect(createdBranch).toMatch(/^docs\//);
+  expect(created).toEqual([{ site: 'python', title: 'Afbeelding bij les.mdx' }]);
+  const createdBranch = 'concept/python-1';
   expect(uploaded).toContain(createdBranch);
   expect(uploaded).toContain('diagram.png');
-  await expect(page).toHaveURL(/ref=docs%2F/);
+  await expect(page).toHaveURL(/ref=concept%2Fpython-1/);
   const img = page.locator('.mdx-preview img');
   await expect(img).toHaveAttribute('alt', 'Schema van de les');
   await expect
     .poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth))
     .toBe(1);
   await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
-  await page
-    .getByRole('textbox', { name: 'Conceptversie (branch)', exact: true })
-    .click();
+  await page.getByRole('textbox', { name: 'Concept', exact: true }).click();
   await expect(
-    page.getByRole('option', { name: createdBranch, exact: true }),
+    page.getByRole('option', { name: 'Afbeelding bij les.mdx', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('option', { name: 'other-draft', exact: true }),
+    page.getByRole('option', { name: 'Andere cursus', exact: true }),
   ).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   expect(saves[0]).toMatchObject({ branch: createdBranch, sha: 'sha-1' });
   expect(saves[0].content).toContain('./diagram-1234567890abcdef.png');
   expect(saves[0].content).not.toContain('blob:');
@@ -626,7 +620,7 @@ test('an upload failure keeps the selected file and text for retry inside a nest
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   expect(saves[0].content).toMatch(
     /Existing text[\s\S]*image-1234567890abcdef.png[\s\S]*<\/details>/,
   );
@@ -637,25 +631,14 @@ test('a new unsaved lesson retains its uploaded image and draft branch after rec
   page,
 }) => {
   const saves = await mockPortal(page);
-  let branch = '';
+  await mockConcepts(page);
+  const branch = 'concept/python-1';
   await page.addInitScript(() =>
     sessionStorage.setItem(
       'nieuw:python:folder/new.mdx',
       '# New lesson\n\nUnsaved text',
     ),
   );
-  await page.route('**/api/branches', async (route) => {
-    if (route.request().method() === 'POST') {
-      branch = route.request().postDataJSON().name;
-      await route.fulfill({ json: { name: branch, sha: 'base' } });
-    } else
-      await route.fulfill({
-        json: [
-          { name: 'main', sha: 'base' },
-          { name: branch, sha: 'base' },
-        ],
-      });
-  });
   await page.route(
     (url) => url.pathname.endsWith('/assets'),
     async (route) => {
@@ -702,7 +685,7 @@ test('a new unsaved lesson retains its uploaded image and draft branch after rec
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
-  await expect(page.getByText('Je concept is opgeslagen op')).toBeVisible();
+  await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   expect(saves[0]).toMatchObject({ branch, sha: null, path: 'folder/new.mdx' });
   expect(saves[0].content).toContain('Unsaved text');
   expect(saves[0].content).toContain('./new-1234567890abcdef.png');

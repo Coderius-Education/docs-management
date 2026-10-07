@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from app.config import site_dir
 from app.github.client import GitHubClient, repo_path
 from app.github.commits import multi_file_commit
 from app.github.contents import content_root, get_branch_head
@@ -181,7 +182,7 @@ async def read_json(client: GitHubClient, path: str, ref: str) -> dict | None:
 async def read_settings(client: GitHubClient, site: str, ref: str) -> dict:
     content_root(site)
     head = await get_branch_head(client, ref)
-    raw = await read_json(client, f"sites/{site}/site-settings.json", head)
+    raw = await read_json(client, f"{site_dir(site)}/site-settings.json", head)
     return {
         "settings": validate_settings(raw if raw is not None else {"version": 1}),
         "head_sha": head,
@@ -201,10 +202,10 @@ async def save_settings(
         message,
         expected_head=expected_head,
         add={
-            f"sites/{site}/site-settings.json": (
+            f"{site_dir(site)}/site-settings.json": (
                 json.dumps(value, ensure_ascii=False, indent=2) + "\n"
             ).encode(),
-            f"sites/{site}/src/css/managed-theme.css": generate_css(value).encode(),
+            f"{site_dir(site)}/src/css/managed-theme.css": generate_css(value).encode(),
         },
     )
     return {"settings": value, "commit_sha": sha, "head_sha": sha}
@@ -225,7 +226,7 @@ async def capabilities(client: GitHubClient, site: str, ref: str) -> dict:
         return result
     head = await get_branch_head(client, ref)
     result["head_sha"] = head
-    manifest = await read_json(client, f"sites/{site}/authoring-capabilities.json", head)
+    manifest = await read_json(client, f"{site_dir(site)}/authoring-capabilities.json", head)
     if manifest and manifest.get("version") == 1 and manifest.get("framework") == "docusaurus":
         for key in ("managed_homepage", "settings_runtime", "mermaid", "math"):
             result[key] = manifest.get(key) is True

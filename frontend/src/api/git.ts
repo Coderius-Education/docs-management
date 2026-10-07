@@ -3,32 +3,56 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import type { ContentScope } from "./types";
 
+// A concept is a GitHub branch with an open pull request; publishing merges it.
+// Those words never reach the UI: the `branch` field is an internal handle.
+
 export interface Branch {
   name: string;
   sha: string;
 }
 
-export interface PrSummary {
+export type ConceptStatus =
+  | "concept"
+  | "wordt_gecontroleerd"
+  | "klaar"
+  | "aandacht"
+  | "gepubliceerd"
+  | "verworpen";
+
+export interface Concept {
   number: number;
   title: string;
+  /** Internal handle used as `ref` when reading and saving. Never shown. */
   branch: string;
+  site: string | null;
   author_login: string;
   state: string;
   head_sha: string;
   html_url: string;
   updated_at: string;
+  status?: ConceptStatus;
 }
 
-export interface PrDetail extends PrSummary {
+export interface CheckRun {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+}
+
+export interface ConceptDetail extends Concept {
   body: string | null;
   mergeable: boolean | null;
   merged: boolean;
-  checks: { name: string; status: string; conclusion: string | null }[];
+  checks: CheckRun[];
+  status: ConceptStatus;
+  publish_blocked: string | null;
+  behind_by: number;
   previews: { site: string; url: string }[];
   expected_previews: { site: string; url: string }[];
 }
 
-export interface PrFile {
+export interface ConceptFile {
   filename: string;
   status: string;
   additions: number;
@@ -36,14 +60,7 @@ export interface PrFile {
   patch: string | null;
 }
 
-export interface PrCommit {
-  sha: string;
-  message: string;
-  author_login: string | null;
-  date: string | null;
-}
-
-export interface PrActivityEvent {
+export interface ConceptActivityEvent {
   type: "commit" | "build" | "opened" | "merged" | "closed";
   ts: string | null;
   sha?: string;
@@ -54,19 +71,62 @@ export interface PrActivityEvent {
   head_sha?: string;
 }
 
+export interface ConflictHunk {
+  id: string;
+  base: string | null;
+  ours: string | null;
+  theirs: string | null;
+  ours_deleted?: boolean;
+  theirs_deleted?: boolean;
+  context_before: string;
+  context_after: string;
+}
+
+export type ConflictSegment =
+  | { type: "text"; text: string }
+  | { type: "conflict"; id: string; base: string; ours: string; theirs: string };
+
+export interface ConflictFile {
+  file: string;
+  binary: boolean;
+  whole_file: boolean;
+  segments: ConflictSegment[];
+  hunks: ConflictHunk[];
+}
+
+export type ConflictChoice = "ours" | "theirs" | "both" | { custom: string };
+
+export type UpdateResult =
+  | { status: "actueel" }
+  | { status: "bijgewerkt"; sha: string }
+  | {
+      status: "conflicten";
+      files: ConflictFile[];
+      branch_sha: string;
+      main_sha: string;
+    };
+
+/** A save that collided with someone else's save of the same page. */
+export interface SaveConflict {
+  file: string;
+  segments: ConflictSegment[];
+  hunks: ConflictHunk[];
+  current_sha: string;
+  current_content: string;
+}
+
+export interface SaveResult {
+  commit_sha: string;
+  content_sha: string;
+  /** The server merged with a newer version; `content` is what was saved. */
+  merged?: boolean;
+  content?: string;
+}
+
 export function useBranches() {
   return useQuery({
     queryKey: ["branches"],
     queryFn: () => api<Branch[]>("/api/branches"),
-  });
-}
-
-export function useCreateBranch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: { name: string; from_branch: string }) =>
-      api<Branch>("/api/branches", { method: "POST", body: payload }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["branches"] }),
   });
 }
 
@@ -80,17 +140,16 @@ export function useSavePage(site: string) {
       content: string;
       message: string;
       sha?: string | null;
+      base_text?: string | null;
     }) =>
-      api<{ commit_sha: string; content_sha: string }>(
-        `/api/sites/${site}/page`,
-        {
-          method: "PUT",
-          body: payload,
-        },
-      ),
+      api<SaveResult>(`/api/sites/${site}/page`, {
+        method: "PUT",
+        body: payload,
+      }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["page", site, vars.path] });
       qc.invalidateQueries({ queryKey: ["tree", site] });
+      qc.invalidateQueries({ queryKey: ["concepts"] });
     },
   });
 }
@@ -116,75 +175,97 @@ export function uploadImage(
   );
 }
 
-export function usePrs(state = "open") {
+/** Concepts with status. `details: false` skips the checks (fast, for pickers). */
+export function useConcepts(state = "open", details = true) {
   return useQuery({
-    queryKey: ["prs", state],
-    queryFn: () => api<PrSummary[]>("/api/prs", { params: { state } }),
+    queryKey: ["concepts", state, details],
+    queryFn: () =>
+      api<Concept[]>("/api/concepts", {
+        params: { state, details: String(details) },
+      }),
+    refetchInterval: details ? 30_000 : false,
   });
 }
 
-export function usePr(number: number) {
+/** Title of the concept behind a ref, for badges ("main" is the published site). */
+export function useConceptTitle(branch: string): string {
+  const { data } = useConcepts("open", false);
+  if (branch === "main") return "Gepubliceerde versie";
+  const title = data?.find((c) => c.branch === branch)?.title;
+  return title ? `Concept: ${title}` : "Concept";
+}
+
+export function useConcept(number: number) {
   return useQuery({
-    queryKey: ["pr", number],
-    queryFn: () => api<PrDetail>(`/api/prs/${number}`),
-    refetchInterval: 30_000, // checks/builds veranderen terwijl je kijkt
+    queryKey: ["concept", number],
+    queryFn: () => api<ConceptDetail>(`/api/concepts/${number}`),
+    refetchInterval: 30_000, // controle en voorbeelden veranderen terwijl je kijkt
   });
 }
 
-export function usePrFiles(number: number) {
+export function useConceptFiles(number: number) {
   return useQuery({
-    queryKey: ["pr", number, "files"],
-    queryFn: () => api<PrFile[]>(`/api/prs/${number}/files`),
+    queryKey: ["concept", number, "files"],
+    queryFn: () => api<ConceptFile[]>(`/api/concepts/${number}/files`),
   });
 }
 
-export function usePrCommits(number: number) {
+export function useConceptActivity(number: number) {
   return useQuery({
-    queryKey: ["pr", number, "commits"],
-    queryFn: () => api<PrCommit[]>(`/api/prs/${number}/commits`),
+    queryKey: ["concept", number, "activity"],
+    queryFn: () =>
+      api<ConceptActivityEvent[]>(`/api/concepts/${number}/activity`),
+    refetchInterval: 30_000,
   });
 }
 
-export function usePrActivity(number: number) {
-  return useQuery({
-    queryKey: ["pr", number, "activity"],
-    queryFn: () => api<PrActivityEvent[]>(`/api/prs/${number}/activity`),
-    refetchInterval: 30_000, // builds verschijnen terwijl CI loopt
-  });
-}
-
-export function useCreatePr() {
+export function useCreateConcept() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { branch: string; title: string; body?: string }) =>
-      api<PrSummary>("/api/prs", { method: "POST", body: payload }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["prs"] }),
+    mutationFn: (payload: { site: string; title: string }) =>
+      api<Concept>("/api/concepts", { method: "POST", body: payload }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["concepts"] }),
   });
 }
 
-export function useMergePr(number: number) {
+function useConceptAction<T, V = void>(
+  number: number,
+  action: string,
+  body: (vars: V) => unknown = () => ({}),
+) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () =>
-      api<{ merged: boolean }>(`/api/prs/${number}/merge`, {
+    mutationFn: (vars: V) =>
+      api<T>(`/api/concepts/${number}/${action}`, {
         method: "POST",
-        body: {},
+        body: body(vars),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prs"] });
-      qc.invalidateQueries({ queryKey: ["pr", number] });
+      qc.invalidateQueries({ queryKey: ["concepts"] });
+      qc.invalidateQueries({ queryKey: ["concept", number] });
     },
   });
 }
 
-export function useClosePr(number: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () =>
-      api(`/api/prs/${number}/close`, { method: "POST", body: {} }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prs"] });
-      qc.invalidateQueries({ queryKey: ["pr", number] });
-    },
-  });
+export function usePublishConcept(number: number) {
+  return useConceptAction<{ merged: boolean }>(number, "publiceren");
+}
+
+export function useDiscardConcept(number: number) {
+  return useConceptAction<Concept>(number, "verwerpen");
+}
+
+export function useUpdateConcept(number: number) {
+  return useConceptAction<UpdateResult>(number, "bijwerken");
+}
+
+export function useResolveConflicts(number: number) {
+  return useConceptAction<
+    UpdateResult,
+    {
+      choices: Record<string, Record<string, ConflictChoice>>;
+      expected_head: string;
+      expected_main: string;
+    }
+  >(number, "conflicten", (vars) => vars);
 }

@@ -119,6 +119,13 @@ it('resolves persistent images without accepting temporary or executable URLs', 
   expect(resolveAsset('/img/a.png', ctx)).toBe(
     'https://python.coderius.nl/img/a.png',
   );
+  const subjectCtx = { ...ctx, domain: 'informatica.coderius.nl/python/' };
+  expect(resolveAsset('/img/a.png', subjectCtx)).toBe(
+    'https://informatica.coderius.nl/python/img/a.png',
+  );
+  expect(resolveAsset('@site/static/img/a.png', subjectCtx)).toBe(
+    'https://informatica.coderius.nl/python/img/a.png',
+  );
   expect(resolveAsset('https://cdn.example/a.png', ctx)).toBe(
     'https://cdn.example/a.png',
   );

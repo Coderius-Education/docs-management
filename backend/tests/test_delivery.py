@@ -21,9 +21,12 @@ def make_build(builds_dir: Path, site: str, branch: str, sha: str, html: str = "
     return target
 
 
+INF = "informatica.coderius.nl"
+
+
 async def test_live_site_serving(delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "abc123def456")
-    resp = await delivery_client.get("/", headers={"host": "python.coderius.nl"})
+    resp = await delivery_client.get("/python/", headers={"host": INF})
     assert resp.status_code == 200
     assert "abc123def456" in resp.text
     assert resp.headers["cache-control"] == "no-cache"
@@ -33,7 +36,7 @@ async def test_live_site_serving(delivery_client, builds_dir):
 
 async def test_docs_route_without_slash(delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "abc123def456")
-    resp = await delivery_client.get("/docs/intro", headers={"host": "python.coderius.nl"})
+    resp = await delivery_client.get("/python/docs/intro", headers={"host": INF})
     assert resp.status_code == 200
     assert "intro" in resp.text
 
@@ -41,7 +44,7 @@ async def test_docs_route_without_slash(delivery_client, builds_dir):
 async def test_assets_immutable_cache(delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "abc123def456")
     resp = await delivery_client.get(
-        "/assets/js/main.abc123def456.js", headers={"host": "python.coderius.nl"}
+        "/python/assets/js/main.abc123def456.js", headers={"host": INF}
     )
     assert resp.status_code == 200
     assert "immutable" in resp.headers["cache-control"]
@@ -53,7 +56,7 @@ async def test_unknown_host(delivery_client, builds_dir):
 
 
 async def test_site_without_build_503(delivery_client, builds_dir):
-    resp = await delivery_client.get("/", headers={"host": "python.coderius.nl"})
+    resp = await delivery_client.get("/python/", headers={"host": INF})
     assert resp.status_code == 503
 
 
@@ -68,15 +71,163 @@ async def test_preview_host(delivery_client, builds_dir):
 
 async def test_preview_without_build_404(delivery_client, builds_dir):
     resp = await delivery_client.get(
-        "/", headers={"host": "onbekend--python.preview.coderius.nl"}
+        "/python/", headers={"host": "onbekend--informatica.preview.coderius.nl"}
     )
     assert resp.status_code == 404
+
+
+async def test_subject_preview_serves_branch_build(delivery_client, builds_dir):
+    make_build(builds_dir, "python", "concept-python-1", "fff111222333")
+    make_build(builds_dir, "python", "main", "abc123def456")
+    resp = await delivery_client.get(
+        "/python/", headers={"host": "concept-python-1--informatica.preview.coderius.nl"}
+    )
+    assert resp.status_code == 200
+    assert "fff111222333" in resp.text
+    assert resp.headers["x-robots-tag"] == "noindex, nofollow"
+
+
+async def test_subject_preview_falls_back_to_main(delivery_client, builds_dir):
+    # CI bouwt alleen geraakte sites: web heeft geen build op deze branch.
+    make_build(builds_dir, "web", "main", "aaa111222333")
+    resp = await delivery_client.get(
+        "/web/", headers={"host": "concept-python-1--informatica.preview.coderius.nl"}
+    )
+    assert resp.status_code == 200
+    assert "aaa111222333" in resp.text
+
+
+async def test_subject_preview_root_serves_home(delivery_client, builds_dir):
+    make_build(builds_dir, "home", "main", "home11112222")
+    resp = await delivery_client.get(
+        "/", headers={"host": "concept-python-1--informatica.preview.coderius.nl"}
+    )
+    assert resp.status_code == 200
+    assert "home11112222" in resp.text
+
+
+async def test_subject_root_serves_home(delivery_client, builds_dir):
+    make_build(builds_dir, "home", "main", "home11112222")
+    for host in (INF, "wo.coderius.nl", "coderius.nl"):
+        resp = await delivery_client.get("/", headers={"host": host})
+        assert resp.status_code == 200, host
+        assert "home11112222" in resp.text
+
+
+async def test_path_maps_to_registry_path_not_slug(delivery_client, builds_dir):
+    make_build(builds_dir, "algorithms", "main", "alg111222333")
+    resp = await delivery_client.get("/algoritmes/", headers={"host": INF})
+    assert "alg111222333" in resp.text
+    # wo kent geen /algoritmes/: daar valt het pad in de home-build.
+    make_build(builds_dir, "home", "main", "home11112222")
+    resp = await delivery_client.get("/algoritmes/", headers={"host": "wo.coderius.nl"})
+    assert "alg111222333" not in resp.text
+
+
+async def test_wo_site(delivery_client, builds_dir):
+    make_build(builds_dir, "onderzoek", "main", "ond111222333")
+    resp = await delivery_client.get("/onderzoek/", headers={"host": "wo.coderius.nl"})
+    assert "ond111222333" in resp.text
+
+
+async def test_trailing_slash_redirect_is_relative(delivery_client, builds_dir):
+    resp = await delivery_client.get("/python?x=1", headers={"host": INF})
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "/python/?x=1"
+
+
+async def test_legacy_host_redirects_with_path_and_query(delivery_client, builds_dir):
+    resp = await delivery_client.get(
+        "/docs/intro?tab=2",
+        headers={"host": "python.coderius.nl", "x-forwarded-proto": "https"},
+    )
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "https://informatica.coderius.nl/python/docs/intro?tab=2"
+
+
+async def test_legacy_algoritmes_redirects_to_path(delivery_client, builds_dir):
+    resp = await delivery_client.get(
+        "/", headers={"host": "algoritmes.coderius.nl", "x-forwarded-proto": "https"}
+    )
+    assert resp.headers["location"] == "https://informatica.coderius.nl/algoritmes/"
+
+
+async def test_legacy_redirect_ignores_bad_scheme_and_port(delivery_client, builds_dir):
+    resp = await delivery_client.get(
+        "/x",
+        headers={"host": "python.coderius.nl:evil", "x-forwarded-proto": "javascript"},
+    )
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "https://informatica.coderius.nl/python/x"
+
+
+async def test_legacy_redirect_drops_port_in_production(delivery_client, builds_dir):
+    resp = await delivery_client.get(
+        "/", headers={"host": "python.coderius.nl:8443", "x-forwarded-proto": "https"}
+    )
+    assert resp.headers["location"] == "https://informatica.coderius.nl/python/"
+
+
+async def test_legacy_redirect_cannot_become_protocol_relative(delivery_client, builds_dir):
+    resp = await delivery_client.get(
+        "//evil.com/x", headers={"host": "python.coderius.nl", "x-forwarded-proto": "https"}
+    )
+    location = resp.headers["location"]
+    assert location.startswith("https://informatica.coderius.nl/python/")
+    assert "//evil.com" not in location
+
+
+def test_resolve_host_unit():
+    from app.delivery.router import HostTarget, Redirect, reset_caches, resolve_host
+
+    reset_caches()
+    assert resolve_host("informatica.coderius.nl", "python/a/b") == HostTarget(
+        site="python", branch_slug="main", is_preview=False, rest_path="a/b"
+    )
+    assert resolve_host("informatica.coderius.nl", "onbekend/x").site == "home"
+    assert resolve_host("evil.example.com", "") is None
+    assert isinstance(resolve_host("ctf.coderius.nl", "x"), Redirect)
+    # Oude previewvorm blijft werken.
+    old = resolve_host("b--python.preview.coderius.nl", "docs/")
+    assert old.site == "python" and old.is_preview and old.rest_path == "docs/"
+
+
+def test_dev_domain_root_keeps_numeric_port(monkeypatch):
+    from app.config import get_settings
+    from app.delivery.router import Redirect, reset_caches, resolve_host
+
+    monkeypatch.setenv("DOMAIN_ROOT", "localtest.me")
+    get_settings.cache_clear()
+    reset_caches()
+    try:
+        target = resolve_host("python.localtest.me:8001", "x", scheme="http")
+        assert target == Redirect("http://informatica.localtest.me:8001/python/x")
+        assert resolve_host("informatica.localtest.me:8001", "python/").site == "python"
+        assert resolve_host("localtest.me:8001", "").site == "home"
+    finally:
+        get_settings.cache_clear()
+        reset_caches()
+
+
+async def test_legacy_host_serves_site_when_redirects_disabled(
+    delivery_client, builds_dir, monkeypatch
+):
+    from app.config import get_settings
+    from app.delivery.router import reset_caches
+
+    monkeypatch.setenv("LEGACY_REDIRECTS", "false")
+    get_settings.cache_clear()
+    reset_caches()
+    make_build(builds_dir, "python", "main", "abc123def456")
+    resp = await delivery_client.get("/", headers={"host": "python.coderius.nl"})
+    assert resp.status_code == 200
+    assert "abc123def456" in resp.text
 
 
 async def test_spa_404_fallback(delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "abc123def456")
     resp = await delivery_client.get(
-        "/bestaat/niet", headers={"host": "python.coderius.nl"}
+        "/python/bestaat/niet", headers={"host": INF}
     )
     assert resp.status_code == 404
     assert "404" in resp.text
@@ -91,7 +242,7 @@ async def test_asset_fallback_previous_build(delivery_client, builds_dir):
     # huidige build heeft het oude asset niet, vorige wel
     assert (old / "assets/js/main.oldsha1234567.js").is_file()
     resp = await delivery_client.get(
-        "/assets/js/main.oldsha1234567.js", headers={"host": "python.coderius.nl"}
+        "/python/assets/js/main.oldsha1234567.js", headers={"host": INF}
     )
     assert resp.status_code == 200
 
@@ -101,7 +252,7 @@ async def test_path_traversal_blocked(delivery_client, builds_dir):
     secret = builds_dir / "geheim.txt"
     secret.write_text("geheim")
     resp = await delivery_client.get(
-        "/../../geheim.txt", headers={"host": "python.coderius.nl"}
+        "/python/../../geheim.txt", headers={"host": INF}
     )
-    assert resp.status_code in (404, 400)
+    assert resp.status_code != 200
     assert "geheim" not in resp.text

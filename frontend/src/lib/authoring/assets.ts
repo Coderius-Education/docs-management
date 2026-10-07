@@ -61,9 +61,12 @@ export function resolveAsset(
         ? `https://${context.domain}`
         : undefined;
   if (!origin) return undefined;
+  // Sites live under a path on their subject host (informatica.coderius.nl/python/),
+  // so `/img/a.png` resolves against that base, like Docusaurus' baseUrl does.
+  const base = origin.replace(/\/+$/, '');
   if (url.startsWith('@site/static/'))
-    return new URL(url.slice('@site/static'.length), origin).href;
-  if (url.startsWith('/')) return new URL(url, origin).href;
+    return new URL(base + url.slice('@site/static'.length)).href;
+  if (url.startsWith('/')) return new URL(base + url).href;
   // Relative source assets are transformed by Docusaurus; guessing a build URL is misleading.
   return undefined;
 }

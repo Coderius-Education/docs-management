@@ -20,7 +20,7 @@ import { IconPlus } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 
-import { useBranches, usePrs } from '../api/git';
+import { useConcepts } from '../api/git';
 import { useSites } from '../api/hooks';
 import { useCreateExperiment, useExperiments } from '../api/experiments';
 
@@ -33,7 +33,10 @@ const statusColor: Record<string, string> = {
 
 export function ExperimentsPage() {
   const { data: experiments, isLoading } = useExperiments();
+  const { data: concepts } = useConcepts('all', false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const conceptName = (branch: string) =>
+    concepts?.find((c) => c.branch === branch)?.title ?? 'Concept';
 
   return (
     <>
@@ -51,8 +54,8 @@ export function ExperimentsPage() {
           <Loader m="md" />
         ) : (experiments?.length ?? 0) === 0 ? (
           <Text c="dimmed" p="md">
-            Nog geen experimenten. Maak een variant-branch met een aangepaste pagina,
-            wacht op de build en start hier een A/B-test.
+            Nog geen experimenten. Maak een concept met een aangepaste pagina,
+            wacht tot het voorbeeld klaar is en start hier een A/B-test.
           </Text>
         ) : (
           <Table highlightOnHover>
@@ -61,7 +64,7 @@ export function ExperimentsPage() {
                 <Table.Th>Naam</Table.Th>
                 <Table.Th>Site</Table.Th>
                 <Table.Th>Pagina</Table.Th>
-                <Table.Th>Variant-branch</Table.Th>
+                <Table.Th>Variant</Table.Th>
                 <Table.Th>Split</Table.Th>
                 <Table.Th>Status</Table.Th>
               </Table.Tr>
@@ -79,7 +82,7 @@ export function ExperimentsPage() {
                     <code>{experiment.page_path}</code>
                   </Table.Td>
                   <Table.Td>
-                    <code>{experiment.variant_branch}</code>
+                    {conceptName(experiment.variant_branch)}
                   </Table.Td>
                   <Table.Td>{experiment.split_pct}% B</Table.Td>
                   <Table.Td>
@@ -100,8 +103,7 @@ export function ExperimentsPage() {
 
 function NewExperimentModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { data: sites } = useSites();
-  const { data: branches } = useBranches();
-  const { data: prs } = usePrs('open');
+  const { data: concepts } = useConcepts('open', false);
   const createExperiment = useCreateExperiment();
 
   const [site, setSite] = useState<string | null>(null);
@@ -111,15 +113,13 @@ function NewExperimentModal({ opened, onClose }: { opened: boolean; onClose: () 
   const [variantBranch, setVariantBranch] = useState<string | null>(null);
   const [splitPct, setSplitPct] = useState<number>(50);
 
-  const branchOptions = useMemo(() => {
-    const withPr = new Set(prs?.map((pr) => pr.branch));
-    return (branches ?? [])
-      .filter((branch) => branch.name !== 'main')
-      .map((branch) => ({
-        value: branch.name,
-        label: withPr.has(branch.name) ? `${branch.name} (open PR)` : branch.name,
-      }));
-  }, [branches, prs]);
+  const branchOptions = useMemo(
+    () =>
+      (concepts ?? [])
+        .filter((concept) => !site || !concept.site || concept.site === site)
+        .map((concept) => ({ value: concept.branch, label: concept.title })),
+    [concepts, site],
+  );
 
   async function handleCreate() {
     if (!site || !name || !pagePath || !variantBranch) return;
@@ -174,8 +174,8 @@ function NewExperimentModal({ opened, onClose }: { opened: boolean; onClose: () 
           required
         />
         <Select
-          label="Variant-branch (B)"
-          description="De branch met de aangepaste pagina; er moet een afgeronde build zijn"
+          label="Variant (B)"
+          description="Het concept met de aangepaste pagina; het voorbeeld moet klaar zijn"
           data={branchOptions}
           value={variantBranch}
           onChange={setVariantBranch}

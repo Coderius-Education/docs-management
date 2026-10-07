@@ -19,7 +19,7 @@ async def test_list_sites(api_client):
     assert resp.status_code == 200
     slugs = [s["slug"] for s in resp.json()]
     assert "python" in slugs
-    assert len(slugs) == 14
+    assert len(slugs) == 15
 
 
 @respx.mock
@@ -34,14 +34,18 @@ async def test_site_tree_filters_to_docs(api_client):
             json={
                 "truncated": False,
                 "tree": [
-                    {"path": "sites/python/docs/01-basis", "type": "tree", "sha": "t1"},
+                    {"path": "sites/informatica/python/docs/01-basis", "type": "tree", "sha": "t1"},
                     {
-                        "path": "sites/python/docs/01-basis/01-intro.mdx",
+                        "path": "sites/informatica/python/docs/01-basis/01-intro.mdx",
                         "type": "blob",
                         "sha": "b1",
                     },
-                    {"path": "sites/python/src/iets.ts", "type": "blob", "sha": "b2"},
-                    {"path": "sites/web/docs/02-css/01-kleur.mdx", "type": "blob", "sha": "b3"},
+                    {"path": "sites/informatica/python/src/iets.ts", "type": "blob", "sha": "b2"},
+                    {
+                        "path": "sites/informatica/web/docs/02-css/01-kleur.mdx",
+                        "type": "blob",
+                        "sha": "b3",
+                    },
                 ],
             },
         )
@@ -56,7 +60,7 @@ async def test_site_tree_filters_to_docs(api_client):
 async def test_read_page(api_client):
     await make_logged_in_user(api_client)
     content = "---\nsidebar_position: 1\n---\n\n# 1.1 Intro\n"
-    respx.get(f"{REPO}/contents/sites/python/docs/01-basis/01-intro.mdx").mock(
+    respx.get(f"{REPO}/contents/sites/informatica/python/docs/01-basis/01-intro.mdx").mock(
         return_value=Response(
             200,
             json={
@@ -66,9 +70,7 @@ async def test_read_page(api_client):
             },
         )
     )
-    resp = await api_client.get(
-        "/api/sites/python/page", params={"path": "01-basis/01-intro.mdx"}
-    )
+    resp = await api_client.get("/api/sites/python/page", params={"path": "01-basis/01-intro.mdx"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["content"] == content

@@ -1,7 +1,6 @@
 import {
   Alert,
   Button,
-  Code,
   Group,
   Modal,
   Select,
@@ -12,15 +11,34 @@ import {
 import { createTwoFilesPatch } from 'diff';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useCreateBranch, useCreatePr, useSavePage } from '../api/git';
+import {
+  type Concept,
+  type ConflictChoice,
+  type SaveConflict,
+  useConcepts,
+  useCreateConcept,
+  useSavePage,
+} from '../api/git';
 import { ApiError } from '../api/client';
 import type { ContentScope } from '../api/types';
+import { applyChoices } from '../lib/concepts';
+import { allChosen, ConflictResolver } from './ConflictResolver';
 import { DiffView } from './DiffView';
+
 export interface SavedPage {
   content: string;
   branch: string;
   sha: string;
+  /** The server merged in someone else's save: `content` replaces the editor text. */
+  merged?: boolean;
 }
+
+const NEW = '__nieuw__';
+
+/**
+ * Saves into a concept. A concept is created on first save with the title the
+ * teacher typed; publishing happens later from the concept page.
+ */
 export function SaveModal({
   opened,
   onClose,
@@ -36,7 +54,7 @@ export function SaveModal({
   files,
   defaultMessage,
   title = 'Lesmateriaal opslaan',
-  summary = 'Sla eerst een concept op. Publiceren gebeurt later via een pull request.',
+  summary = 'Je wijziging komt in een concept. Publiceren doe je later, na de controle.',
   continueLabel = 'Verder bewerken',
 }: {
   opened: boolean;
@@ -47,6 +65,7 @@ export function SaveModal({
   originalContent: string;
   newContent: string;
   sha: string | null;
+  /** Internal ref the editor loaded from ("main" for the published version). */
   currentBranch: string;
   onSaved: (result: SavedPage) => void;
   saveResource?: (
@@ -62,22 +81,26 @@ export function SaveModal({
   continueLabel?: string;
 }) {
   const navigate = useNavigate();
-  const createBranch = useCreateBranch();
+  const { data: concepts } = useConcepts('open', false);
+  const createConcept = useCreateConcept();
   const savePage = useSavePage(site);
-  const createPr = useCreatePr();
   const [selection, setSelection] = useState<string | null>(
-    currentBranch === 'main' ? '__new__' : currentBranch,
+    currentBranch === 'main' ? NEW : currentBranch,
   );
-  const [newBranch, setNewBranch] = useState(
-    `docs/${site}-${Date.now().toString(36)}`,
-  );
+  const [conceptTitle, setConceptTitle] = useState('');
   const [message, setMessage] = useState(
     defaultMessage ?? `Lesmateriaal bijwerken: ${path}`,
   );
   const [saving, setSaving] = useState(false);
-  const [savedToBranch, setSavedToBranch] = useState<string | null>(null);
+  const [savedTo, setSavedTo] = useState<Concept | null>(null);
   const [error, setError] = useState('');
-  const created = useRef(new Set<string>());
+  const [conflict, setConflict] = useState<
+    (SaveConflict & { branch: string; mine: string }) | null
+  >(null);
+  const [choices, setChoices] = useState<Record<string, ConflictChoice>>({});
+  // A concept created in this dialog is reused when saving again after an error.
+  const created = useRef<Concept | null>(null);
+
   const diff = useMemo(
     () =>
       (files ?? [{ path, before: originalContent, after: newContent }])
@@ -95,63 +118,148 @@ export function SaveModal({
         .join('\n'),
     [files, path, originalContent, newContent],
   );
-  const target = selection === '__new__' ? newBranch.trim() : (selection ?? '');
+
+  const options = useMemo(() => {
+    const own = (concepts ?? []).filter(
+      (c) => c.site === site || c.branch === currentBranch,
+    );
+    const list = own.map((c) => ({ value: c.branch, label: c.title }));
+    if (
+      currentBranch !== 'main' &&
+      !list.some((option) => option.value === currentBranch)
+    )
+      list.unshift({ value: currentBranch, label: 'Huidig concept' });
+    return [{ value: NEW, label: 'Nieuw concept' }, ...list];
+  }, [concepts, site, currentBranch]);
+
+  const isNew = selection === NEW;
+  const ready =
+    !!selection && !!message.trim() && (!isNew || !!conceptTitle.trim());
+
+  function conceptFor(branch: string): Concept | null {
+    return (
+      (created.current?.branch === branch ? created.current : null) ??
+      concepts?.find((c) => c.branch === branch) ??
+      null
+    );
+  }
+
+  async function targetBranch(): Promise<string> {
+    if (!isNew) return selection ?? '';
+    if (!created.current)
+      created.current = await createConcept.mutateAsync({
+        site,
+        title: conceptTitle.trim(),
+      });
+    return created.current.branch;
+  }
+
+  async function write(
+    branch: string,
+    snapshot: string,
+    pageSha: string | null,
+    baseText: string | null,
+  ) {
+    if (saveResource)
+      return {
+        content: snapshot,
+        sha: await saveResource(branch, snapshot, message.trim()),
+        merged: false,
+      };
+    const result = await savePage.mutateAsync({
+      path,
+      scope,
+      branch,
+      content: snapshot,
+      message: message.trim(),
+      sha: pageSha,
+      base_text: baseText,
+    });
+    return {
+      content: result.merged && result.content !== undefined ? result.content : snapshot,
+      sha: result.content_sha,
+      merged: !!result.merged,
+    };
+  }
+
+  function finish(branch: string, saved: { content: string; sha: string; merged: boolean }) {
+    onSaved({ branch, ...saved });
+    setSavedTo(
+      conceptFor(branch) ?? {
+        number: 0,
+        title: '',
+        branch,
+        site,
+        author_login: '',
+        state: 'open',
+        head_sha: '',
+        html_url: '',
+        updated_at: '',
+      },
+    );
+  }
+
   async function save() {
-    if (!target || !message.trim() || saving) return;
+    if (!ready || saving) return;
     const snapshot = newContent;
     setSaving(true);
     setError('');
+    let branch = '';
     try {
-      if (selection === '__new__' && !created.current.has(target)) {
-        await createBranch.mutateAsync({
-          name: target,
-          from_branch: currentBranch,
-        });
-        created.current.add(target);
-      }
-      const result = saveResource
-        ? { content_sha: await saveResource(target, snapshot, message.trim()) }
-        : await savePage.mutateAsync({
-            path,
-            scope,
-            branch: target,
-            content: snapshot,
-            message: message.trim(),
-            sha,
-          });
-      onSaved({ content: snapshot, branch: target, sha: result.content_sha });
-      setSavedToBranch(target);
+      branch = await targetBranch();
+      // Send the loaded text along, so a parallel save can be merged for us.
+      finish(branch, await write(branch, snapshot, sha, sha ? originalContent : null));
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 409
-          ? 'Deze pagina is op de server gewijzigd. Je eigen tekst blijft bewaard. Vergelijk de nieuwste versie voordat je opnieuw opslaat.'
-          : String(err),
-      );
+      const detail =
+        err instanceof ApiError
+          ? (err.detail as { conflict?: SaveConflict } | undefined)
+          : undefined;
+      if (err instanceof ApiError && err.status === 409 && detail?.conflict) {
+        setConflict({ ...detail.conflict, branch, mine: snapshot });
+        setChoices({});
+      } else {
+        setError(
+          err instanceof ApiError && err.status === 409
+            ? 'Deze pagina is op de server gewijzigd. Je eigen tekst blijft bewaard. Vergelijk de nieuwste versie voordat je opnieuw opslaat.'
+            : String(err),
+        );
+      }
     } finally {
       setSaving(false);
     }
   }
-  async function review() {
-    if (!savedToBranch) return;
+
+  async function saveResolved() {
+    if (!conflict) return;
+    const resolved = applyChoices(conflict.segments, choices);
+    if (resolved === undefined) return;
+    setSaving(true);
+    setError('');
     try {
-      const pr = await createPr.mutateAsync({
-        branch: savedToBranch,
-        title: message.trim(),
-      });
-      onClose();
-      navigate(`/prs/${pr.number}`);
+      const saved = await write(
+        conflict.branch,
+        resolved,
+        conflict.current_sha,
+        conflict.current_content,
+      );
+      setConflict(null);
+      finish(conflict.branch, { ...saved, merged: true });
     } catch (err) {
       setError(String(err));
+    } finally {
+      setSaving(false);
     }
   }
+
+  const busy = saving || createConcept.isPending;
   return (
     <Modal
       opened={opened}
       onClose={() => {
-        if (!saving && !createPr.isPending) onClose();
+        if (!busy) onClose();
       }}
-      closeOnClickOutside={!saving}
-      closeOnEscape={!saving}
+      closeOnClickOutside={!busy}
+      closeOnEscape={!busy}
       title={title}
       size="xl"
     >
@@ -161,22 +269,52 @@ export function SaveModal({
             {error}
           </Alert>
         )}
-        {savedToBranch ? (
+        {savedTo ? (
           <>
             <Alert color="green">
-              Je concept is opgeslagen op <Code>{savedToBranch}</Code>. Het is
-              nog niet gepubliceerd.
+              {savedTo.title
+                ? `Opgeslagen in concept '${savedTo.title}'.`
+                : 'Opgeslagen in het concept.'}{' '}
+              Nog niet gepubliceerd; het voorbeeld wordt gebouwd.
             </Alert>
-            <Text size="sm">
-              Vraag een controle aan om het cursusvoorbeeld te laten bouwen en
-              daarna te publiceren.
-            </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={onClose}>
                 {continueLabel}
               </Button>
-              <Button onClick={review} loading={createPr.isPending}>
-                Controle aanvragen
+              {savedTo.number > 0 && (
+                <Button
+                  onClick={() => {
+                    onClose();
+                    navigate(`/concepten/${savedTo.number}`);
+                  }}
+                >
+                  Concept bekijken
+                </Button>
+              )}
+            </Group>
+          </>
+        ) : conflict ? (
+          <>
+            <Alert color="orange" title="Iemand anders heeft deze pagina ook gewijzigd">
+              De wijzigingen die niet overlappen zijn al samengevoegd. Kies per
+              blok welke tekst blijft.
+            </Alert>
+            <ConflictResolver
+              hunks={conflict.hunks}
+              choices={choices}
+              onChange={setChoices}
+              theirsLabel="Versie in het concept"
+            />
+            <Group justify="flex-end">
+              <Button variant="default" onClick={onClose} disabled={saving}>
+                Annuleren
+              </Button>
+              <Button
+                onClick={saveResolved}
+                loading={saving}
+                disabled={!allChosen(conflict.hunks, choices)}
+              >
+                Samengevoegde versie opslaan
               </Button>
             </Group>
           </>
@@ -185,25 +323,23 @@ export function SaveModal({
             <Text size="sm">{summary}</Text>
             <DiffView patch={diff} maxHeight={220} />
             <Select
-              label="Conceptversie (branch)"
-              description="Bewaar in dit concept of maak er een kopie van, inclusief afbeeldingen."
+              label="Concept"
+              description="Kies een bestaand concept of begin een nieuw concept."
               value={selection}
               onChange={setSelection}
-              disabled={saving}
-              data={[
-                { value: '__new__', label: 'Nieuw concept maken' },
-                ...[currentBranch]
-                  .filter((b) => b !== 'main')
-                  .map((b) => ({ value: b, label: b })),
-              ]}
+              disabled={busy}
+              allowDeselect={false}
+              data={options}
             />
-            {selection === '__new__' && (
+            {isNew && (
               <TextInput
-                label="Naam conceptversie"
-                description={`Gebaseerd op ${currentBranch}`}
-                value={newBranch}
-                onChange={(e) => setNewBranch(e.currentTarget.value)}
-                disabled={saving}
+                label="Waar gaat dit over?"
+                description="De titel van het concept, bv. 'Uitleg over lussen verbeterd'."
+                value={conceptTitle}
+                onChange={(e) => setConceptTitle(e.currentTarget.value)}
+                required
+                disabled={busy}
+                data-autofocus
               />
             )}
             <TextInput
@@ -211,17 +347,13 @@ export function SaveModal({
               value={message}
               onChange={(e) => setMessage(e.currentTarget.value)}
               required
-              disabled={saving}
+              disabled={busy}
             />
             <Group justify="flex-end">
-              <Button variant="default" onClick={onClose} disabled={saving}>
+              <Button variant="default" onClick={onClose} disabled={busy}>
                 Annuleren
               </Button>
-              <Button
-                onClick={save}
-                loading={saving}
-                disabled={!target || !message.trim()}
-              >
+              <Button onClick={save} loading={busy} disabled={!ready}>
                 Concept opslaan
               </Button>
             </Group>

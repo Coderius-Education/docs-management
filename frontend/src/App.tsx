@@ -1,6 +1,6 @@
 import { Center, Loader } from "@mantine/core";
 import { Suspense, lazy } from "react";
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes, useParams } from "react-router";
 
 import { Layout } from "./components/Layout";
 import { RequireAuth } from "./components/RequireAuth";
@@ -13,8 +13,8 @@ import { Login } from "./routes/Login";
 const EditorPage = lazy(() =>
   import("./routes/EditorPage").then((m) => ({ default: m.EditorPage })),
 );
-import { PrDetail } from "./routes/PrDetail";
-import { PrList } from "./routes/PrList";
+import { ConceptDetail } from "./routes/ConceptDetail";
+import { ConceptList } from "./routes/ConceptList";
 import { SettingsRedirect } from "./routes/SettingsRedirect";
 import { SiteBrowser } from "./routes/SiteBrowser";
 
@@ -49,13 +49,22 @@ export default function App() {
               </Suspense>
             }
           />
-          <Route path="/prs" element={<PrList />} />
-          <Route path="/prs/:number" element={<PrDetail />} />
-          <Route path="/builds" element={<BuildsPage />} />
+          <Route path="/concepten" element={<ConceptList />} />
+          <Route path="/concepten/:number" element={<ConceptDetail />} />
+          {/* Oude adressen blijven werken. */}
+          <Route path="/prs" element={<Navigate to="/concepten" replace />} />
+          <Route path="/prs/:number" element={<LegacyConceptRedirect />} />
+          <Route path="/voorbeelden" element={<BuildsPage />} />
+          <Route path="/builds" element={<Navigate to="/voorbeelden" replace />} />
           <Route path="/experiments" element={<ExperimentsPage />} />
           <Route path="/experiments/:id" element={<ExperimentDetail />} />
         </Route>
       </Route>
     </Routes>
   );
+}
+
+function LegacyConceptRedirect() {
+  const { number } = useParams();
+  return <Navigate to={`/concepten/${number}`} replace />;
 }
