@@ -181,7 +181,14 @@ function Studio({
     }
   }, [draft.base.branch, draft.dirty, branch]);
 
-  async function upload(file: File): Promise<string | null> {
+  /**
+   * Uploads an image and applies its URL to the *current* document: the upload
+   * can take seconds, and edits made meanwhile must not be overwritten.
+   */
+  async function upload(
+    file: File,
+    toepassen: (doc: Vakpagina, url: string) => Vakpagina,
+  ): Promise<void> {
     setUploading(true);
     try {
       let target = draft.base.branch;
@@ -198,10 +205,10 @@ function Studio({
       );
       if (result.commit_sha || target !== draft.base.branch)
         draft.setBase({ ...draft.base, branch: target, sha: result.commit_sha ?? draft.base.sha });
-      return result.url;
+      const huidig = latest.current;
+      if (huidig) zet(toepassen(huidig, result.url));
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
-      return null;
     } finally {
       setUploading(false);
     }
@@ -458,7 +465,7 @@ function BlokInspector({
   zet: (doc: Vakpagina) => void;
   kies: (id: string | null) => void;
   sites: SiteInfo[];
-  upload: (file: File) => Promise<string | null>;
+  upload: (file: File, toepassen: (doc: Vakpagina, url: string) => Vakpagina) => Promise<void>;
   uploading: boolean;
 }) {
   const blok = id ? vindBlok(doc.blokken, id) : null;
@@ -593,8 +600,7 @@ function BlokInspector({
           <FileButton
             onChange={async (file) => {
               if (!file) return;
-              const url = await upload(file);
-              if (url) prop('src', url);
+              await upload(file, (huidig, url) => zetProp(huidig, blok.id, 'src', url));
             }}
             accept="image/png,image/jpeg,image/gif,image/webp"
           >
@@ -731,7 +737,7 @@ function ThemaPaneel({
   zet: (doc: Vakpagina) => void;
   modus: 'licht' | 'donker';
   setModus: (modus: 'licht' | 'donker') => void;
-  upload: (file: File) => Promise<string | null>;
+  upload: (file: File, toepassen: (doc: Vakpagina, url: string) => Vakpagina) => Promise<void>;
   uploading: boolean;
 }) {
   const thema = doc.thema ?? {};
@@ -798,8 +804,10 @@ function ThemaPaneel({
           <FileButton
             onChange={async (file) => {
               if (!file) return;
-              const url = await upload(file);
-              if (url) zetLogo(sleutel, url);
+              await upload(file, (huidig, url) => {
+                const t = huidig.thema ?? {};
+                return zetThema(huidig, { ...t, logo: { ...t.logo, [sleutel]: url } });
+              });
             }}
             accept="image/png,image/jpeg,image/gif,image/webp"
           >
@@ -825,7 +833,7 @@ function PaginaPaneel({
   doc: Vakpagina;
   zet: (doc: Vakpagina) => void;
   vakNaam: string;
-  upload: (file: File) => Promise<string | null>;
+  upload: (file: File, toepassen: (doc: Vakpagina, url: string) => Vakpagina) => Promise<void>;
   uploading: boolean;
 }) {
   const meta = doc.meta ?? {};
@@ -859,8 +867,7 @@ function PaginaPaneel({
         <FileButton
           onChange={async (file) => {
             if (!file) return;
-            const url = await upload(file);
-            if (url) zetVeld('afbeelding', url);
+            await upload(file, (huidig, url) => zetMeta(huidig, { ...huidig.meta, afbeelding: url }));
           }}
           accept="image/png,image/jpeg,image/gif,image/webp"
         >

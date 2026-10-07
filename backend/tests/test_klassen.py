@@ -220,6 +220,8 @@ async def test_new_code_archive_delete(api_client):
     klas = await nieuwe_klas(api_client, auth["csrf"])
     vernieuwd = (await api_client.post(f"/api/klassen/{klas['id']}/nieuwe-code", headers=h)).json()
     assert vernieuwd["code"] != klas["code"]
+    # Alleen de code verandert; een open editor houdt zijn versie.
+    assert vernieuwd["versie"] == klas["versie"]
 
     archief = await api_client.post(f"/api/klassen/{klas['id']}/archiveren", headers=h)
     assert archief.json()["gearchiveerd"] is True

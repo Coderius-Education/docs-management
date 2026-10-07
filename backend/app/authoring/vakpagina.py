@@ -145,7 +145,8 @@ class Thema(_Strikt):
 class Meta(_Strikt):
     titel: str | None = Field(default=None, max_length=300)
     omschrijving: str | None = Field(default=None, max_length=300)
-    afbeelding: str | None = None
+    # 300, net als de andere meta-velden in valideer.ts van home.
+    afbeelding: str | None = Field(default=None, max_length=300)
 
     @field_validator("afbeelding")
     @classmethod

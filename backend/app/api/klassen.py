@@ -171,7 +171,8 @@ async def nieuwe_code(klas_id: int, user: CurrentUser, db: Db) -> dict:
     klas = await _klas(db, klas_id)
     await _mag_bewerken(db, klas, user)
     klas.code = await service.code_vrij(db)
-    klas.versie += 1
+    # Geen nieuwe versie: de inhoud verandert niet, en een open editor moet zijn
+    # onopgeslagen wijzigingen houden.
     klas.updated_at = utcnow()
     klas.updated_by = user.id
     await db.commit()
