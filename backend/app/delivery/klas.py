@@ -17,6 +17,9 @@ from app.db.session import get_sessionmaker
 from app.klassen.service import publiek
 
 CACHE_TTL_SECONDS = 5.0
+# Willekeurige codes mogen de cache niet laten groeien: hij is begrensd en
+# wordt geleegd als hij vol raakt.
+CACHE_MAX = 1000
 CODE_RE = re.compile(r"^[a-z0-9]{6,16}$")
 # /klas/<code> of /klas/<code>/ binnen de home-build.
 KLAS_PAD_RE = re.compile(r"^klas/(?P<code>[a-z0-9]{6,16})/?$")
@@ -44,6 +47,8 @@ async def klas_voor_code(code: str, vak: str | None) -> dict | None:
                 select(Klas).where(Klas.code == code, Klas.gearchiveerd.is_(False))
             )
         found = publiek(klas) if klas is not None else None
+        if len(_cache) >= CACHE_MAX:
+            _cache.clear()
         _cache[code] = (now, found)
     if found is None or found["vak"] != vak:
         return None

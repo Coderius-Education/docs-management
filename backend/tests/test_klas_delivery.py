@@ -93,3 +93,11 @@ async def test_klas_page_unknown_or_wrong_vak_is_404_without_cookie(delivery_cli
         assert "set-cookie" not in resp.headers, (host, path)
         if path.startswith("/klas/") and ".." not in path:
             assert resp.status_code == 404, (host, path)
+
+
+async def test_cache_stays_bounded_under_random_codes(delivery_client, builds_dir, monkeypatch):
+    monkeypatch.setattr(delivery_klas, "CACHE_MAX", 10)
+    await seed_klas()
+    for i in range(50):
+        await delivery_client.get(f"/_cdx/klas/zzzzzz{i:04d}.json", headers={"host": INF})
+    assert len(delivery_klas._cache) <= 10
