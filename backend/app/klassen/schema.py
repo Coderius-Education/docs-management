@@ -23,6 +23,9 @@ MAX_BYTES = 64 * 1024
 
 HOOFDSTUK_SLEUTEL = re.compile(r"^(cat|doc|link):[^\s]{1,300}$")
 DOC_ID = re.compile(r"^[A-Za-z0-9_./-]{1,300}$")
+# Een lespad blijft op de eigen host: geen spaties, stuurtekens of backslashes
+# (browsers halen tabs uit een URL, dus "/\t/x" zou "//x" worden).
+VEILIG_PAD = re.compile(r"^/[A-Za-z0-9._~!$&'()*+,;=:@%/#?-]*$")
 
 
 class _Strikt(BaseModel):
@@ -39,7 +42,7 @@ class PaginaItem(_Strikt):
     type: Literal["pagina"]
     site: str = Field(max_length=50)
     docId: str = Field(pattern=DOC_ID.pattern)
-    pad: str = Field(max_length=500)
+    pad: str = Field(max_length=500, pattern=VEILIG_PAD.pattern)
     label: str = Field(min_length=1, max_length=100)
 
 
@@ -51,7 +54,7 @@ class LinkItem(_Strikt):
     @field_validator("url")
     @classmethod
     def _https(cls, url: str) -> str:
-        if not re.match(r"^https://[^\s/]+", url):
+        if not re.match(r"^https://[^\s/\\]+", url) or re.search(r"[\s\x00-\x1f\\]", url):
             raise ValueError("Een link moet met https:// beginnen")
         return url
 

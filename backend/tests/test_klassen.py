@@ -126,6 +126,16 @@ async def test_content_validation(api_client):
                 "label": "x",
             }
         ),
+        met(
+            {
+                "type": "pagina",
+                "site": "python",
+                "docId": "a",
+                "pad": "/python/\t/evil.example",
+                "label": "x",
+            }
+        ),
+        met({"type": "link", "url": "https://ok.example/\n/x", "label": "x"}),
         met(cursussen={"python": {"verborgen": ["<script>"]}}),
         met({"type": "cursus", "site": "python", "extra": 1}),
     ]
