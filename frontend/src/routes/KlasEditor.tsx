@@ -323,6 +323,24 @@ function ConflictMelding({ klasId }: { klasId: number }) {
   );
 }
 
+/** Host of a link for display; never throws on a malformed address. */
+function linkHost(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return 'link';
+  }
+}
+
+function geldigeLink(url: string): boolean {
+  if (!/^https:\/\/[^\s/\\]+\S*$/.test(url)) return false;
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function siteNaam(sites: SiteInfo[], slug: string) {
   return sites.find((s) => s.slug === slug)?.display_name ?? slug;
 }
@@ -516,7 +534,7 @@ function ItemRegel({
       ? 'Cursus'
       : item.type === 'pagina'
         ? `Les uit ${siteNaam(sites, item.site)}`
-        : new URL(item.url).hostname;
+        : linkHost(item.url);
   return (
     <Group gap="xs" wrap="nowrap">
       <Icoon size={16} style={{ flexShrink: 0 }} aria-hidden />
@@ -661,7 +679,7 @@ function LinkModal({
 }) {
   const [label, setLabel] = useState('');
   const [url, setUrl] = useState('');
-  const geldig = /^https:\/\/[^\s/\\]+\S*$/.test(url.trim());
+  const geldig = geldigeLink(url.trim());
 
   function bevestig() {
     voegToe({ type: 'link', url: url.trim(), label: label.trim() || url.trim() });
@@ -1023,7 +1041,7 @@ function Voorbeeld({
                     ? 'Cursus'
                     : item.type === 'pagina'
                       ? `Les uit ${siteNaam(sites, item.site)}`
-                      : new URL(item.url).hostname}
+                      : linkHost(item.url)}
                 </Text>
                 <Text size="xs" fw={600} lineClamp={2}>
                   {item.type === 'cursus' ? item.label || siteNaam(sites, item.site) : item.label}

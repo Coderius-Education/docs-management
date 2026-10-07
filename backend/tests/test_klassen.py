@@ -136,6 +136,7 @@ async def test_content_validation(api_client):
             }
         ),
         met({"type": "link", "url": "https://ok.example/\n/x", "label": "x"}),
+        met({"type": "link", "url": "https://[kapot", "label": "x"}),
         met(cursussen={"python": {"verborgen": ["<script>"]}}),
         met({"type": "cursus", "site": "python", "extra": 1}),
     ]

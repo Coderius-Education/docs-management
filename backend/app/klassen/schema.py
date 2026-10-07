@@ -9,6 +9,7 @@ sleutel uit het sidebar-manifest van de cursusbuild (`cat:`, `doc:`, `link:`).
 import json
 import re
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -56,6 +57,12 @@ class LinkItem(_Strikt):
     def _https(cls, url: str) -> str:
         if not re.match(r"^https://[^\s/\\]+", url) or re.search(r"[\s\x00-\x1f\\]", url):
             raise ValueError("Een link moet met https:// beginnen")
+        try:
+            host = urlsplit(url).hostname
+        except ValueError:
+            host = None
+        if not host:
+            raise ValueError("Dit is geen geldige link")
         return url
 
 
