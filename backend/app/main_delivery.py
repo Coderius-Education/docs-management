@@ -6,6 +6,8 @@
 - Previews: {branch}--{vak}.<preview-suffix>/<path>/ → <site>/<branch>/current
   (+ noindex), met main als terugval: CI bouwt alleen de geraakte sites.
 - A/B (M4): cookie kan de hele site naar een variant-build sturen.
+- Vakpagina's: de root van een vak-host → home's vooraf gebouwde /vak/<vak>
+  (met terugval op index.html voor een oudere home-build).
 - Klassen: <vak-host>/klas/<code> → home's SPA-terugval met 200 en een
   klas-cookie; /_cdx/klas/<code>.json levert de klas aan home en de cursussen.
 - HTML krijgt het analytics-snippet geïnjecteerd; assets krijgen immutable caching.
@@ -90,7 +92,12 @@ def create_app() -> FastAPI:
                 )
             return Response("Site nog niet gepubliceerd", status_code=503)
 
-        file = await asyncio.to_thread(resolve_file, build_dir, full_path)
+        file = None
+        if target.site == HOME and target.subject and full_path in ("", "index.html"):
+            # Vakpagina: home bouwt /vak/<vak> vooraf met het ontwerp van dat vak.
+            file = await asyncio.to_thread(resolve_file, build_dir, f"vak/{target.subject}")
+        if file is None:
+            file = await asyncio.to_thread(resolve_file, build_dir, full_path)
 
         # Asset-fallback: na een main-flip kunnen oude hashed chunks nog opgevraagd
         # worden door open tabs; probeer dan de vorige build.

@@ -235,9 +235,7 @@ async def test_legacy_host_serves_site_when_redirects_disabled(
 
 async def test_spa_404_fallback(delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "abc123def456")
-    resp = await delivery_client.get(
-        "/python/bestaat/niet", headers={"host": INF}
-    )
+    resp = await delivery_client.get("/python/bestaat/niet", headers={"host": INF})
     assert resp.status_code == 404
     assert "404" in resp.text
 
@@ -260,8 +258,29 @@ async def test_path_traversal_blocked(delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "abc123def456")
     secret = builds_dir / "geheim.txt"
     secret.write_text("geheim")
-    resp = await delivery_client.get(
-        "/python/../../geheim.txt", headers={"host": INF}
-    )
+    resp = await delivery_client.get("/python/../../geheim.txt", headers={"host": INF})
     assert resp.status_code != 200
     assert "geheim" not in resp.text
+
+
+async def test_vak_root_serves_prerendered_vakpagina(delivery_client, builds_dir):
+    target = make_build(
+        builds_dir,
+        "home",
+        "main",
+        "homesha12345",
+        html="<html><head></head><body>alle</body></html>",
+    )
+    (target / "vak").mkdir()
+    (target / "vak" / "informatica.html").write_text(
+        "<html><head></head><body>vak-informatica</body></html>"
+    )
+
+    resp = await delivery_client.get("/", headers={"host": INF})
+    assert resp.status_code == 200
+    assert "vak-informatica" in resp.text
+    # Preview van dat vak ook; de apex en een vak zonder eigen pagina niet.
+    preview = await delivery_client.get("/", headers={"host": "b--informatica.preview.coderius.nl"})
+    assert "vak-informatica" in preview.text
+    assert "alle" in (await delivery_client.get("/", headers={"host": "coderius.nl"})).text
+    assert "alle" in (await delivery_client.get("/", headers={"host": "wo.coderius.nl"})).text

@@ -1,0 +1,1 @@
+{ "version": 1, "vak": "informatica", "blokken": [ { "id": "a", "type": "Button", "props": { "href": "/" }, "tekst": "x" } ] }
