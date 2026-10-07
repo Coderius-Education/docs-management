@@ -17,6 +17,8 @@ import {
   IconChevronDown,
   IconFlask,
   IconFileText,
+  IconFolder,
+  IconFolderOpen,
   IconHome,
   IconLogout,
   IconMoon,
@@ -27,12 +29,16 @@ import {
 import { Outlet, useLocation, useNavigate } from 'react-router';
 
 import { api } from '../api/client';
-import { useMe, useSites } from '../api/hooks';
+import { useMe, useSites, useSubjects } from '../api/hooks';
+import { SIDEBAR_CLOSED_KEY, groupSitesBySubject } from '../lib/subjectGroups';
+import { useClosedSubjects } from '../lib/useClosedSubjects';
 
 export function Layout() {
   const [opened, { toggle }] = useDisclosure();
   const { data: me } = useMe();
   const { data: sites } = useSites();
+  const { data: subjects } = useSubjects();
+  const folders = useClosedSubjects(SIDEBAR_CLOSED_KEY);
   const navigate = useNavigate();
   const location = useLocation();
   const canvasRoute =
@@ -139,14 +145,35 @@ export function Layout() {
             leftSection={<IconWorldWww size={16} />}
             defaultOpened
           >
-            {sites?.map((site) => (
-              <MantineNavLink
-                key={site.slug}
-                label={site.display_name}
-                active={location.pathname.startsWith(`/sites/${site.slug}`)}
-                onClick={() => navigate(`/sites/${site.slug}`)}
-              />
-            ))}
+            {groupSitesBySubject(sites, subjects).map((group) => {
+              const open = folders.isOpen(group.key);
+              const Icon = open ? IconFolderOpen : IconFolder;
+              const isCurrent = (slug: string) =>
+                location.pathname.startsWith(`/sites/${slug}`);
+              return (
+                <MantineNavLink
+                  key={group.key}
+                  label={group.title}
+                  leftSection={<Icon size={16} />}
+                  opened={open}
+                  onChange={() => folders.toggle(group.key)}
+                  role="button"
+                  aria-expanded={open}
+                  // A closed folder still shows where you are.
+                  active={!open && group.sites.some((site) => isCurrent(site.slug))}
+                  variant="subtle"
+                >
+                  {group.sites.map((site) => (
+                    <MantineNavLink
+                      key={site.slug}
+                      label={site.display_name}
+                      active={isCurrent(site.slug)}
+                      onClick={() => navigate(`/sites/${site.slug}`)}
+                    />
+                  ))}
+                </MantineNavLink>
+              );
+            })}
           </MantineNavLink>
         </ScrollArea>
       </AppShell.Navbar>
