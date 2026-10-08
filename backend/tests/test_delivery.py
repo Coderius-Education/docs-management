@@ -63,10 +63,27 @@ async def test_site_without_build_503(delivery_client, builds_dir):
 async def test_preview_host(delivery_client, builds_dir):
     make_build(builds_dir, "python", "docs-nieuwe-les", "fff111222333")
     resp = await delivery_client.get(
-        "/", headers={"host": "docs-nieuwe-les--python.preview.coderius.nl"}
+        "/python/", headers={"host": "docs-nieuwe-les--informatica.preview.coderius.nl"}
     )
     assert resp.status_code == 200
     assert resp.headers["x-robots-tag"] == "noindex, nofollow"
+
+
+async def test_old_preview_host_redirects_to_subject_preview(delivery_client, builds_dir):
+    # Builds hebben baseUrl /<path>/: op de root van de oude host laadt geen asset.
+    for path in ("/docs/intro", "/python/docs/intro"):
+        resp = await delivery_client.get(
+            path,
+            headers={
+                "host": "docs-nieuwe-les--python.preview.coderius.nl",
+                "x-forwarded-proto": "https",
+            },
+        )
+        assert resp.status_code == 301
+        assert (
+            resp.headers["location"]
+            == "https://docs-nieuwe-les--informatica.preview.coderius.nl/python/docs/intro"
+        )
 
 
 async def test_preview_without_build_404(delivery_client, builds_dir):
@@ -195,10 +212,9 @@ def test_resolve_host_unit():
     assert resolve_host("coderius.nl", "").subject is None
     assert resolve_host("evil.example.com", "") is None
     assert isinstance(resolve_host("ctf.coderius.nl", "x"), Redirect)
-    # Oude previewvorm blijft werken.
-    old = resolve_host("b--python.preview.coderius.nl", "docs/")
-    assert old.site == "python" and old.is_preview and old.rest_path == "docs/"
-    assert old.subject is None
+    # Oude previewvorm stuurt door naar de vak-preview.
+    old = resolve_host("b--python.preview.coderius.nl", "docs/", "x=1")
+    assert old == Redirect("https://b--informatica.preview.coderius.nl/python/docs/?x=1")
 
 
 def test_dev_domain_root_keeps_numeric_port(monkeypatch):

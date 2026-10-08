@@ -6,7 +6,8 @@
 - Een oud subdomein (``python.coderius.nl/x``) → 301 naar ``<vak>/<path>/x``.
 - ``<branch>--<vak>.preview.coderius.nl/<path>/`` → preview van die branch
   (main_delivery valt terug op main als die site geen build voor de branch heeft).
-- ``<branch>--<site>.preview.coderius.nl`` (oude vorm) blijft werken.
+- ``<branch>--<site>.preview.coderius.nl/x`` (oude vorm) → 301 naar
+  ``<branch>--<vak>.preview.coderius.nl/<path>/x``.
 """
 
 import re
@@ -167,7 +168,22 @@ def resolve_host(
                 site=site, branch_slug=branch, is_preview=True, rest_path=rest, subject=name
             )
         if name in t.site_paths:
-            # Oude previewvorm <branch>--<site>: de site staat op de root.
+            site_subject, site_path = t.site_paths[name]
+            if site_subject and site_path:
+                # Oude previewvorm <branch>--<site>: de build heeft baseUrl
+                # /<path>/, dus op de root laadt geen enkel asset. Stuur door
+                # naar <branch>--<vak>.<suffix>/<path>/. Staat /<path>/ er al
+                # (oude host met nieuw pad), dan niet dubbel.
+                rest = _clean_path(path)
+                first, _, tail = rest.partition("/")
+                if first == site_path:
+                    rest = tail
+                authority = f"{branch}--{site_subject}.{get_settings().preview_domain_suffix}"
+                if port and authority.endswith(DEV_HOST_SUFFIX):
+                    authority = f"{authority}:{port}"
+                location = f"{_safe_scheme(scheme)}://{authority}/{site_path}/{rest}"
+                return Redirect(_with_query(location, query))
+            # Site zonder vakpad: die staat nog op de root.
             return HostTarget(
                 site=name, branch_slug=branch, is_preview=True, rest_path=_clean_path(path)
             )
