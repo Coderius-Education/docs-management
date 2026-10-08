@@ -330,5 +330,14 @@ def test_legacy_paths_only_for_their_own_site():
     reset_caches()
     # python heeft geen legacy_paths: /oud/ stuurt daar gewoon door.
     assert isinstance(resolve_host("python.coderius.nl", "oud/x"), Redirect)
+    # De sites die oudeOpslag hebben (docs: createConfig) houden /oud/ ook.
+    for host, site in (
+        ("web.coderius.nl", "web"),
+        ("robotica.coderius.nl", "robotica"),
+        ("ctf.coderius.nl", "ctf"),
+    ):
+        target = resolve_host(host, "oud/overzetten/regels.json")
+        assert target.site == site and target.rest_path == "oud/overzetten/regels.json"
+        assert isinstance(resolve_host(host, "docs/"), Redirect)
     target = resolve_host("ide.coderius.nl", "oud/overzetten/")
     assert target.site == "ide" and target.rest_path == "oud/overzetten/"

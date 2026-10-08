@@ -6,10 +6,10 @@
   ],
   "sites": [
     { "slug": "python", "subject": "informatica", "path": "python", "display_name": "Python", "legacy_domains": ["python.coderius.nl"] },
-    { "slug": "web", "subject": "informatica", "path": "web", "display_name": "Webdesign", "legacy_domains": ["web.coderius.nl"] },
+    { "slug": "web", "subject": "informatica", "path": "web", "display_name": "Webdesign", "legacy_domains": ["web.coderius.nl"], "legacy_paths": ["oud/"] },
     { "slug": "fullstack", "subject": "informatica", "path": "fullstack", "display_name": "Fullstack", "legacy_domains": ["fullstack.coderius.nl"] },
-    { "slug": "robotica", "subject": "informatica", "path": "robotica", "display_name": "Robotica", "legacy_domains": ["robotica.coderius.nl"] },
-    { "slug": "ctf", "subject": "informatica", "path": "ctf", "display_name": "CTF", "legacy_domains": ["ctf.coderius.nl"] },
+    { "slug": "robotica", "subject": "informatica", "path": "robotica", "display_name": "Robotica", "legacy_domains": ["robotica.coderius.nl"], "legacy_paths": ["oud/"] },
+    { "slug": "ctf", "subject": "informatica", "path": "ctf", "display_name": "CTF", "legacy_domains": ["ctf.coderius.nl"], "legacy_paths": ["oud/"] },
     { "slug": "embedded", "subject": "informatica", "path": "embedded", "display_name": "Embedded", "legacy_domains": ["embedded.coderius.nl"] },
     { "slug": "editor", "subject": "informatica", "path": "editor", "display_name": "Editor", "legacy_domains": ["editor.coderius.nl"] },
     { "slug": "godot", "subject": "informatica", "path": "godot", "display_name": "Godot", "legacy_domains": ["godot.coderius.nl"] },
