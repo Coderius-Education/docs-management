@@ -25,6 +25,8 @@ class HostTarget:
     is_preview: bool
     # Pad binnen de build-map (zonder het /<path>-voorvoegsel van de site).
     rest_path: str = ""
+    # Vak van de host (vak-host of vak-preview); None op de apex en elders.
+    subject: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,7 +128,9 @@ def resolve_host(
         if isinstance(found, Redirect):
             return found
         site, rest = found
-        return HostTarget(site=site, branch_slug="main", is_preview=False, rest_path=rest)
+        return HostTarget(
+            site=site, branch_slug="main", is_preview=False, rest_path=rest, subject=subject
+        )
 
     if hostname == t.apex:
         return HostTarget(
@@ -159,7 +163,9 @@ def resolve_host(
             if isinstance(found, Redirect):
                 return found
             site, rest = found
-            return HostTarget(site=site, branch_slug=branch, is_preview=True, rest_path=rest)
+            return HostTarget(
+                site=site, branch_slug=branch, is_preview=True, rest_path=rest, subject=name
+            )
         if name in t.site_paths:
             # Oude previewvorm <branch>--<site>: de site staat op de root.
             return HostTarget(

@@ -360,7 +360,7 @@ function Overview({
           <Group gap="xs">
             {concept.previews.map((preview) => (
               <Button
-                key={preview.site}
+                key={preview.url}
                 component="a"
                 href={preview.url}
                 target="_blank"
@@ -368,7 +368,7 @@ function Overview({
                 size="xs"
                 leftSection={<IconCheck size={12} />}
               >
-                {preview.site}
+                {preview.label ?? preview.site}
               </Button>
             ))}
           </Group>

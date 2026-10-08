@@ -182,14 +182,23 @@ def test_resolve_host_unit():
 
     reset_caches()
     assert resolve_host("informatica.coderius.nl", "python/a/b") == HostTarget(
-        site="python", branch_slug="main", is_preview=False, rest_path="a/b"
+        site="python",
+        branch_slug="main",
+        is_preview=False,
+        rest_path="a/b",
+        subject="informatica",
     )
     assert resolve_host("informatica.coderius.nl", "onbekend/x").site == "home"
+    # Het vak reist mee op vak-hosts en vak-previews, niet op de apex.
+    assert resolve_host("wo.coderius.nl", "").subject == "wo"
+    assert resolve_host("b--wo.preview.coderius.nl", "").subject == "wo"
+    assert resolve_host("coderius.nl", "").subject is None
     assert resolve_host("evil.example.com", "") is None
     assert isinstance(resolve_host("ctf.coderius.nl", "x"), Redirect)
     # Oude previewvorm blijft werken.
     old = resolve_host("b--python.preview.coderius.nl", "docs/")
     assert old.site == "python" and old.is_preview and old.rest_path == "docs/"
+    assert old.subject is None
 
 
 def test_dev_domain_root_keeps_numeric_port(monkeypatch):
@@ -226,9 +235,7 @@ async def test_legacy_host_serves_site_when_redirects_disabled(
 
 async def test_spa_404_fallback(delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "abc123def456")
-    resp = await delivery_client.get(
-        "/python/bestaat/niet", headers={"host": INF}
-    )
+    resp = await delivery_client.get("/python/bestaat/niet", headers={"host": INF})
     assert resp.status_code == 404
     assert "404" in resp.text
 
@@ -251,8 +258,29 @@ async def test_path_traversal_blocked(delivery_client, builds_dir):
     make_build(builds_dir, "python", "main", "abc123def456")
     secret = builds_dir / "geheim.txt"
     secret.write_text("geheim")
-    resp = await delivery_client.get(
-        "/python/../../geheim.txt", headers={"host": INF}
-    )
+    resp = await delivery_client.get("/python/../../geheim.txt", headers={"host": INF})
     assert resp.status_code != 200
     assert "geheim" not in resp.text
+
+
+async def test_vak_root_serves_prerendered_vakpagina(delivery_client, builds_dir):
+    target = make_build(
+        builds_dir,
+        "home",
+        "main",
+        "homesha12345",
+        html="<html><head></head><body>alle</body></html>",
+    )
+    (target / "vak").mkdir()
+    (target / "vak" / "informatica.html").write_text(
+        "<html><head></head><body>vak-informatica</body></html>"
+    )
+
+    resp = await delivery_client.get("/", headers={"host": INF})
+    assert resp.status_code == 200
+    assert "vak-informatica" in resp.text
+    # Preview van dat vak ook; de apex en een vak zonder eigen pagina niet.
+    preview = await delivery_client.get("/", headers={"host": "b--informatica.preview.coderius.nl"})
+    assert "vak-informatica" in preview.text
+    assert "alle" in (await delivery_client.get("/", headers={"host": "coderius.nl"})).text
+    assert "alle" in (await delivery_client.get("/", headers={"host": "wo.coderius.nl"})).text

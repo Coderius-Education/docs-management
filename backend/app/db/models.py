@@ -171,3 +171,40 @@ class WebhookDelivery(Base):
     event: Mapped[str] = mapped_column(String(50))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Klas(Base):
+    """Een klasweergave: een docent kiest cursussen, snelkoppelingen en hoofdstukken.
+
+    Leerlingen openen hem via een onraadbare link (<vak-host>/klas/<code>); er
+    zijn geen leerlingaccounts. `inhoud` volgt app.klassen.schema.KlasInhoud.
+    """
+
+    __tablename__ = "klassen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    vak: Mapped[str] = mapped_column(String(50), index=True)
+    naam: Mapped[str] = mapped_column(String(100))
+    inhoud: Mapped[dict] = mapped_column()
+    eigenaar_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    gearchiveerd: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optimistic locking: een PUT met een oude versie krijgt 409.
+    versie: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class KlasDocent(Base):
+    """Collega die een klas mag bewerken. Op login, zodat uitnodigen vóór de
+    eerste keer inloggen kan."""
+
+    __tablename__ = "klas_docenten"
+
+    klas_id: Mapped[int] = mapped_column(
+        ForeignKey("klassen.id", ondelete="CASCADE"), primary_key=True
+    )
+    login: Mapped[str] = mapped_column(String(100), primary_key=True)
+    toegevoegd_door: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -130,14 +130,12 @@ async def get_concept(
         )
     ).all()
     pr["previews"] = [
-        {"site": site_slug, "url": pulls.preview_url_for_slug(slug, site_slug)}
-        for _, site_slug in builds
+        link for _, site_slug in builds for link in pulls.preview_links(slug, site_slug)
     ]
     # Nog geen builds binnen? Toon alvast de verwachte URL's zodra CI klaar is.
     expected = [pr["site"]] if pr.get("site") in SITES else list(SITES)
     pr["expected_previews"] = [
-        {"site": site_slug, "url": pulls.preview_url_for_slug(slug, site_slug)}
-        for site_slug in expected
+        link for site_slug in expected for link in pulls.preview_links(slug, site_slug)
     ]
     return pr
 

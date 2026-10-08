@@ -13,6 +13,12 @@ from app.authoring.content import validate_content
 from app.authoring.effective import read_effective_settings
 from app.authoring.homepage import read_homepage, save_homepage
 from app.authoring.settings import capabilities, read_settings, save_settings
+from app.authoring.vakpagina import (
+    read_vak_image,
+    read_vakpagina,
+    save_vakpagina,
+    write_vak_image,
+)
 from app.config import SUBJECTS, get_settings, register_site_subject, site_dir_for
 from app.db.models import Site
 from app.db.session import get_db
@@ -85,6 +91,59 @@ async def list_subjects(user: CurrentUser) -> list[dict]:
         {"slug": slug, "display_name": s["display_name"], "domain": domains[slug]}
         for slug, s in SUBJECTS.items()
     ]
+
+
+class VakpaginaWrite(BaseModel):
+    branch: str
+    expected_head: str
+    message: str
+    document: dict
+
+
+@subjects_router.get("/{vak}/pagina")
+async def get_vakpagina(user: CurrentUser, vak: str, ref: str = "main") -> dict:
+    """De vakpagina op een concept (of main); `document: null` = standaardpagina."""
+    return await read_vakpagina(GitHubClient(user_github_token(user)), vak, ref)
+
+
+@subjects_router.put("/{vak}/pagina", dependencies=[Depends(require_csrf)])
+async def update_vakpagina(payload: VakpaginaWrite, user: CurrentUser, vak: str) -> dict:
+    if payload.branch == "main":
+        raise HTTPException(status_code=400, detail="Rechtstreeks naar main schrijven mag niet")
+    return await save_vakpagina(
+        GitHubClient(user_github_token(user)),
+        vak,
+        payload.branch,
+        payload.expected_head,
+        payload.message,
+        payload.document,
+    )
+
+
+@subjects_router.post("/{vak}/pagina/afbeeldingen", dependencies=[Depends(require_csrf)])
+async def upload_vak_image(
+    user: CurrentUser,
+    vak: str,
+    branch: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+) -> dict:
+    if branch == "main":
+        raise HTTPException(status_code=400, detail="Rechtstreeks naar main schrijven mag niet")
+    content = await file.read(MAX_IMAGE_BYTES + 1)
+    client = GitHubClient(user_github_token(user))
+    return await write_vak_image(client, vak, branch, file.filename or "", content)
+
+
+@subjects_router.get("/{vak}/pagina/afbeeldingen/{name}")
+async def preview_vak_image(user: CurrentUser, vak: str, name: str, ref: str = "main") -> Response:
+    content, media_type = await read_vak_image(
+        GitHubClient(user_github_token(user)), vak, name, ref
+    )
+    return Response(
+        content,
+        media_type=media_type,
+        headers={"Cache-Control": "private, no-cache", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 class NewSubject(BaseModel):
@@ -213,8 +272,7 @@ async def create_site(
     register_site_subject(slug, subject)
 
     steps = [
-        f"Keur beide voorstellen goed: {docs_pr.get('html_url')} en "
-        f"{mgmt_pr.get('html_url')}.",
+        f"Keur beide voorstellen goed: {docs_pr.get('html_url')} en {mgmt_pr.get('html_url')}.",
         "Trek het docs-voorstel lokaal binnen, draai `pnpm install` om "
         "pnpm-lock.yaml bij te werken en push (anders faalt de controle op "
         "--frozen-lockfile).",

@@ -6,6 +6,10 @@
 - Previews: {branch}--{vak}.<preview-suffix>/<path>/ → <site>/<branch>/current
   (+ noindex), met main als terugval: CI bouwt alleen de geraakte sites.
 - A/B (M4): cookie kan de hele site naar een variant-build sturen.
+- Vakpagina's: de root van een vak-host → home's vooraf gebouwde /vak/<vak>
+  (met terugval op index.html voor een oudere home-build).
+- Klassen: <vak-host>/klas/<code> → home's SPA-terugval met 200 en een
+  klas-cookie; /_cdx/klas/<code>.json levert de klas aan home en de cursussen.
 - HTML krijgt het analytics-snippet geïnjecteerd; assets krijgen immutable caching.
 """
 
@@ -15,9 +19,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import RedirectResponse
 
+from app.config import get_settings
 from app.db.session import dispose_db, init_db
 from app.delivery import experiments as exp
-from app.delivery.router import Redirect, resolve_host
+from app.delivery import klas
+from app.delivery.router import HOME, Redirect, resolve_host
 from app.delivery.snippet import SNIPPET_JS, inject_snippet
 from app.delivery.static import not_found_page, resolve_file, serve_file
 from app.ingest.unpack import previous_build, resolve_current
@@ -46,6 +52,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(exp.events_router)
+    app.include_router(klas.klas_router)
 
     @app.get("/{full_path:path}")
     async def serve(full_path: str, request: Request) -> Response:
@@ -85,7 +92,12 @@ def create_app() -> FastAPI:
                 )
             return Response("Site nog niet gepubliceerd", status_code=503)
 
-        file = await asyncio.to_thread(resolve_file, build_dir, full_path)
+        file = None
+        if target.site == HOME and target.subject and full_path in ("", "index.html"):
+            # Vakpagina: home bouwt /vak/<vak> vooraf met het ontwerp van dat vak.
+            file = await asyncio.to_thread(resolve_file, build_dir, f"vak/{target.subject}")
+        if file is None:
+            file = await asyncio.to_thread(resolve_file, build_dir, full_path)
 
         # Asset-fallback: na een main-flip kunnen oude hashed chunks nog opgevraagd
         # worden door open tabs; probeer dan de vorige build.
@@ -95,6 +107,26 @@ def create_app() -> FastAPI:
                 fallback = await asyncio.to_thread(resolve_file, prev, full_path)
                 if fallback is not None:
                     return serve_file(prev, fallback, extra_headers)
+
+        if file is None and target.site == HOME:
+            # Klaspagina: de SPA-terugval van home, maar met 200 en het klas-cookie.
+            match = klas.KLAS_PAD_RE.match(full_path)
+            nf = not_found_page(build_dir) if match else None
+            if match and nf is not None:
+                code = match.group("code")
+                if await klas.klas_voor_code(code, target.subject) is not None:
+                    html = await asyncio.to_thread(nf.read_bytes)
+                    return Response(
+                        inject_snippet(html),
+                        media_type="text/html",
+                        headers={
+                            "Cache-Control": "no-cache",
+                            **extra_headers,
+                            "X-Robots-Tag": "noindex, nofollow",
+                            "Referrer-Policy": "no-referrer",
+                            "Set-Cookie": klas.klas_cookie(code, get_settings().secure_cookies),
+                        },
+                    )
 
         if file is None:
             nf = not_found_page(build_dir)

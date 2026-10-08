@@ -12,6 +12,7 @@ import time
 
 from fastapi import HTTPException
 
+from app.config import SUBJECTS, get_settings
 from app.github.client import GitHubClient, repo_path
 
 CONCEPT_PREFIX = "concept/"
@@ -332,3 +333,21 @@ def preview_url_for_slug(slug: str, site_slug: str) -> str:
     from app.delivery.router import preview_host
 
     return f"https://{preview_host(slug, site_slug)}"
+
+
+def preview_links(slug: str, site_slug: str) -> list[dict]:
+    """Voorbeeldlinks van een site op een branch. Home draait op de root van elk
+    vak (met per vak een eigen vakpagina), dus die krijgt één link per vak."""
+    if site_slug != "home":
+        return [
+            {"site": site_slug, "label": site_slug, "url": preview_url_for_slug(slug, site_slug)}
+        ]
+    suffix = get_settings().preview_domain_suffix
+    return [
+        {
+            "site": site_slug,
+            "label": f"Vakpagina {subject['display_name']}",
+            "url": f"https://{slug}--{vak}.{suffix}/",
+        }
+        for vak, subject in SUBJECTS.items()
+    ]

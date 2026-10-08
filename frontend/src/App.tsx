@@ -8,6 +8,12 @@ import { BuildsPage } from "./routes/BuildsPage";
 import { Dashboard } from "./routes/Dashboard";
 import { ExperimentDetail } from "./routes/ExperimentDetail";
 import { ExperimentsPage } from "./routes/ExperimentsPage";
+import { KlasEditor } from "./routes/KlasEditor";
+import { KlassenPage } from "./routes/KlassenPage";
+
+const VakpaginaStudio = lazy(() =>
+  import("./routes/VakpaginaStudio").then((m) => ({ default: m.VakpaginaStudio })),
+);
 import { Login } from "./routes/Login";
 
 const EditorPage = lazy(() =>
@@ -58,6 +64,16 @@ export default function App() {
           <Route path="/builds" element={<Navigate to="/voorbeelden" replace />} />
           <Route path="/experiments" element={<ExperimentsPage />} />
           <Route path="/experiments/:id" element={<ExperimentDetail />} />
+          <Route path="/klassen" element={<KlassenPage />} />
+          <Route path="/klassen/:id" element={<KlasEditor />} />
+          <Route
+            path="/vakken/:vak/pagina"
+            element={
+              <Suspense fallback={<Loader />}>
+                <VakpaginaStudio />
+              </Suspense>
+            }
+          />
         </Route>
       </Route>
     </Routes>

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "vak": "informatica",
+  "meta": { "titel": "Informatica op Coderius", "omschrijving": "Leer programmeren.", "afbeelding": "/vakpaginas/informatica/og.png" },
+  "thema": {
+    "licht": { "primary": "#1d4ed8", "primaryForeground": "#ffffff" },
+    "donker": { "primary": "#93c5fd", "primaryForeground": "#0b1220" },
+    "kopletter": "atkinson",
+    "logo": { "licht": "/vakpaginas/informatica/logo.svg", "donker": "/vakpaginas/informatica/logo-donker.svg" }
+  },
+  "blokken": [
+    {
+      "id": "hero",
+      "type": "Hero",
+      "props": { "title": "Informatica", "tagline": "Van Python tot je eigen website", "variant": "default", "width": "wide" },
+      "kinderen": [
+        {
+          "id": "knoppen",
+          "type": "Buttons",
+          "props": { "align": "center" },
+          "kinderen": [
+            { "id": "start", "type": "Button", "props": { "href": "/python/", "variant": "primary", "size": "lg" }, "tekst": "Begin met Python" },
+            { "id": "docent", "type": "Button", "props": { "href": "/docent", "variant": "secondary" }, "tekst": "Voor docenten" }
+          ]
+        }
+      ]
+    },
+    { "id": "aanbod", "type": "Courses", "props": { "title": "Alle cursussen", "filters": false, "uitgelicht": ["python", "web"], "niveaus": ["Beginner"] } },
+    {
+      "id": "kolommen",
+      "type": "Columns",
+      "props": { "count": 3, "spacing": "large", "background": "muted" },
+      "kinderen": [
+        { "id": "k1", "type": "Card", "props": { "title": "Gratis", "info": "Open source" }, "tekst": "Alles is **gratis** en [open](https://github.com/Coderius-Education/docs)." },
+        { "id": "k2", "type": "Card", "props": { "title": "In je browser", "href": "/python/" }, "tekst": "- geen installatie\n- werkt op elke laptop" },
+        { "id": "k3", "type": "Section", "props": { "title": "Voor docenten" }, "tekst": "Kijk op de [docentenpagina](/docent)." }
+      ]
+    },
+    { "id": "lijn", "type": "Divider", "props": {} },
+    { "id": "foto", "type": "Picture", "props": { "src": "/vakpaginas/informatica/klas.jpg", "alt": "Leerlingen achter laptops", "caption": "Les in 4H", "width": "narrow" } }
+  ]
+}
