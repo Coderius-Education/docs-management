@@ -16,7 +16,7 @@
     { "slug": "dvwa", "subject": "informatica", "path": "dvwa", "display_name": "DVWA", "legacy_domains": ["dvwa.coderius.nl"] },
     { "slug": "play", "subject": "informatica", "path": "play", "display_name": "Play", "legacy_domains": ["play.coderius.nl"] },
     { "slug": "algorithms", "subject": "informatica", "path": "algoritmes", "display_name": "Algoritmes", "legacy_domains": ["algoritmes.coderius.nl"] },
-    { "slug": "ide", "subject": "informatica", "path": "ide", "display_name": "IDE", "legacy_domains": ["ide.coderius.nl"] },
+    { "slug": "ide", "subject": "informatica", "path": "ide", "display_name": "IDE", "legacy_domains": ["ide.coderius.nl"], "legacy_paths": ["oud/"] },
     { "slug": "didactiek", "subject": "informatica", "path": "didactiek", "display_name": "Didactiek", "legacy_domains": ["didactiek.coderius.nl"] },
     { "slug": "onderzoek", "subject": "wo", "path": "onderzoek", "display_name": "Onderzoek", "legacy_domains": [] },
     { "slug": "home", "subject": null, "path": "", "display_name": "Home", "legacy_domains": [] }
