@@ -8,12 +8,17 @@
   die serveert het oude subdomein zelf uit de build van de site. Alleen een
   pagina op de oude origin kan de browseropslag van die origin lezen, en zo
   projecten van vóór de verhuizing overzetten.
+- Met ``legacy_live_until`` (een datum) draait de site tot en met die dag ook
+  nog op het oude subdomein, onder zijn eigen pad (``ide.coderius.nl/ide/``),
+  en stuurt ``/`` daar tijdelijk (302) naartoe. Niet op ``/`` zelf: wie er sinds
+  de verhuizing was, heeft de 301 van ``/`` in zijn browser bewaard.
 - ``<branch>--<vak>.preview.coderius.nl/<path>/`` → preview van die branch
   (main_delivery valt terug op main als die site geen build voor de branch heeft).
 - ``<branch>--<site>.preview.coderius.nl/x`` (oude vorm) → 301 naar
   ``<branch>--<vak>.preview.coderius.nl/<path>/x``.
 """
 
+import datetime
 import posixpath
 import re
 from dataclasses import dataclass
@@ -49,6 +54,7 @@ class _Tables:
     paths: dict[tuple[str, str], str]  # (vak, path) -> site-slug
     legacy: dict[str, str]  # host -> site-slug
     legacy_paths: dict[str, tuple[str, ...]]  # site-slug -> padvoorvoegsels die niet 301'en
+    legacy_live_until: dict[str, datetime.date]  # site-slug -> laatste dag live op oud subdomein
     site_paths: dict[str, tuple[str | None, str]]  # site -> (vak, path)
     preview_re: re.Pattern
 
@@ -60,6 +66,7 @@ def _tables() -> _Tables:
     paths: dict[tuple[str, str], str] = {}
     legacy: dict[str, str] = {}
     legacy_paths: dict[str, tuple[str, ...]] = {}
+    legacy_live_until: dict[str, datetime.date] = {}
     site_paths: dict[str, tuple[str | None, str]] = {}
     for slug, entry in SITE_REGISTRY.items():
         subject = entry.get("subject")
@@ -70,6 +77,8 @@ def _tables() -> _Tables:
         for domain in entry.get("legacy_domains", []):
             legacy[s.localize(domain).lower()] = slug
         legacy_paths[slug] = tuple(_legacy_prefix(p) for p in entry.get("legacy_paths", []))
+        if entry.get("legacy_live_until"):
+            legacy_live_until[slug] = datetime.date.fromisoformat(entry["legacy_live_until"])
     suffix = re.escape(s.preview_domain_suffix.lower())
     return _Tables(
         apex=s.localize("coderius.nl").lower(),
@@ -78,6 +87,7 @@ def _tables() -> _Tables:
         paths=paths,
         legacy=legacy,
         legacy_paths=legacy_paths,
+        legacy_live_until=legacy_live_until,
         site_paths=site_paths,
         preview_re=re.compile(rf"^(?P<branch>.+)--(?P<name>[a-z0-9-]+)\.{suffix}$"),
     )
@@ -126,6 +136,11 @@ def _kept_on_legacy(path: str, prefixes: tuple[str, ...]) -> bool:
     return any(f"{norm}/".startswith(prefix) for prefix in prefixes)
 
 
+def _vandaag() -> datetime.date:
+    """Losse functie, zodat tests de datum kunnen vastzetten."""
+    return datetime.date.today()
+
+
 def _with_query(location: str, query: str) -> str:
     return f"{location}?{query}" if query else location
 
@@ -170,6 +185,20 @@ def resolve_host(
 
     legacy_site = t.legacy.get(hostname)
     if legacy_site:
+        tot = t.legacy_live_until.get(legacy_site)
+        if tot is not None and _vandaag() <= tot:
+            _, site_path = t.site_paths[legacy_site]
+            clean = _clean_path(path)
+            first, sep, rest = clean.partition("/")
+            if clean == "" or (first == site_path and not sep):
+                # Tijdelijk (302): na de einddatum hoort '/' weer te 301'en.
+                return Redirect(_with_query(f"/{site_path}/", query), 302)
+            # Genormaliseerd, zodat 'ide/../x' niet langs deze uitzondering glipt.
+            norm = posixpath.normpath(clean)
+            if first == site_path and sep and norm == clean.rstrip("/"):
+                return HostTarget(
+                    site=legacy_site, branch_slug="main", is_preview=False, rest_path=rest
+                )
         if _kept_on_legacy(path, t.legacy_paths.get(legacy_site, ())):
             return HostTarget(
                 site=legacy_site,

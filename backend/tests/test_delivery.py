@@ -314,7 +314,11 @@ async def test_legacy_paths_are_served_on_old_origin(delivery_client, builds_dir
     assert "overzetten" in resp.text
 
 
-async def test_legacy_paths_do_not_free_the_rest_of_the_host(delivery_client, builds_dir):
+async def test_legacy_paths_do_not_free_the_rest_of_the_host(
+    delivery_client, builds_dir, monkeypatch
+):
+    # Na de live-periode van ide.coderius.nl (zie test_ide_live_*).
+    _live_tot(monkeypatch, "2099-01-01")
     make_build(builds_dir, "ide", "main", "ide123456789")
     for path in ("/", "/oudje/", "/oud/../index.html", "/oud/%2e%2e/index.html"):
         resp = await delivery_client.get(
@@ -341,3 +345,63 @@ def test_legacy_paths_only_for_their_own_site():
         assert isinstance(resolve_host(host, "docs/"), Redirect)
     target = resolve_host("ide.coderius.nl", "oud/overzetten/")
     assert target.site == "ide" and target.rest_path == "oud/overzetten/"
+
+
+# ide.coderius.nl blijft een tijd live: de IDE draait er onder /ide/ (hetzelfde
+# pad als op de vak-host, dus dezelfde build), op de oude origin, zodat
+# leerlingen hun oude projecten gewoon zien. '/' kan niet: wie er sinds de
+# verhuizing was, heeft de 301 van '/' in zijn browser bewaard.
+def _live_tot(monkeypatch, vandaag: str):
+    import datetime
+
+    from app.delivery import router
+
+    router.reset_caches()
+    monkeypatch.setattr(router, "_vandaag", lambda: datetime.date.fromisoformat(vandaag))
+    return router
+
+
+def test_ide_live_serves_ide_under_its_path(monkeypatch):
+    router = _live_tot(monkeypatch, "2026-11-01")
+    target = router.resolve_host("ide.coderius.nl", "ide/assets/js/main.js")
+    assert target == router.HostTarget(
+        site="ide", branch_slug="main", is_preview=False, rest_path="assets/js/main.js"
+    )
+    assert router.resolve_host("ide.coderius.nl", "ide/").rest_path == ""
+
+
+def test_ide_live_root_is_a_temporary_relative_redirect(monkeypatch):
+    router = _live_tot(monkeypatch, "2026-11-01")
+    # 302, niet 301: na de einddatum moet '/' weer gewoon doorsturen.
+    assert router.resolve_host("ide.coderius.nl", "") == router.Redirect("/ide/", 302)
+    assert router.resolve_host("ide.coderius.nl", "/", "a=1") == router.Redirect("/ide/?a=1", 302)
+    assert router.resolve_host("ide.coderius.nl", "ide") == router.Redirect("/ide/", 302)
+
+
+def test_ide_live_keeps_other_paths_as_before(monkeypatch):
+    router = _live_tot(monkeypatch, "2026-11-01")
+    assert router.resolve_host("ide.coderius.nl", "oud/overzetten/").site == "ide"
+    other = router.resolve_host("ide.coderius.nl", "import", scheme="https")
+    assert other == router.Redirect("https://informatica.coderius.nl/ide/import", 301)
+    assert router.resolve_host("ide.coderius.nl", "ide/../x").__class__ is router.Redirect
+    # Alleen de ide: web blijft gewoon doorsturen.
+    assert isinstance(router.resolve_host("web.coderius.nl", "web/"), router.Redirect)
+
+
+def test_ide_live_stops_after_end_date(monkeypatch):
+    router = _live_tot(monkeypatch, "2099-01-01")
+    assert router.resolve_host("ide.coderius.nl", "", scheme="https") == router.Redirect(
+        "https://informatica.coderius.nl/ide/", 301
+    )
+    assert isinstance(router.resolve_host("ide.coderius.nl", "ide/x"), router.Redirect)
+
+
+async def test_ide_live_serves_build_over_http(delivery_client, builds_dir, monkeypatch):
+    _live_tot(monkeypatch, "2026-11-01")
+    make_build(builds_dir, "ide", "main", "ide123456789")
+    resp = await delivery_client.get("/ide/", headers={"host": "ide.coderius.nl"})
+    assert resp.status_code == 200
+    assert "ide123456789" in resp.text
+    resp = await delivery_client.get("/", headers={"host": "ide.coderius.nl"})
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/ide/"

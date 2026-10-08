@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # site via een PR kan worden toegevoegd zonder Python-broncode te herschrijven.
 #
 # Vorm: {apex, subjects:[{slug,domain,display_name}],
-#        sites:[{slug,subject,path,display_name,legacy_domains,legacy_paths?}]}.
+#        sites:[{slug,subject,path,display_name,legacy_domains,legacy_paths?,legacy_live_until?}]}.
 # Een site woont op https://<vak-domein>/<path>/ (bv. informatica.coderius.nl/python/).
 # Let op: slug en path verschillen soms (algorithms -> /algoritmes/).
 # `home` heeft geen vak: die build draait op de apex en op de root van elk vak.
