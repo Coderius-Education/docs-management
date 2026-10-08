@@ -300,3 +300,44 @@ async def test_vak_root_serves_prerendered_vakpagina(delivery_client, builds_dir
     assert "vak-informatica" in preview.text
     assert "alle" in (await delivery_client.get("/", headers={"host": "coderius.nl"})).text
     assert "alle" in (await delivery_client.get("/", headers={"host": "wo.coderius.nl"})).text
+
+
+# Projecten van vóór de verhuizing staan in de IndexedDB van ide.coderius.nl.
+# Alleen een pagina op die origin kan ze lezen, dus /oud/ blijft daar bestaan.
+async def test_legacy_paths_are_served_on_old_origin(delivery_client, builds_dir):
+    target = make_build(builds_dir, "ide", "main", "ide123456789")
+    page = target / "oud" / "overzetten"
+    page.mkdir(parents=True)
+    (page / "index.html").write_text("<html><head></head><body>overzetten</body></html>")
+    resp = await delivery_client.get("/oud/overzetten/", headers={"host": "ide.coderius.nl"})
+    assert resp.status_code == 200
+    assert "overzetten" in resp.text
+
+
+async def test_legacy_paths_do_not_free_the_rest_of_the_host(delivery_client, builds_dir):
+    make_build(builds_dir, "ide", "main", "ide123456789")
+    for path in ("/", "/oudje/", "/oud/../index.html", "/oud/%2e%2e/index.html"):
+        resp = await delivery_client.get(
+            path, headers={"host": "ide.coderius.nl", "x-forwarded-proto": "https"}
+        )
+        assert resp.status_code == 301, path
+        assert resp.headers["location"].startswith("https://informatica.coderius.nl/ide/"), path
+
+
+def test_legacy_paths_only_for_their_own_site():
+    from app.delivery.router import Redirect, reset_caches, resolve_host
+
+    reset_caches()
+    # python heeft geen legacy_paths: /oud/ stuurt daar gewoon door.
+    assert isinstance(resolve_host("python.coderius.nl", "oud/x"), Redirect)
+    # De sites die oudeOpslag hebben (docs: createConfig) houden /oud/ ook.
+    for host, site in (
+        ("web.coderius.nl", "web"),
+        ("robotica.coderius.nl", "robotica"),
+        ("ctf.coderius.nl", "ctf"),
+    ):
+        target = resolve_host(host, "oud/overzetten/regels.json")
+        assert target.site == site and target.rest_path == "oud/overzetten/regels.json"
+        assert isinstance(resolve_host(host, "docs/"), Redirect)
+    target = resolve_host("ide.coderius.nl", "oud/overzetten/")
+    assert target.site == "ide" and target.rest_path == "oud/overzetten/"

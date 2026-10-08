@@ -3,13 +3,18 @@
 - ``<vak>.coderius.nl/<path>/…`` → site met dat pad binnen het vak; het
   voorvoegsel ``/<path>`` wordt gestript tegen de build-map.
 - Al het andere op een vak-host, en de apex, → de ``home``-build.
-- Een oud subdomein (``python.coderius.nl/x``) → 301 naar ``<vak>/<path>/x``.
+- Een oud subdomein (``python.coderius.nl/x``) → 301 naar ``<vak>/<path>/x``,
+  behalve paden onder ``legacy_paths`` van die site (``ide.coderius.nl/oud/…``):
+  die serveert het oude subdomein zelf uit de build van de site. Alleen een
+  pagina op de oude origin kan de browseropslag van die origin lezen, en zo
+  projecten van vóór de verhuizing overzetten.
 - ``<branch>--<vak>.preview.coderius.nl/<path>/`` → preview van die branch
   (main_delivery valt terug op main als die site geen build voor de branch heeft).
 - ``<branch>--<site>.preview.coderius.nl/x`` (oude vorm) → 301 naar
   ``<branch>--<vak>.preview.coderius.nl/<path>/x``.
 """
 
+import posixpath
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -43,6 +48,7 @@ class _Tables:
     subject_hosts: dict[str, str]  # vak-slug -> host
     paths: dict[tuple[str, str], str]  # (vak, path) -> site-slug
     legacy: dict[str, str]  # host -> site-slug
+    legacy_paths: dict[str, tuple[str, ...]]  # site-slug -> padvoorvoegsels die niet 301'en
     site_paths: dict[str, tuple[str | None, str]]  # site -> (vak, path)
     preview_re: re.Pattern
 
@@ -53,6 +59,7 @@ def _tables() -> _Tables:
     subject_hosts = {slug: host.lower() for slug, host in s.subject_domains().items()}
     paths: dict[tuple[str, str], str] = {}
     legacy: dict[str, str] = {}
+    legacy_paths: dict[str, tuple[str, ...]] = {}
     site_paths: dict[str, tuple[str | None, str]] = {}
     for slug, entry in SITE_REGISTRY.items():
         subject = entry.get("subject")
@@ -62,6 +69,7 @@ def _tables() -> _Tables:
             paths[(subject, path)] = slug
         for domain in entry.get("legacy_domains", []):
             legacy[s.localize(domain).lower()] = slug
+        legacy_paths[slug] = tuple(_legacy_prefix(p) for p in entry.get("legacy_paths", []))
     suffix = re.escape(s.preview_domain_suffix.lower())
     return _Tables(
         apex=s.localize("coderius.nl").lower(),
@@ -69,6 +77,7 @@ def _tables() -> _Tables:
         subject_hosts=subject_hosts,
         paths=paths,
         legacy=legacy,
+        legacy_paths=legacy_paths,
         site_paths=site_paths,
         preview_re=re.compile(rf"^(?P<branch>.+)--(?P<name>[a-z0-9-]+)\.{suffix}$"),
     )
@@ -94,6 +103,27 @@ def _clean_path(path: str) -> str:
     """Pad zonder voorloop-slashes, zodat '//evil.com' nooit een protocol-relatieve
     Location oplevert."""
     return path.lstrip("/\\")
+
+
+def _legacy_prefix(prefix: str) -> str:
+    """'/oud/' -> 'oud/'. Een voorvoegsel is altijd een map, zodat 'oud' niet
+    ook 'oudje' vrijgeeft."""
+    clean = prefix.strip("/")
+    if not clean or ".." in clean.split("/"):
+        raise ValueError(f"ongeldig legacy_paths-voorvoegsel: {prefix!r}")
+    return f"{clean}/"
+
+
+def _kept_on_legacy(path: str, prefixes: tuple[str, ...]) -> bool:
+    """Valt het pad onder een legacy_paths-voorvoegsel? Genormaliseerd, zodat
+    'oud/../index.html' niet de hele site op de oude origin vrijgeeft."""
+    if not prefixes:
+        return False
+    clean = _clean_path(path)
+    norm = posixpath.normpath(clean) if clean else ""
+    if norm != clean.rstrip("/") or norm.startswith(".."):
+        return False
+    return any(f"{norm}/".startswith(prefix) for prefix in prefixes)
 
 
 def _with_query(location: str, query: str) -> str:
@@ -140,6 +170,13 @@ def resolve_host(
 
     legacy_site = t.legacy.get(hostname)
     if legacy_site:
+        if _kept_on_legacy(path, t.legacy_paths.get(legacy_site, ())):
+            return HostTarget(
+                site=legacy_site,
+                branch_slug="main",
+                is_preview=False,
+                rest_path=_clean_path(path),
+            )
         if not get_settings().legacy_redirects:
             return HostTarget(
                 site=legacy_site,
