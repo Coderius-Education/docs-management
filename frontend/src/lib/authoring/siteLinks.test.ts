@@ -25,8 +25,18 @@ const index: LinkIndex = {
   missing: ['ctf'],
   sites: [
     {
+      site: 'onderzoek',
+      label: 'Onderzoek',
+      subject: 'wo',
+      build_id: 3,
+      built_at: null,
+      stale: false,
+      pages: [{ path: '/lussen-in-onderzoek', title: 'Lussen in onderzoek', kind: 'docs', headings: [] }],
+    },
+    {
       site: 'web',
       label: 'Web',
+      subject: 'informatica',
       build_id: 2,
       built_at: null,
       stale: false,
@@ -37,6 +47,7 @@ const index: LinkIndex = {
     {
       site: 'python',
       label: 'Python',
+      subject: 'informatica',
       build_id: 1,
       built_at: null,
       stale: false,
@@ -55,7 +66,7 @@ const index: LinkIndex = {
 };
 
 it('searches titles, then paths, then headings, own site first', () => {
-  const hits = searchPages(index, 'lus', { current: 'python' });
+  const hits = searchPages(index, 'lus', { current: 'python', subject: 'informatica' });
   expect(hits.map((h) => `${h.site.site}${h.page.path}`)).toEqual([
     'python/docs/lussen',
     'web/docs/lussen-in-js',
@@ -76,4 +87,9 @@ it('describes links for the preview', () => {
   expect(describeSiteUrl(index, 'site:ctf/')?.status).toBe('unindexed');
   expect(describeSiteUrl(index, 'site:pyton/')?.status).toBe('unknown-site');
   expect(describeSiteUrl(index, 'https://example.com')).toBeNull();
+});
+
+it('filters on subject', () => {
+  expect(searchPages(index, 'lus', { subject: 'wo' }).map((h) => h.site.site)).toEqual(['onderzoek']);
+  expect(searchPages(index, 'lus')).toHaveLength(4);
 });

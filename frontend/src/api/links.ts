@@ -16,6 +16,8 @@ export interface LinkPage {
 export interface LinkSite {
   site: string;
   label: string;
+  /** Vak van de cursus (informatica, wo, …); null voor de homepage. */
+  subject: string | null;
   build_id: number;
   built_at: string | null;
   /** De nieuwste build was onleesbaar; deze index komt van een oudere. */

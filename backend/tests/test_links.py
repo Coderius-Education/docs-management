@@ -87,6 +87,7 @@ async def test_index_uit_nieuwste_leesbare_build(api_client, builds_dir):
     )
     assert [p["path"] for p in python["pages"]] == ["/docs/lussen", "/"]
     assert python["stale"] is False
+    assert python["subject"] == "informatica"
 
     # Nieuwere build zonder index.html: terugval op de vorige, gemarkeerd stale.
     await _build(builds_dir, "b" * 40, None, now)

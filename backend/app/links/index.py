@@ -197,6 +197,7 @@ async def site_index(db: AsyncSession, site: Site) -> dict | None:
         return {
             "site": site.slug,
             "label": site.display_name,
+            "subject": site.subject,
             "build_id": build.id,
             "built_at": build.created_at.isoformat() if build.created_at else None,
             "stale": positie > 0,
