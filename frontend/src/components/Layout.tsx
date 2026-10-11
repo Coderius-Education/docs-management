@@ -28,10 +28,12 @@ import {
   IconSun,
   IconWorldWww,
 } from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 
 import { api } from '../api/client';
 import { useMe, useSites, useSubjects } from '../api/hooks';
+import { FocusModeContext } from '../lib/focusMode';
 import { OTHER_GROUP, SIDEBAR_CLOSED_KEY, groupSitesBySubject } from '../lib/subjectGroups';
 import { useClosedSubjects } from '../lib/useClosedSubjects';
 
@@ -48,6 +50,8 @@ export function Layout() {
       new URLSearchParams(location.search).get('scope') === 'homepage') ||
     /^\/vakken\/[^/]+\/pagina$/.test(location.pathname);
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
+  const [focus, setFocus] = useState(false);
+  const focusMode = useMemo(() => ({ focus, setFocus }), [focus]);
 
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' });
@@ -55,149 +59,152 @@ export function Layout() {
   }
 
   return (
-    <AppShell
-      header={{ height: 56 }}
-      navbar={{
-        width: 260,
-        breakpoint: 'sm',
-        collapsed: { mobile: !opened, desktop: canvasRoute && !opened },
-      }}
-      padding="md"
-    >
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Burger
-              opened={opened}
-              onClick={toggle}
-              hiddenFrom={canvasRoute ? undefined : 'sm'}
-              aria-label={opened ? 'Navigatie sluiten' : 'Navigatie openen'}
-              size="sm"
-            />
-            <Title order={4} style={{ fontSize: 'clamp(14px, 3vw, 18px)' }}>
-              Coderius Docs Beheer
-            </Title>
-          </Group>
-          <Group gap="xs">
-            <ActionIcon
-              variant="subtle"
-              onClick={toggleColorScheme}
-              aria-label="Kleurschema wisselen"
-            >
-              {colorScheme === 'dark' ? (
-                <IconSun size={18} />
-              ) : (
-                <IconMoon size={18} />
+    <FocusModeContext.Provider value={focusMode}>
+      <AppShell
+        disabled={focus}
+        header={{ height: 56 }}
+        navbar={{
+          width: 260,
+          breakpoint: 'sm',
+          collapsed: { mobile: !opened, desktop: canvasRoute && !opened },
+        }}
+        padding={focus ? 0 : 'md'}
+      >
+        <AppShell.Header>
+          <Group h="100%" px="md" justify="space-between">
+            <Group>
+              <Burger
+                opened={opened}
+                onClick={toggle}
+                hiddenFrom={canvasRoute ? undefined : 'sm'}
+                aria-label={opened ? 'Navigatie sluiten' : 'Navigatie openen'}
+                size="sm"
+              />
+              <Title order={4} style={{ fontSize: 'clamp(14px, 3vw, 18px)' }}>
+                Coderius Docs Beheer
+              </Title>
+            </Group>
+            <Group gap="xs">
+              <ActionIcon
+                variant="subtle"
+                onClick={toggleColorScheme}
+                aria-label="Kleurschema wisselen"
+              >
+                {colorScheme === 'dark' ? (
+                  <IconSun size={18} />
+                ) : (
+                  <IconMoon size={18} />
+                )}
+              </ActionIcon>
+              {me && (
+                <Menu position="bottom-end">
+                  <Menu.Target>
+                    <UnstyledButton>
+                      <Group gap="xs">
+                        <Avatar src={me.avatar_url} size="sm" radius="xl" />
+                        <Text size="sm" visibleFrom="sm">
+                          {me.name ?? me.login}
+                        </Text>
+                        <IconChevronDown size={14} />
+                      </Group>
+                    </UnstyledButton>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item
+                      leftSection={<IconLogout size={14} />}
+                      onClick={logout}
+                    >
+                      Uitloggen
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
               )}
-            </ActionIcon>
-            {me && (
-              <Menu position="bottom-end">
-                <Menu.Target>
-                  <UnstyledButton>
-                    <Group gap="xs">
-                      <Avatar src={me.avatar_url} size="sm" radius="xl" />
-                      <Text size="sm" visibleFrom="sm">
-                        {me.name ?? me.login}
-                      </Text>
-                      <IconChevronDown size={14} />
-                    </Group>
-                  </UnstyledButton>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Item
-                    leftSection={<IconLogout size={14} />}
-                    onClick={logout}
-                  >
-                    Uitloggen
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
-            )}
+            </Group>
           </Group>
-        </Group>
-      </AppShell.Header>
+        </AppShell.Header>
 
-      <AppShell.Navbar p="xs">
-        <ScrollArea>
-          <MantineNavLink
-            label="Dashboard"
-            leftSection={<IconHome size={16} />}
-            active={location.pathname === '/'}
-            onClick={() => navigate('/')}
-          />
-          <MantineNavLink
-            label="Concepten"
-            leftSection={<IconFileText size={16} />}
-            active={location.pathname.startsWith('/concepten')}
-            onClick={() => navigate('/concepten')}
-          />
-          <MantineNavLink
-            label="Voorbeelden"
-            leftSection={<IconPackages size={16} />}
-            active={location.pathname.startsWith('/voorbeelden')}
-            onClick={() => navigate('/voorbeelden')}
-          />
-          <MantineNavLink
-            label="Klassen"
-            leftSection={<IconSchool size={16} />}
-            active={location.pathname.startsWith('/klassen')}
-            onClick={() => navigate('/klassen')}
-          />
-          <MantineNavLink
-            label="Experimenten"
-            leftSection={<IconFlask size={16} />}
-            active={location.pathname.startsWith('/experiments')}
-            onClick={() => navigate('/experiments')}
-          />
-          <MantineNavLink
-            label="Sites"
-            leftSection={<IconWorldWww size={16} />}
-            defaultOpened
-          >
-            {groupSitesBySubject(sites, subjects).map((group) => {
-              const open = folders.isOpen(group.key);
-              const Icon = open ? IconFolderOpen : IconFolder;
-              const isCurrent = (slug: string) =>
-                location.pathname.startsWith(`/sites/${slug}`);
-              return (
-                <MantineNavLink
-                  key={group.key}
-                  label={group.title}
-                  leftSection={<Icon size={16} />}
-                  opened={open}
-                  onChange={() => folders.toggle(group.key)}
-                  role="button"
-                  aria-expanded={open}
-                  // A closed folder still shows where you are.
-                  active={!open && group.sites.some((site) => isCurrent(site.slug))}
-                  variant="subtle"
-                >
-                  {group.key !== OTHER_GROUP && (
-                    <MantineNavLink
-                      label="Vakpagina"
-                      leftSection={<IconLayoutDashboard size={14} />}
-                      active={location.pathname === `/vakken/${group.key}/pagina`}
-                      onClick={() => navigate(`/vakken/${group.key}/pagina`)}
-                    />
-                  )}
-                  {group.sites.map((site) => (
-                    <MantineNavLink
-                      key={site.slug}
-                      label={site.display_name}
-                      active={isCurrent(site.slug)}
-                      onClick={() => navigate(`/sites/${site.slug}`)}
-                    />
-                  ))}
-                </MantineNavLink>
-              );
-            })}
-          </MantineNavLink>
-        </ScrollArea>
-      </AppShell.Navbar>
+        <AppShell.Navbar p="xs">
+          <ScrollArea>
+            <MantineNavLink
+              label="Dashboard"
+              leftSection={<IconHome size={16} />}
+              active={location.pathname === '/'}
+              onClick={() => navigate('/')}
+            />
+            <MantineNavLink
+              label="Concepten"
+              leftSection={<IconFileText size={16} />}
+              active={location.pathname.startsWith('/concepten')}
+              onClick={() => navigate('/concepten')}
+            />
+            <MantineNavLink
+              label="Voorbeelden"
+              leftSection={<IconPackages size={16} />}
+              active={location.pathname.startsWith('/voorbeelden')}
+              onClick={() => navigate('/voorbeelden')}
+            />
+            <MantineNavLink
+              label="Klassen"
+              leftSection={<IconSchool size={16} />}
+              active={location.pathname.startsWith('/klassen')}
+              onClick={() => navigate('/klassen')}
+            />
+            <MantineNavLink
+              label="Experimenten"
+              leftSection={<IconFlask size={16} />}
+              active={location.pathname.startsWith('/experiments')}
+              onClick={() => navigate('/experiments')}
+            />
+            <MantineNavLink
+              label="Sites"
+              leftSection={<IconWorldWww size={16} />}
+              defaultOpened
+            >
+              {groupSitesBySubject(sites, subjects).map((group) => {
+                const open = folders.isOpen(group.key);
+                const Icon = open ? IconFolderOpen : IconFolder;
+                const isCurrent = (slug: string) =>
+                  location.pathname.startsWith(`/sites/${slug}`);
+                return (
+                  <MantineNavLink
+                    key={group.key}
+                    label={group.title}
+                    leftSection={<Icon size={16} />}
+                    opened={open}
+                    onChange={() => folders.toggle(group.key)}
+                    role="button"
+                    aria-expanded={open}
+                    // A closed folder still shows where you are.
+                    active={!open && group.sites.some((site) => isCurrent(site.slug))}
+                    variant="subtle"
+                  >
+                    {group.key !== OTHER_GROUP && (
+                      <MantineNavLink
+                        label="Vakpagina"
+                        leftSection={<IconLayoutDashboard size={14} />}
+                        active={location.pathname === `/vakken/${group.key}/pagina`}
+                        onClick={() => navigate(`/vakken/${group.key}/pagina`)}
+                      />
+                    )}
+                    {group.sites.map((site) => (
+                      <MantineNavLink
+                        key={site.slug}
+                        label={site.display_name}
+                        active={isCurrent(site.slug)}
+                        onClick={() => navigate(`/sites/${site.slug}`)}
+                      />
+                    ))}
+                  </MantineNavLink>
+                );
+              })}
+            </MantineNavLink>
+          </ScrollArea>
+        </AppShell.Navbar>
 
-      <AppShell.Main>
-        <Outlet />
-      </AppShell.Main>
-    </AppShell>
+        <AppShell.Main>
+          <Outlet />
+        </AppShell.Main>
+      </AppShell>
+    </FocusModeContext.Provider>
   );
 }

@@ -25,9 +25,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { useConcepts } from '../api/git';
-import { usePage, useSites, useTree } from '../api/hooks';
-import { contentScope, scopedKey } from '../api/types';
+import { usePage, usePreviews, useSites, useTree } from '../api/hooks';
+import { contentScope, scopedKey, siteHost } from '../api/types';
 import { categoryContent, friendlyName } from '../lib/authoring/folders';
+import { splitFrontmatter } from '../lib/frontmatter';
+import { MdxPreview } from '../lib/mdx-preview/MdxPreview';
 import { NewFolderModal } from '../components/NewFolderModal';
 import { NewMetadataModal } from '../components/NewMetadataModal';
 import { NewPageModal } from '../components/NewPageModal';
@@ -83,7 +85,18 @@ export function SiteBrowser() {
     scope,
   );
 
+  const [view, setView] = useState<'voorbeeld' | 'bron'>('voorbeeld');
+  const { data: previews } = usePreviews();
+  const split = useMemo(
+    () =>
+      page && scope !== 'metadata' ? splitFrontmatter(page.content) : null,
+    [page, scope],
+  );
+
   const siteInfo = sites?.find((s) => s.slug === site);
+  const previewOrigin = previews?.find(
+    (p) => p.site === site && p.branch === ref,
+  )?.url;
   const rootLabel =
     scope === 'pages'
       ? "Alle pagina's"
@@ -345,20 +358,56 @@ export function SiteBrowser() {
                       {page.path}
                     </Text>
                   </div>
-                  <Button
-                    size="xs"
-                    leftSection={<IconPencil size={14} />}
-                    onClick={() =>
-                      navigate(
-                        `/sites/${site}/${scope === 'metadata' ? 'metadata' : 'edit'}?path=${encodeURIComponent(page.path)}&ref=${encodeURIComponent(ref)}&scope=${scope}`,
-                      )
-                    }
-                  >
-                    Bewerken
-                  </Button>
+                  <Group gap="xs">
+                    {split && (
+                      <SegmentedControl
+                        size="xs"
+                        aria-label="Weergave"
+                        value={view}
+                        onChange={(v) => setView(v as 'voorbeeld' | 'bron')}
+                        data={[
+                          { value: 'voorbeeld', label: 'Voorbeeld' },
+                          { value: 'bron', label: 'Broncode' },
+                        ]}
+                      />
+                    )}
+                    <Button
+                      size="xs"
+                      leftSection={<IconPencil size={14} />}
+                      onClick={() =>
+                        navigate(
+                          `/sites/${site}/${scope === 'metadata' ? 'metadata' : 'edit'}?path=${encodeURIComponent(page.path)}&ref=${encodeURIComponent(ref)}&scope=${scope}`,
+                        )
+                      }
+                    >
+                      Bewerken
+                    </Button>
+                  </Group>
                 </Group>
+                {split?.error && view === 'voorbeeld' && (
+                  <Alert color="orange" mb="sm">
+                    {split.error}
+                  </Alert>
+                )}
                 <ScrollArea h="62vh">
-                  <Code block>{page.content}</Code>
+                  {split && !split.error && view === 'voorbeeld' ? (
+                    <MdxPreview
+                      body={split.body}
+                      site={site}
+                      scope={scope}
+                      domain={siteHost(siteInfo)}
+                      path={page.path}
+                      branch={ref}
+                      previewOrigin={previewOrigin}
+                      title={
+                        typeof split.frontmatter.title === 'string'
+                          ? split.frontmatter.title
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <Code block>{page.content}</Code>
+                  )}
                 </ScrollArea>
               </>
             )}

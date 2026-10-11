@@ -62,6 +62,7 @@ import {
 import { attributes, insertComponent } from '../../lib/authoring/components';
 import { insertTabs } from '../../lib/authoring/content';
 import { resolveAsset } from '../../lib/authoring/assets';
+import { applySplice, shiftPoint } from '../../lib/authoring/insertion';
 import { type SiteSettings } from '../../lib/authoring/settings';
 import { MdxPreview } from '../../lib/mdx-preview/MdxPreview';
 import {
@@ -480,12 +481,21 @@ export function HomepageEditor(props: Props) {
             {...props}
             nested
             inheritedImports={importsFrom(parsed.tree!)}
-            onInsertComponent={(name, offset) =>
-              change(insertComponent(value, site, name, r.from + offset))
-            }
-            onInsertTabs={(offset) =>
-              change(insertTabs(value, r.from + offset))
-            }
+            onInsertComponent={(name, inner) => {
+              const point = shiftPoint(inner, r.from);
+              change(
+                insertComponent(
+                  applySplice(value, point),
+                  site,
+                  name,
+                  point.at,
+                ),
+              );
+            }}
+            onInsertTabs={(inner) => {
+              const point = shiftPoint(inner, r.from);
+              change(insertTabs(applySplice(value, point), point.at));
+            }}
             value={raw}
             onChange={(next) => change(replaceRange(value, r, next))}
           />

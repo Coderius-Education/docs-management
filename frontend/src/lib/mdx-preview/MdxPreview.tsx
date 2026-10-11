@@ -13,13 +13,25 @@ import { textContent, type LessonNode } from '../authoring/syntax';
 import { CodePreview, HeadingPreview, TabsPreview } from './ContentPreview';
 import { tabsModel } from '../authoring/content';
 import { modelForNode, sectionBindings } from '../authoring/homepage';
+import { describeSiteUrl, parseSiteUrl, type LinkStatus } from '../authoring/siteLinks';
+import { useLinkIndex } from '../../api/links';
 import './MdxPreview.css';
 
 export interface PreviewContext extends AssetContext {
   site?: string;
   title?: string;
   description?: string;
+  /** Beschrijft een site:-link: naar welke pagina, en of die (en het anker) bestaat. */
+  describeLink?: (url: string) => { label: string; status: LinkStatus } | null;
 }
+
+const LINK_STATUS: Record<LinkStatus, string> = {
+  ok: '',
+  'missing-page': 'Deze pagina bestaat niet in de gepubliceerde versie.',
+  'missing-anchor': 'Deze kop staat niet op die pagina.',
+  'unknown-site': 'Onbekende cursus.',
+  unindexed: '',
+};
 export function renderLesson(
   source: string,
   context: PreviewContext = {},
@@ -119,12 +131,34 @@ export function renderLesson(
           <span key={key}>{children ?? node.alt}</span>
         );
       }
-      case 'link':
+      case 'link': {
+        const target = parseSiteUrl(node.url ?? '');
+        if (target) {
+          const info = context.describeLink?.(node.url ?? '');
+          const status = info?.status ?? 'unindexed';
+          const problem = LINK_STATUS[status];
+          return (
+            <span
+              key={key}
+              className="preview-link preview-link-site"
+              data-status={status}
+              title={[info?.label ?? target.site, problem, node.url]
+                .filter(Boolean)
+                .join(' · ')}
+            >
+              {children}
+              {target.site !== context.site && (
+                <small className="preview-link-target"> ↗ {target.site}</small>
+              )}
+            </span>
+          );
+        }
         return (
           <span key={key} className="preview-link" title={node.url}>
             {children}
           </span>
         );
+      }
       case 'image': {
         const src = resolveAsset(node.url ?? '', context);
         return src ? (
@@ -321,6 +355,12 @@ export function MdxPreview({
     () => parseLesson(deferred, site ?? ''),
     [deferred, site],
   );
+  // Alleen ophalen als er site:-links staan: de index beslaat alle cursussen.
+  const { data: linkIndex } = useLinkIndex(deferred.includes('](site:'));
+  const describeLink = useMemo(
+    () => (url: string) => describeSiteUrl(linkIndex, url),
+    [linkIndex],
+  );
   const content = useMemo(
     () =>
       renderLesson(deferred, {
@@ -332,8 +372,10 @@ export function MdxPreview({
         title,
         description,
         scope,
+        describeLink,
       }),
     [
+      describeLink,
       deferred,
       site,
       domain,

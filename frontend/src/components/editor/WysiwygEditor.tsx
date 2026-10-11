@@ -5,8 +5,11 @@ import { Crepe, CrepeFeature } from '@milkdown/crepe';
 import { serializerCtx, editorViewCtx } from '@milkdown/kit/core';
 import { Plugin } from '@milkdown/kit/prose/state';
 import { uploadConfig } from '@milkdown/kit/plugin/upload';
-import { imageSchema } from '@milkdown/kit/preset/commonmark';
+import { imageSchema, linkSchema } from '@milkdown/kit/preset/commonmark';
+import type { Ctx } from '@milkdown/kit/ctx';
 import { resolveAsset, type AssetContext } from '../../lib/authoring/assets';
+import type { Cut } from '../../lib/authoring/insertion';
+import type { RequestSiteLink } from './SiteLinkPicker';
 import { $prose, $view, insert, replaceAll } from '@milkdown/kit/utils';
 import { Alert, Loader } from '@mantine/core';
 import {
@@ -17,8 +20,13 @@ import {
   useState,
 } from 'react';
 
+const SITE_LINK_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img"><title>Link naar pagina</title><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M10 13.5l1.5 1.5l3-3"/></svg>';
+
 export interface MarkdownHandle {
   insert: (text: string) => void;
+  /** Waar de (laatste) cursor dit tekstblok doorsnijdt; null zolang de editor laadt. */
+  cutAtCursor: () => Cut | null;
 }
 export const WysiwygEditor = forwardRef<
   MarkdownHandle,
@@ -26,12 +34,14 @@ export const WysiwygEditor = forwardRef<
     value: string;
     onChange: (markdown: string) => void;
     assetContext?: AssetContext;
+    /** Zet de knop 'Link naar pagina' in de selectiewerkbalk. */
+    onSiteLink?: RequestSiteLink;
   }
->(function WysiwygEditor({ value, onChange, assetContext = {} }, ref) {
+>(function WysiwygEditor({ value, onChange, assetContext = {}, onSiteLink }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const instance = useRef<Crepe | null>(null);
-  const latest = useRef({ value, onChange });
-  latest.current = { value, onChange };
+  const latest = useRef({ value, onChange, onSiteLink });
+  latest.current = { value, onChange, onSiteLink };
   const received = useRef(value);
   const syncing = useRef(false);
   const assets = useRef(assetContext);
@@ -57,6 +67,52 @@ export const WysiwygEditor = forwardRef<
           ctx.get(editorViewCtx).focus(),
         );
       },
+      cutAtCursor() {
+        if (!instance.current) return null;
+        return instance.current.editor.action((ctx) => {
+          // ProseMirror bewaart de selectie na blur: dit is de cursor van vóór
+          // de klik op 'Blok toevoegen'.
+          const { state } = ctx.get(editorViewCtx);
+          const $pos = state.doc.resolve(state.selection.to);
+          let tr = state.tr;
+          let cut: number;
+          if ($pos.depth === 0) cut = $pos.pos;
+          else if (
+            $pos.depth === 1 &&
+            $pos.parent.type.name === 'paragraph' &&
+            $pos.parentOffset > 0 &&
+            $pos.parentOffset < $pos.parent.content.size
+          ) {
+            // Spaties rond de cursor horen bij geen van beide helften.
+            const start = $pos.start(1);
+            const end = $pos.end(1);
+            let from = $pos.pos;
+            let to = $pos.pos;
+            while (from > start && /\s/.test(state.doc.textBetween(from - 1, from)))
+              from--;
+            while (to < end && /\s/.test(state.doc.textBetween(to, to + 1))) to++;
+            tr = tr.delete(from, to).split(from);
+            cut = tr.doc.resolve(tr.mapping.map(from)).before(1);
+          } else if ($pos.depth === 1 && $pos.parentOffset === 0)
+            cut = $pos.before(1);
+          // In lijsten, tabellen en code nooit splitsen: erna invoegen.
+          else cut = $pos.after(1);
+          if (cut === 0) return { position: 'start' };
+          if (cut === tr.doc.content.size) return { position: 'end' };
+          const marker = `coderiusinvoegpunt${Math.random().toString(16).slice(2)}`;
+          const { schema } = state;
+          tr.insert(cut, schema.nodes.paragraph.create(null, schema.text(marker)));
+          // Niet dispatchen: geen flikkering en geen stap in de undo-geschiedenis.
+          const markdown = ctx.get(serializerCtx)(tr.doc);
+          const at = markdown.indexOf(marker);
+          if (at < 0) return { position: 'end' };
+          return {
+            position: 'middle',
+            before: markdown.slice(0, at),
+            after: markdown.slice(at + marker.length),
+          };
+        });
+      },
     }),
     [],
   );
@@ -75,7 +131,46 @@ export const WysiwygEditor = forwardRef<
         [CrepeFeature.ImageBlock]: false,
         [CrepeFeature.Latex]: false,
       },
+      featureConfigs: latest.current.onSiteLink
+        ? {
+            [CrepeFeature.Toolbar]: {
+              buildToolbar: (builder) =>
+                builder.addGroup('coderius', 'Koppelen').addItem('site-link', {
+                  icon: SITE_LINK_ICON,
+                  active: () => false,
+                  onRun: (ctx) => requestSiteLink(ctx),
+                }),
+            },
+          }
+        : undefined,
     });
+    /** Opent de paginakiezer en zet de gekozen site:-link op de selectie. */
+    function requestSiteLink(ctx: Ctx) {
+      const request = latest.current.onSiteLink;
+      const { state } = ctx.get(editorViewCtx);
+      const { from, to, empty, $from, $to } = state.selection;
+      if (!request || empty || !$from.sameParent($to)) return;
+      const linkType = linkSchema.type(ctx);
+      let href: string | undefined;
+      state.doc.nodesBetween(from, to, (node) => {
+        href ??= linkType.isInSet(node.marks)?.attrs.href;
+      });
+      const doc = state.doc;
+      void request({ text: state.doc.textBetween(from, to), href }).then((url) => {
+        if (!url || disposed) return;
+        crepe.editor.action((next) => {
+          const view = next.get(editorViewCtx);
+          // Intussen getypt: de onthouden selectie klopt niet meer.
+          if (view.state.doc !== doc) return;
+          view.dispatch(
+            view.state.tr
+              .removeMark(from, to, linkType)
+              .addMark(from, to, linkType.create({ href: url })),
+          );
+          view.focus();
+        });
+      });
+    }
     crepe.editor.config((ctx) =>
       ctx.update(uploadConfig.key, (prev) => ({
         ...prev,

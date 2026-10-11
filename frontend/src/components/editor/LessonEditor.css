@@ -41,6 +41,18 @@
 .editor-path {
   overflow-wrap: anywhere;
 }
+.editor-session-toolbar {
+  position: sticky;
+  top: var(--app-shell-header-offset, 0rem);
+  z-index: 150;
+  padding-block: 8px;
+  background: var(--mantine-color-body);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+.editor-page.is-focus {
+  min-height: 100dvh;
+  padding: 0 16px 16px;
+}
 @media (max-width: 70em) {
   .editor-workspace {
     grid-template-columns: minmax(0, 1fr);
@@ -56,7 +68,8 @@
   .lesson-editor .milkdown .ProseMirror {
     padding: 10px 22px;
   }
-  .editor-toolbar {
+  .editor-toolbar,
+  .editor-session-toolbar > .mantine-Group-root {
     align-items: flex-start;
   }
 }

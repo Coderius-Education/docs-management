@@ -10,7 +10,7 @@ export function siteSnippets(site: string): Snippet[] {
     {
       label: ':::info',
       content:
-        ':::info\nIn deze opdracht gebruik je … (zie [sectie](/docs/...)).\n:::\n',
+        `:::info\nIn deze opdracht gebruik je … (zie [sectie](site:${site}/docs/...)).\n:::\n`,
     },
     { label: ':::tip', content: ':::tip\n…\n:::\n' },
     { label: ':::caution', content: ':::caution\n**Let op:** …\n:::\n' },
