@@ -76,7 +76,7 @@ export function KlassenPage() {
         ) : lijsten[tab].length === 0 ? (
           <Text c="dimmed" p="md">
             {tab === 'mijn'
-              ? 'Je hebt nog geen klassen. Maak er een, of dupliceer een klas van een collega.'
+              ? 'Je hebt nog geen klassen.'
               : tab === 'gedeeld'
                 ? 'Nog geen klassen van collega’s waarin jij mededocent bent.'
                 : 'Er zijn nog geen klassen.'}
@@ -191,7 +191,6 @@ function NieuweKlasModal({ opened, onClose }: { opened: boolean; onClose: () => 
       <Stack>
         <TextInput
           label="Naam"
-          description="Leerlingen zien deze naam bovenaan de klaspagina."
           placeholder="4H informatica"
           value={naam}
           onChange={(e) => setNaam(e.currentTarget.value)}
@@ -200,7 +199,6 @@ function NieuweKlasModal({ opened, onClose }: { opened: boolean; onClose: () => 
         />
         <Select
           label="Vak"
-          description="Een klas hoort bij één vak; de link staat op het adres van dat vak."
           data={(subjects ?? []).map((s) => ({ value: s.slug, label: s.display_name }))}
           value={gekozenVak}
           onChange={setVak}

@@ -161,7 +161,6 @@ export function NewSiteModal({ opened, onClose }: { opened: boolean; onClose: ()
           />
           <Select
             label="Vak"
-            description="Het vak bepaalt het domein, bv. informatica.coderius.nl"
             value={subject}
             onChange={setSubject}
             allowDeselect={false}
@@ -207,7 +206,7 @@ export function NewSiteModal({ opened, onClose }: { opened: boolean; onClose: ()
           />
           <TextInput
             label="Adres"
-            description={`De site komt op https://${subjectDomainValue || '<vak>'}/${effectivePath || '<adres>'}/`}
+            description={`https://${subjectDomainValue || '<vak>'}/${effectivePath || '<adres>'}/`}
             value={effectivePath}
             error={effectivePath && !pathValid ? 'Ongeldig adres' : undefined}
             onChange={(e) => {
@@ -217,7 +216,6 @@ export function NewSiteModal({ opened, onClose }: { opened: boolean; onClose: ()
           />
           <TextInput
             label="Titel"
-            description="De <title> en navbar-titel van de site"
             placeholder="bijv. Datavisualisatie Leren — Coderius"
             value={title}
             onChange={(e) => setTitle(e.currentTarget.value)}
@@ -228,10 +226,6 @@ export function NewSiteModal({ opened, onClose }: { opened: boolean; onClose: ()
             value={tagline}
             onChange={(e) => setTagline(e.currentTarget.value)}
           />
-          <Text size="xs" c="dimmed">
-            Maakt <Code>sites/{subjectSlugValue || '<vak>'}/{effectiveSlug || '<map>'}</Code>{' '}
-            aan en zet in beide repositories een voorstel klaar.
-          </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={handleClose}>
               Annuleren
