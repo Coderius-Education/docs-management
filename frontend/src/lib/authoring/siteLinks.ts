@@ -48,12 +48,18 @@ const normalize = (text: string) =>
 export function searchPages(
   index: LinkIndex,
   query: string,
-  { site, current, limit = 50 }: { site?: string; current?: string; limit?: number } = {},
+  {
+    site,
+    subject,
+    current,
+    limit = 50,
+  }: { site?: string; subject?: string; current?: string; limit?: number } = {},
 ): PageHit[] {
   const words = normalize(query).split(/\s+/).filter(Boolean);
   const hits: (PageHit & { score: number })[] = [];
   for (const s of index.sites) {
     if (site && s.site !== site) continue;
+    if (subject && s.subject !== subject) continue;
     for (const page of s.pages) {
       const title = normalize(page.title);
       const path = normalize(page.path);

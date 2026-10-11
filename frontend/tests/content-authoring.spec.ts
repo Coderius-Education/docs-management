@@ -436,6 +436,7 @@ test('Link naar pagina wraps the selection in a site: link to a page and heading
           {
             site: 'python',
             label: 'Python',
+            subject: 'informatica',
             build_id: 1,
             built_at: null,
             stale: false,
@@ -448,8 +449,25 @@ test('Link naar pagina wraps the selection in a site: link to a page and heading
               },
             ],
           },
+          {
+            site: 'onderzoek',
+            label: 'Onderzoek',
+            subject: 'wo',
+            build_id: 2,
+            built_at: null,
+            stale: false,
+            pages: [{ path: '/lussen-in-data', title: 'Lussen in data', kind: 'docs', headings: [] }],
+          },
         ],
       },
+    }),
+  );
+  await page.route('**/api/subjects', (route) =>
+    route.fulfill({
+      json: [
+        { slug: 'informatica', display_name: 'Informatica', domain: 'informatica.coderius.nl' },
+        { slug: 'wo', display_name: 'Wetenschapsoriëntatie', domain: 'wo.coderius.nl' },
+      ],
     }),
   );
   await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
@@ -459,6 +477,12 @@ test('Link naar pagina wraps the selection in a site: link to a page and heading
   await page.getByRole('img', { name: 'Link naar pagina' }).click();
   const dialog = page.getByRole('dialog', { name: 'Link naar pagina' });
   await expect(dialog.getByLabel('Zoek een pagina')).toHaveValue('lussen');
+  // Zonder filter zoek je over alle vakken; het vak-filter is optioneel.
+  const andereVak = dialog.getByRole('option', { name: /Lussen in data/ });
+  await expect(andereVak).toBeVisible();
+  await dialog.getByRole('textbox', { name: 'Vak' }).click();
+  await page.getByRole('option', { name: 'Informatica', exact: true }).click();
+  await expect(andereVak).toHaveCount(0);
   await dialog.getByRole('option', { name: /Herhalen met lussen/ }).click();
   await dialog.getByLabel('De for-lus').check();
   await expect(dialog.getByText('site:python/docs/herhalen#de-for-lus')).toBeVisible();

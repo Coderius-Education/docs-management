@@ -23,6 +23,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { useSubjects } from '../../api/hooks';
 import { useLinkIndex, type LinkPage, type LinkSite } from '../../api/links';
 import {
   formatSiteUrl,
@@ -92,7 +93,9 @@ function SiteLinkPicker({
   const { data: index, isLoading, error } = useLinkIndex();
   const existing = request.href ? parseSiteUrl(request.href) : null;
   const [query, setQuery] = useState(existing ? '' : request.text);
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const [siteFilter, setSiteFilter] = useState<string | null>(null);
+  const { data: subjects } = useSubjects();
   const [chosen, setChosen] = useState<{ site: LinkSite; page: LinkPage } | null>(
     null,
   );
@@ -119,18 +122,27 @@ function SiteLinkPicker({
         ? searchPages(index, query, {
             current,
             site: siteFilter ?? undefined,
+            subject: subjectFilter ?? undefined,
           })
         : [],
-    [index, query, current, siteFilter],
+    [index, query, current, siteFilter, subjectFilter],
+  );
+  const subjectOptions = useMemo(
+    () =>
+      (subjects ?? [])
+        .filter((v) => index?.sites.some((s) => s.subject === v.slug))
+        .map((v) => ({ value: v.slug, label: v.display_name })),
+    [subjects, index],
   );
   const siteOptions = useMemo(
     () =>
       [...(index?.sites ?? [])]
+        .filter((s) => !subjectFilter || s.subject === subjectFilter)
         .sort((a, b) =>
           a.site === current ? -1 : b.site === current ? 1 : a.label.localeCompare(b.label),
         )
         .map((s) => ({ value: s.site, label: s.label })),
-    [index, current],
+    [index, current, subjectFilter],
   );
 
   const url = manual
@@ -155,13 +167,26 @@ function SiteLinkPicker({
       )}
       {!manual && (
         <>
-          <Group grow align="flex-end">
-            <TextInput
-              label="Zoek een pagina"
-              placeholder="Titel, pad of kop"
-              value={query}
-              onChange={(e) => setQuery(e.currentTarget.value)}
-              data-autofocus
+          <TextInput
+            label="Zoek een pagina"
+            placeholder="Titel, pad of kop"
+            value={query}
+            onChange={(e) => setQuery(e.currentTarget.value)}
+            data-autofocus
+          />
+          <Group grow>
+            <Select
+              label="Vak"
+              placeholder="Alle vakken"
+              clearable
+              value={subjectFilter}
+              onChange={(value) => {
+                setSubjectFilter(value);
+                // Een cursus van een ander vak past niet meer bij het filter.
+                if (value && index?.sites.find((s) => s.site === siteFilter)?.subject !== value)
+                  setSiteFilter(null);
+              }}
+              data={subjectOptions}
             />
             <Select
               label="Cursus"
