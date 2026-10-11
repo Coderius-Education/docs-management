@@ -1,13 +1,18 @@
 import {
   Alert,
   Button,
+  Collapse,
   Group,
   Modal,
   Select,
   Stack,
+  Paper,
   Text,
   TextInput,
+  UnstyledButton,
 } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { createTwoFilesPatch } from 'diff';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -22,6 +27,7 @@ import {
 import { ApiError } from '../api/client';
 import type { ContentScope } from '../api/types';
 import { applyChoices } from '../lib/concepts';
+import { diffStats } from '../lib/diffStats';
 import { allChosen, ConflictResolver } from './ConflictResolver';
 import { DiffView } from './DiffView';
 
@@ -101,23 +107,25 @@ export function SaveModal({
   // A concept created in this dialog is reused when saving again after an error.
   const created = useRef<Concept | null>(null);
 
-  const diff = useMemo(
-    () =>
-      (files ?? [{ path, before: originalContent, after: newContent }])
-        .filter((file) => file.before !== file.after)
-        .map((file) =>
-          createTwoFilesPatch(
-            file.path,
-            file.path,
-            file.before,
-            file.after,
-            'voor',
-            'na',
-          ),
-        )
-        .join('\n'),
-    [files, path, originalContent, newContent],
-  );
+  const [diffOpen, { toggle: toggleDiff }] = useDisclosure(false);
+  const diff = useMemo(() => {
+    const changed = (
+      files ?? [{ path, before: originalContent, after: newContent }]
+    ).filter((file) => file.before !== file.after);
+    const patch = changed
+      .map((file) =>
+        createTwoFilesPatch(
+          file.path,
+          file.path,
+          file.before,
+          file.after,
+          'voor',
+          'na',
+        ),
+      )
+      .join('\n');
+    return { patch, files: changed.length, ...diffStats(patch) };
+  }, [files, path, originalContent, newContent]);
 
   const options = useMemo(() => {
     const own = (concepts ?? []).filter(
@@ -320,8 +328,40 @@ export function SaveModal({
           </>
         ) : (
           <>
+            {diff.patch ? (
+              <Paper withBorder>
+                <UnstyledButton
+                  onClick={toggleDiff}
+                  aria-expanded={diffOpen}
+                  aria-controls="opslaan-wijzigingen"
+                  w="100%"
+                  p="xs"
+                >
+                  <Group gap="xs" wrap="nowrap">
+                    {diffOpen ? (
+                      <IconChevronDown size={16} />
+                    ) : (
+                      <IconChevronRight size={16} />
+                    )}
+                    <Text size="sm" fw={600}>
+                      Wijzigingen bekijken
+                    </Text>
+                    <Text size="sm" c="dimmed">
+                      (+{diff.added} −{diff.removed}, {diff.files}{' '}
+                      {diff.files === 1 ? 'bestand' : 'bestanden'})
+                    </Text>
+                  </Group>
+                </UnstyledButton>
+                <Collapse in={diffOpen} id="opslaan-wijzigingen">
+                  <DiffView patch={diff.patch} maxHeight={360} />
+                </Collapse>
+              </Paper>
+            ) : (
+              <Text size="sm" c="dimmed">
+                Geen wijzigingen
+              </Text>
+            )}
             <Text size="sm">{summary}</Text>
-            <DiffView patch={diff} maxHeight={220} />
             <Select
               label="Concept"
               description="Kies een bestaand concept of begin een nieuw concept."

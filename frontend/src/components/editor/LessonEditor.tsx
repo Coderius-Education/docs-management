@@ -3,7 +3,6 @@ import {
   Badge,
   Button,
   Group,
-  Menu,
   Modal,
   Paper,
   Select,
@@ -12,7 +11,7 @@ import {
   TextInput,
   Divider,
 } from '@mantine/core';
-import { useId, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   calloutTypes,
   parseLesson,
@@ -22,11 +21,20 @@ import {
 } from '../../lib/authoring/document';
 import {
   componentModel,
-  componentRegistry,
   insertComponent,
   updateComponent,
 } from '../../lib/authoring/components';
 import { persistentImage, type AssetContext } from '../../lib/authoring/assets';
+import {
+  applySplice,
+  insertAt,
+  pointForCut,
+  shiftPoint,
+  type InsertionPoint,
+} from '../../lib/authoring/insertion';
+import { BlockMenu, type BlockKind } from './BlockMenu';
+import { InsertTargetContext, type InsertTarget } from './insertTarget';
+import { SiteLinkContext } from './SiteLinkPicker';
 import { WysiwygEditor, type MarkdownHandle } from './WysiwygEditor';
 import { RawEditor } from './RawEditor';
 import { ComponentFields } from './ComponentFields';
@@ -60,16 +68,19 @@ export function LessonEditor({
   onInsertTabs,
   assetContext = {},
   onUploadImage,
+  menu = 'inline',
 }: {
   value: string;
   site: string;
   onChange: (value: string) => void;
   inheritedImports?: Record<string, string>;
   nested?: boolean;
-  onInsertComponent?: (name: string, offset: number) => void;
-  onInsertTabs?: (offset: number) => void;
+  onInsertComponent?: (name: string, point: InsertionPoint) => void;
+  onInsertTabs?: (point: InsertionPoint) => void;
   assetContext?: AssetContext;
   onUploadImage?: (file: File) => Promise<string>;
+  /** 'none': het menu 'Blok toevoegen' staat in de werkbalk van de pagina. */
+  menu?: 'inline' | 'none';
 }) {
   const doc = useMemo(() => parseLesson(value, site), [value, site]);
   const imports = { ...inheritedImports, ...doc.imports };
@@ -87,29 +98,105 @@ export function LessonEditor({
   function edit(block: LessonBlock, text: string) {
     onChange(replaceRange(value, block, text));
   }
-  function position() {
-    return active.current === null
-      ? value.length
-      : (doc.blocks[active.current]?.to ?? value.length);
+  /** Op de cursor in het laatst gebruikte tekstblok, anders na het actieve blok. */
+  function insertionPoint(): InsertionPoint {
+    const index = active.current;
+    const block = index === null ? undefined : doc.blocks[index];
+    if (index === null || !block) return { at: value.length };
+    if (block.kind !== 'markdown') return { at: block.to };
+    return pointForCut(block, editors.current.get(index)?.cutAtCursor() ?? null);
   }
   function insertText(text: string, inline = false) {
     const editor =
       active.current === null ? undefined : editors.current.get(active.current);
     if (inline && editor) editor.insert(text);
-    else {
-      const pos = position();
-      onChange(replaceRange(value, { from: pos, to: pos }, `\n\n${text}\n\n`));
-    }
+    else onChange(insertAt(value, insertionPoint(), text));
   }
-  function addComponent(name: string) {
+  function attempt(action: () => void) {
     try {
-      if (onInsertComponent) onInsertComponent(name, position());
-      else onChange(insertComponent(value, site, name, position()));
+      action();
       setFailure('');
     } catch (err) {
       setFailure(String(err));
     }
   }
+  function insertBlock(kind: BlockKind) {
+    if (typeof kind === 'object') {
+      const name = kind.component;
+      return attempt(() => {
+        const point = insertionPoint();
+        if (onInsertComponent) onInsertComponent(name, point);
+        else
+          onChange(
+            insertComponent(applySplice(value, point), site, name, point.at),
+          );
+      });
+    }
+    switch (kind) {
+      case 'text':
+        return insertText('Nieuwe tekst', true);
+      case 'heading':
+        return insertText('## Nieuwe kop', true);
+      case 'heading-id':
+        return insertText('## Nieuwe kop {#nieuwe-kop}');
+      case 'code':
+        return insertText('```python\nprint("Hallo!")\n```', true);
+      case 'table':
+        return insertText(
+          '| Kolom 1 | Kolom 2 |\n| --- | --- |\n| Inhoud | Inhoud |',
+          true,
+        );
+      case 'tip':
+        return insertText(':::tip\nSchrijf hier je tip.\n:::');
+      case 'info':
+        return insertText(':::info\nSchrijf hier je uitleg.\n:::');
+      case 'details-tip':
+        return insertText(
+          '<details>\n<summary>Klik hier voor een tip</summary>\n\nSchrijf hier je tip.\n\n</details>',
+        );
+      case 'details-solution':
+        return insertText(
+          '<details>\n<summary>Klik hier voor de oplossing</summary>\n\n```python\n# Oplossing\n```\n\n</details>',
+        );
+      case 'tabs':
+        return attempt(() => {
+          const point = insertionPoint();
+          if (onInsertTabs) onInsertTabs(point);
+          else onChange(insertTabs(applySplice(value, point), point.at));
+        });
+      case 'image':
+        setImageFile(null);
+        setImageError('');
+        setImageOpen(true);
+    }
+  }
+  /** Geeft een invoegplek uit een geneste editor door naar de documentbron. */
+  function nestedInserts(offset: number) {
+    return {
+      onInsertComponent: (name: string, inner: InsertionPoint) => {
+        const point = shiftPoint(inner, offset);
+        if (onInsertComponent) onInsertComponent(name, point);
+        else
+          onChange(
+            insertComponent(applySplice(value, point), site, name, point.at),
+          );
+      },
+      onInsertTabs: (inner: InsertionPoint) => {
+        const point = shiftPoint(inner, offset);
+        if (onInsertTabs) onInsertTabs(point);
+        else onChange(insertTabs(applySplice(value, point), point.at));
+      },
+    };
+  }
+  const requestSiteLink = useContext(SiteLinkContext) ?? undefined;
+  const targets = useContext(InsertTargetContext);
+  const target = useRef<InsertTarget>({ insertBlock });
+  target.current = { insertBlock };
+  useEffect(() => {
+    if (!targets) return;
+    if (!nested) targets.setDefault(target);
+    return () => targets.clear(target);
+  }, [targets, nested]);
   const sourceBlock =
     sourceIndex === null ? undefined : doc.blocks[sourceIndex];
   return (
@@ -118,6 +205,8 @@ export function LessonEditor({
       className={
         nested ? 'lesson-editor lesson-editor-nested' : 'lesson-editor'
       }
+      // Capture loopt van buiten naar binnen: de binnenste editor wint.
+      onFocusCapture={() => targets?.focus(target)}
     >
       {doc.error ? (
         <Alert color="orange" title="Deze bron heeft aandacht nodig">
@@ -129,118 +218,21 @@ export function LessonEditor({
         </Alert>
       ) : (
         <>
-          <Group justify="space-between">
-            <Menu withinPortal>
-              <Menu.Target>
-                <Button size="xs" variant="light">
-                  Blok toevoegen
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item onClick={() => insertText('Nieuwe tekst', true)}>
-                  Tekst
-                </Menu.Item>
-                <Menu.Item onClick={() => insertText('## Nieuwe kop', true)}>
-                  Kop
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() => insertText('## Nieuwe kop {#nieuwe-kop}')}
-                >
-                  Kop met vast ID
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    insertText('```python\nprint("Hallo!")\n```', true)
-                  }
-                >
-                  Codevoorbeeld
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() => {
-                    try {
-                      if (onInsertTabs) onInsertTabs(position());
-                      else onChange(insertTabs(value, position()));
-                      setFailure('');
-                    } catch (cause) {
-                      setFailure(String(cause));
-                    }
-                  }}
-                >
-                  Tabbladen
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    insertText(
-                      '| Kolom 1 | Kolom 2 |\n| --- | --- |\n| Inhoud | Inhoud |',
-                      true,
-                    )
-                  }
-                >
-                  Tabel
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    insertText(':::tip\nSchrijf hier je tip.\n:::')
-                  }
-                >
-                  Tip (callout)
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    insertText(':::info\nSchrijf hier je uitleg.\n:::')
-                  }
-                >
-                  Informatie (callout)
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    insertText(
-                      '<details>\n<summary>Klik hier voor een tip</summary>\n\nSchrijf hier je tip.\n\n</details>',
-                    )
-                  }
-                >
-                  Uitklapbare tip
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    insertText(
-                      '<details>\n<summary>Klik hier voor de oplossing</summary>\n\n```python\n# Oplossing\n```\n\n</details>',
-                    )
-                  }
-                >
-                  Uitklapbare oplossing
-                </Menu.Item>
-                {componentRegistry
-                  .filter((c) => c.site === site)
-                  .map((c) => (
-                    <Menu.Item
-                      key={c.name}
-                      onClick={() => addComponent(c.name)}
-                    >
-                      {c.label}
-                    </Menu.Item>
-                  ))}
-                <Menu.Item
-                  onClick={() => {
-                    setImageFile(null);
-                    setImageError('');
-                    setImageOpen(true);
-                  }}
-                >
-                  Afbeelding
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-            {!nested && (
-              <Text size="xs" c="dimmed">
-                Selecteer tekst voor opmaak · / voor tekstblokken
-              </Text>
-            )}
-          </Group>
+          {menu === 'inline' && (
+            <Group justify="space-between">
+              <BlockMenu site={site} onPick={insertBlock} />
+              {!nested && (
+                <Text size="xs" c="dimmed">
+                  Selecteer tekst voor opmaak · / voor tekstblokken
+                </Text>
+              )}
+            </Group>
+          )}
           {failure && <Alert color="red">{failure}</Alert>}
           {!doc.blocks.length && (
             <WysiwygEditor
               assetContext={assetContext}
+              onSiteLink={requestSiteLink}
               value={value}
               onChange={onChange}
             />
@@ -262,6 +254,7 @@ export function LessonEditor({
                 {block.kind === 'markdown' ? (
                   <WysiwygEditor
                     assetContext={assetContext}
+                    onSiteLink={requestSiteLink}
                     ref={(editor) => {
                       if (editor) editors.current.set(index, editor);
                       else editors.current.delete(index);
@@ -335,30 +328,7 @@ export function LessonEditor({
                             onChange={(body) =>
                               onChange(replaceRange(value, item.body!, body))
                             }
-                            onInsertComponent={(name, offset) => {
-                              if (onInsertComponent)
-                                onInsertComponent(
-                                  name,
-                                  item.body!.from + offset,
-                                );
-                              else
-                                onChange(
-                                  insertComponent(
-                                    value,
-                                    site,
-                                    name,
-                                    item.body!.from + offset,
-                                  ),
-                                );
-                            }}
-                            onInsertTabs={(offset) => {
-                              if (onInsertTabs)
-                                onInsertTabs(item.body!.from + offset);
-                              else
-                                onChange(
-                                  insertTabs(value, item.body!.from + offset),
-                                );
-                            }}
+                            {...nestedInserts(item.body!.from)}
                           />
                         )}
                       />
@@ -421,27 +391,9 @@ export function LessonEditor({
                         />
                         <LessonEditor
                           nested
-                          onInsertTabs={(offset) => {
-                            if (onInsertTabs)
-                              onInsertTabs(c.body.from + offset);
-                            else
-                              onChange(insertTabs(value, c.body.from + offset));
-                          }}
+                          {...nestedInserts(c.body.from)}
                           onUploadImage={onUploadImage}
                           assetContext={assetContext}
-                          onInsertComponent={(name, offset) => {
-                            if (onInsertComponent)
-                              onInsertComponent(name, c.body.from + offset);
-                            else
-                              onChange(
-                                insertComponent(
-                                  value,
-                                  site,
-                                  name,
-                                  c.body.from + offset,
-                                ),
-                              );
-                          }}
                           site={site}
                           value={value.slice(c.body.from, c.body.to)}
                           inheritedImports={imports}

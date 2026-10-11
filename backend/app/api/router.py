@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api import auth, builds, experiments, git, health, klassen, sites, webhooks
+from app.api import auth, builds, experiments, git, health, klassen, links, sites, webhooks
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -15,3 +15,4 @@ api_router.include_router(builds.router)
 api_router.include_router(webhooks.router)
 api_router.include_router(experiments.router)
 api_router.include_router(klassen.router)
+api_router.include_router(links.router)

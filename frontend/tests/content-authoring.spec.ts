@@ -309,3 +309,162 @@ test('adding tabs inside a tip places imports at document scope', async ({
     content.indexOf('</details>'),
   );
 });
+
+test('page settings sit below the editor and the save dialog folds the diff away', async ({
+  page,
+}) => {
+  await mockContent(page, '---\ntitle: Les\n---\n\nEerste zin.');
+  await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
+  const settings = page.locator('#pagina-instellingen');
+  await expect(settings).toBeVisible();
+  const below = await settings.evaluate((el) => {
+    const workspace = document.querySelector('.editor-workspace');
+    return !!workspace && !!(workspace.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  expect(below).toBe(true);
+
+  await page.getByLabel('Titel', { exact: true }).fill('Nieuwe les');
+  await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
+  const toggle = page.getByRole('button', { name: /Wijzigingen bekijken/ });
+  await expect(toggle).toContainText('(+1 −1, 1 bestand)');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  const diff = page.locator('#opslaan-wijzigingen');
+  await expect(diff).toHaveAttribute('aria-hidden', 'true');
+  await toggle.click();
+  await expect(diff).toHaveAttribute('aria-hidden', 'false');
+  await expect(diff.getByText('+title: Nieuwe les')).toBeVisible();
+});
+
+test('the site browser shows a rendered preview with the source one click away', async ({
+  page,
+}) => {
+  await mockContent(page, '---\ntitle: Les\n---\n\n## Lussen\n\nHerhalen met **for**.');
+  await page.goto('/sites/python?path=les.mdx&ref=lesson');
+  await expect(page.getByRole('heading', { name: 'Lussen' })).toBeVisible();
+  await expect(page.getByText('## Lussen')).toHaveCount(0);
+  await page.getByText('Broncode', { exact: true }).click();
+  await expect(page.getByText('## Lussen')).toBeVisible();
+});
+
+test('Blok toevoegen in the toolbar inserts at the cursor, also mid-paragraph', async ({
+  page,
+}) => {
+  const saves = await mockContent(
+    page,
+    '---\ntitle: Les\n---\n\nEerste zin. Tweede zin.\n\nSlot.',
+  );
+  await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
+  const paragraph = page
+    .locator('.milkdown .ProseMirror p')
+    .filter({ hasText: 'Eerste zin.' });
+  await paragraph.click();
+  await page.keyboard.press('End');
+  for (let i = 0; i < ' Tweede zin.'.length; i++)
+    await page.keyboard.press('ArrowLeft');
+  await page
+    .locator('.editor-session-toolbar')
+    .getByRole('button', { name: 'Blok toevoegen', exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: 'Tip (callout)', exact: true }).click();
+  await save(page);
+  expect(saves[0].content).toMatch(
+    /Eerste zin\.\n\n:::tip\nSchrijf hier je tip\.\n:::\n\nTweede zin\.\n\nSlot\./,
+  );
+});
+
+test('the toolbar inserts components inside the callout that holds the cursor', async ({
+  page,
+}) => {
+  const saves = await mockContent(
+    page,
+    'Intro.\n\n:::tip\nBinnen de tip.\n:::\n\nSlot.',
+  );
+  await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
+  await page
+    .locator('.lesson-editor-nested .milkdown .ProseMirror p')
+    .filter({ hasText: 'Binnen de tip.' })
+    .click();
+  await page.keyboard.press('End');
+  await page
+    .locator('.editor-session-toolbar')
+    .getByRole('button', { name: 'Blok toevoegen', exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: 'Python-oefening', exact: true }).click();
+  await save(page);
+  const content = saves[0].content;
+  const component = content.indexOf('<CodeExercise');
+  expect(component).toBeGreaterThan(content.indexOf('Binnen de tip.'));
+  expect(component).toBeLessThan(content.lastIndexOf(':::'));
+  expect(content.indexOf('import CodeExercise')).toBeLessThan(
+    content.indexOf('Intro.'),
+  );
+});
+
+test('full screen hides the app shell and keeps the toolbar on top', async ({
+  page,
+}) => {
+  await mockContent(page, 'Tekst.');
+  await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
+  const header = page.getByText('Coderius Docs Beheer');
+  await expect(header).toBeVisible();
+  await page.getByRole('button', { name: 'Volledig scherm', exact: true }).click();
+  await expect(header).toBeHidden();
+  const toolbar = page.locator('.editor-session-toolbar');
+  await expect(toolbar.getByRole('button', { name: 'Blok toevoegen', exact: true })).toBeVisible();
+  // AppShell schuift kop en navigatie met een transitie weg.
+  await expect
+    .poll(async () => (await toolbar.boundingBox())!.y)
+    .toBeLessThan(5);
+  await page.getByRole('button', { name: 'Volledig scherm sluiten', exact: true }).click();
+  await expect(header).toBeVisible();
+  await page.getByRole('button', { name: 'Volledig scherm', exact: true }).click();
+  await expect(header).toBeHidden();
+  await page.locator('body').click({ position: { x: 2, y: 400 } });
+  await page.keyboard.press('Escape');
+  await expect(header).toBeVisible();
+});
+
+test('Link naar pagina wraps the selection in a site: link to a page and heading', async ({
+  page,
+}) => {
+  const saves = await mockContent(page, '---\ntitle: Les\n---\n\nHerhaal eerst lussen hier.');
+  await page.route('**/api/links/index', (route) =>
+    route.fulfill({
+      json: {
+        missing: [],
+        sites: [
+          {
+            site: 'python',
+            label: 'Python',
+            build_id: 1,
+            built_at: null,
+            stale: false,
+            pages: [
+              {
+                path: '/docs/herhalen',
+                title: 'Herhalen met lussen',
+                kind: 'docs',
+                headings: [['de-for-lus', 'De for-lus', 2]],
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
+  await page.locator('.milkdown .ProseMirror p').getByText('Herhaal eerst lussen hier.').dblclick({
+    position: { x: 100, y: 5 },
+  });
+  await page.getByRole('img', { name: 'Link naar pagina' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Link naar pagina' });
+  await expect(dialog.getByLabel('Zoek een pagina')).toHaveValue('lussen');
+  await dialog.getByRole('option', { name: /Herhalen met lussen/ }).click();
+  await dialog.getByLabel('De for-lus').check();
+  await expect(dialog.getByText('site:python/docs/herhalen#de-for-lus')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Link invoegen' }).click();
+  await save(page);
+  expect(saves[0].content).toContain(
+    'Herhaal eerst [lussen](site:python/docs/herhalen#de-for-lus) hier.',
+  );
+});

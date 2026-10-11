@@ -1,15 +1,12 @@
 import {
   Alert,
-  Badge,
   Button,
   Group,
   Loader,
   Modal,
   Paper,
-  SegmentedControl,
   Stack,
   Text,
-  Title,
 } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -31,6 +28,13 @@ import {
 import { HomepageStudio } from './HomepageStudio';
 import { validateProperties } from '../lib/authoring/properties';
 import { LessonEditor } from '../components/editor/LessonEditor';
+import { EditorToolbar } from '../components/editor/EditorToolbar';
+import {
+  createInsertTargets,
+  InsertTargetContext,
+} from '../components/editor/insertTarget';
+import { useFocusMode } from '../lib/focusMode';
+import { SiteLinkProvider } from '../components/editor/SiteLinkPicker';
 import { RawEditor } from '../components/editor/RawEditor';
 import { SaveModal, type SavedPage } from '../components/SaveModal';
 import { joinFrontmatter, splitFrontmatter } from '../lib/frontmatter';
@@ -155,6 +159,53 @@ function EditorSession({
   const createConcept = useCreateConcept();
   const conceptTitle = useConceptTitle(baseline.branch);
   const [mode, setMode] = useState('visual');
+  const insertTargets = useMemo(createInsertTargets, []);
+  const { focus, setFocus } = useFocusMode();
+  const nativeFullscreen = useRef(false);
+  function toggleFocus() {
+    if (focus) {
+      setFocus(false);
+      if (document.fullscreenElement)
+        void document.exitFullscreen().catch(() => {});
+      return;
+    }
+    setFocus(true);
+    // De hele pagina, niet de editor: menu's en dialogen staan in een portal op <body>.
+    void document.documentElement
+      .requestFullscreen?.()
+      .then(() => {
+        nativeFullscreen.current = true;
+      })
+      .catch(() => {});
+  }
+  useEffect(() => {
+    function fullscreenChange() {
+      if (document.fullscreenElement || !nativeFullscreen.current) return;
+      // De browser verliet volledig scherm (bv. met Esc): de editor ook.
+      nativeFullscreen.current = false;
+      setFocus(false);
+    }
+    document.addEventListener('fullscreenchange', fullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', fullscreenChange);
+      setFocus(false);
+      if (document.fullscreenElement)
+        void document.exitFullscreen().catch(() => {});
+    };
+  }, [setFocus]);
+  useEffect(() => {
+    if (!focus) return;
+    function keydown(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // Esc hoort bij dialogen, menu's en de editors zelf.
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="dialog"], [role="menu"], .milkdown, .cm-editor'))
+        return;
+      setFocus(false);
+    }
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  }, [focus, setFocus]);
   const [storageError, setStorageError] = useState('');
   const key = recoveryKey(user, site, baseline.branch, scopedKey(scope, path));
   const [recovery, setRecovery] = useState(() => {
@@ -352,216 +403,218 @@ function EditorSession({
       />
     );
   return (
-    <Stack gap="md" className="editor-page">
-      <Group justify="space-between" className="editor-toolbar">
-        <div>
-          <Title order={3}>
-            {scope === 'metadata'
+    <InsertTargetContext.Provider value={insertTargets}>
+      <Stack
+        gap="md"
+        className={focus ? 'editor-page is-focus' : 'editor-page'}
+      >
+        <EditorToolbar
+          title={
+            scope === 'metadata'
               ? 'Categorieën en tags'
               : scope === 'pages'
                 ? 'Pagina bewerken'
-                : 'Lesmateriaal bewerken'}
-          </Title>
-          <Text size="xs" c="dimmed" className="editor-path">
-            {siteInfo?.display_name ?? site} / {path}
-          </Text>
-        </div>
-        <Group gap="xs">
-          {previewOrigin && (
-            <Button
-              size="xs"
-              variant="subtle"
-              component="a"
-              href={previewOrigin}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Cursusvoorbeeld
-            </Button>
-          )}
-          <Badge variant="light" maw={260} title={conceptTitle}>
-            {conceptTitle}
-          </Badge>
-          <Text size="sm" role="status">
-            {dirty ? 'Niet opgeslagen' : 'Opgeslagen'}
-          </Text>
-          <Button
-            disabled={
-              !dirty || !!recovery || imagesInvalid || uploading || invalid
-            }
-            onClick={() => setSaveOpen(true)}
-          >
-            Opslaan…
-          </Button>
-        </Group>
-      </Group>
-      {invalid && (
-        <Alert color="orange">
-          Controleer de pagina-instellingen voordat je opslaat.
-        </Alert>
-      )}
-      {imagesInvalid && (
-        <Alert color="orange">
-          Een afbeelding gebruikt een tijdelijke of ongeldige URL. Vervang deze
-          via Broncode door een bestaande cursusafbeelding of HTTPS-URL voordat
-          je opslaat.
-        </Alert>
-      )}
-      {storageError && <Alert color="orange">{storageError}</Alert>}
-      {recovery && (
-        <Alert color="blue" title="Er is een herstelkopie beschikbaar">
-          <Text size="sm">
-            {recovery.baseSha !== initialSha
-              ? 'De opgeslagen pagina is intussen gewijzigd. Controleer je herstelkopie voor je opslaat.'
-              : 'Wil je verdergaan met je niet-opgeslagen wijzigingen?'}
-          </Text>
-          <Group mt="xs">
-            <Button
-              size="xs"
-              onClick={() => {
-                setContent(recovery.content);
-                setRecovery(null);
-              }}
-            >
-              Concept herstellen
-            </Button>
-            <Button
-              size="xs"
-              variant="default"
-              onClick={() => {
-                try {
-                  clearRecovery(localStorage, key, recovery.content);
-                } catch {
-                  setStorageError('Herstelkopie kon niet worden verwijderd.');
-                }
-                setRecovery(null);
-              }}
-            >
-              Opgeslagen versie gebruiken
-            </Button>
-          </Group>
-        </Alert>
-      )}
-      {!split.error && scope !== 'metadata' && (
-        <Paper withBorder p="sm">
-          <details open>
-            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
-              Pagina-instellingen
-            </summary>
-            <FrontmatterForm
-              kind={scope === 'docs' ? 'docs' : 'pages'}
-              onValidationChange={setFormErrors}
-              rawFrontmatter={split.rawFrontmatter}
-              value={split.frontmatter}
-              onChange={(fm) =>
-                setContent(joinFrontmatter(split, fm, split.body))
-              }
-            />
-          </details>
-        </Paper>
-      )}
-      <SegmentedControl
-        disabled={uploading}
-        aria-label="Editorweergave"
-        value={mode}
-        onChange={setMode}
-        data={[
-          { value: 'visual', label: 'Bewerken' },
-          { value: 'preview', label: 'Voorbeeld' },
-          { value: 'raw', label: 'Broncode' },
-        ]}
-      />
-      {!recovery && (
-        <div className={mode === 'preview' ? '' : 'editor-workspace'}>
-          <Paper withBorder className="editor-pane">
-            {mode === 'preview' ? (
-              preview
-            ) : mode === 'raw' ? (
-              <RawEditor value={content} onChange={setContent} />
-            ) : scope === 'metadata' ? (
-              <MetadataEditor
-                value={content}
-                path={path}
-                onChange={setContent}
-              />
-            ) : parseError ? (
-              <Alert
-                color="orange"
-                title="Open de broncode om deze pagina te corrigeren"
-              >
-                <Text size="sm">{parseError}</Text>
-                <Button size="xs" mt="xs" onClick={() => setMode('raw')}>
-                  Broncode openen
-                </Button>
-              </Alert>
-            ) : (
-              <LessonEditor
-                onUploadImage={upload}
-                assetContext={{
+                : 'Lesmateriaal bewerken'
+          }
+          location={`${siteInfo?.display_name ?? site} / ${path}`}
+          previewOrigin={previewOrigin}
+          conceptTitle={conceptTitle}
+          dirty={dirty}
+          saveDisabled={
+            !dirty || !!recovery || imagesInvalid || uploading || invalid
+          }
+          onSave={() => setSaveOpen(true)}
+          mode={mode}
+          onModeChange={setMode}
+          modeDisabled={uploading}
+          blocks={
+            scope === 'metadata'
+              ? undefined
+              : {
                   site,
-                  scope,
-                  domain: siteHost(siteInfo),
-                  path,
-                  branch: baseline.branch,
-                  previewOrigin,
+                  disabled: mode !== 'visual' || !!parseError || !!recovery,
+                  onPick: (kind) => insertTargets.current()?.insertBlock(kind),
+                }
+          }
+          focus={focus}
+          onToggleFocus={toggleFocus}
+        />
+        {invalid && (
+          <Alert color="orange">
+            <Group justify="space-between" gap="xs">
+              <Text size="sm">
+                Controleer de pagina-instellingen voordat je opslaat.
+              </Text>
+              <Button
+                size="xs"
+                variant="light"
+                color="orange"
+                onClick={() =>
+                  document
+                    .getElementById('pagina-instellingen')
+                    ?.scrollIntoView({ behavior: 'smooth' })
+                }
+              >
+                Naar pagina-instellingen
+              </Button>
+            </Group>
+          </Alert>
+        )}
+        {imagesInvalid && (
+          <Alert color="orange">
+            Een afbeelding gebruikt een tijdelijke of ongeldige URL. Vervang deze
+            via Broncode door een bestaande cursusafbeelding of HTTPS-URL voordat
+            je opslaat.
+          </Alert>
+        )}
+        {storageError && <Alert color="orange">{storageError}</Alert>}
+        {recovery && (
+          <Alert color="blue" title="Er is een herstelkopie beschikbaar">
+            <Text size="sm">
+              {recovery.baseSha !== initialSha
+                ? 'De opgeslagen pagina is intussen gewijzigd. Controleer je herstelkopie voor je opslaat.'
+                : 'Wil je verdergaan met je niet-opgeslagen wijzigingen?'}
+            </Text>
+            <Group mt="xs">
+              <Button
+                size="xs"
+                onClick={() => {
+                  setContent(recovery.content);
+                  setRecovery(null);
                 }}
-                site={site}
-                value={split.body}
-                onChange={(body) =>
-                  setContent(joinFrontmatter(split, split.frontmatter, body))
+              >
+                Concept herstellen
+              </Button>
+              <Button
+                size="xs"
+                variant="default"
+                onClick={() => {
+                  try {
+                    clearRecovery(localStorage, key, recovery.content);
+                  } catch {
+                    setStorageError('Herstelkopie kon niet worden verwijderd.');
+                  }
+                  setRecovery(null);
+                }}
+              >
+                Opgeslagen versie gebruiken
+              </Button>
+            </Group>
+          </Alert>
+        )}
+        {!recovery && (
+          <div className={mode === 'preview' ? '' : 'editor-workspace'}>
+            <Paper withBorder className="editor-pane">
+              {mode === 'preview' ? (
+                preview
+              ) : mode === 'raw' ? (
+                <RawEditor value={content} onChange={setContent} />
+              ) : scope === 'metadata' ? (
+                <MetadataEditor
+                  value={content}
+                  path={path}
+                  onChange={setContent}
+                />
+              ) : parseError ? (
+                <Alert
+                  color="orange"
+                  title="Open de broncode om deze pagina te corrigeren"
+                >
+                  <Text size="sm">{parseError}</Text>
+                  <Button size="xs" mt="xs" onClick={() => setMode('raw')}>
+                    Broncode openen
+                  </Button>
+                </Alert>
+              ) : (
+                <SiteLinkProvider site={site}>
+                  <LessonEditor
+                    menu="none"
+                    onUploadImage={upload}
+                    assetContext={{
+                      site,
+                      scope,
+                      domain: siteHost(siteInfo),
+                      path,
+                      branch: baseline.branch,
+                      previewOrigin,
+                    }}
+                    site={site}
+                    value={split.body}
+                    onChange={(body) =>
+                      setContent(joinFrontmatter(split, split.frontmatter, body))
+                    }
+                  />
+                </SiteLinkProvider>
+              )}
+            </Paper>
+            {mode !== 'preview' && (
+              <Paper withBorder className="editor-pane editor-preview-secondary">
+                {preview}
+              </Paper>
+            )}
+          </div>
+        )}
+        {!split.error && scope !== 'metadata' && (
+          <Paper withBorder p="sm" id="pagina-instellingen">
+            <details open>
+              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                Pagina-instellingen
+              </summary>
+              <FrontmatterForm
+                kind={scope === 'docs' ? 'docs' : 'pages'}
+                onValidationChange={setFormErrors}
+                rawFrontmatter={split.rawFrontmatter}
+                value={split.frontmatter}
+                onChange={(fm) =>
+                  setContent(joinFrontmatter(split, fm, split.body))
                 }
               />
-            )}
+            </details>
           </Paper>
-          {mode !== 'preview' && (
-            <Paper withBorder className="editor-pane editor-preview-secondary">
-              {preview}
-            </Paper>
-          )}
-        </div>
-      )}
-      {saveOpen && (
-        <SaveModal
-          opened
-          onClose={() => setSaveOpen(false)}
-          site={site}
-          scope={scope}
-          path={path}
-          originalContent={baseline.content}
-          newContent={content}
-          sha={baseline.sha}
-          currentBranch={baseline.branch}
-          onSaved={saved}
-        />
-      )}
-      <Modal
-        opened={blocker.state === 'blocked'}
-        onClose={() => blocker.state === 'blocked' && blocker.reset()}
-        title="Niet-opgeslagen wijzigingen"
-      >
-        <Stack>
-          <Text>
-            Je wijzigingen zijn nog niet op de server opgeslagen.
-            {!storageError &&
-              ' Een herstelkopie blijft in deze browser beschikbaar.'}
-          </Text>
-          <Group>
-            <Button
-              variant="default"
-              onClick={() => blocker.state === 'blocked' && blocker.reset()}
-            >
-              Verder bewerken
-            </Button>
-            <Button
-              color="orange"
-              disabled={uploading}
-              onClick={() => blocker.state === 'blocked' && blocker.proceed()}
-            >
-              Pagina verlaten
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-    </Stack>
+        )}
+        {saveOpen && (
+          <SaveModal
+            opened
+            onClose={() => setSaveOpen(false)}
+            site={site}
+            scope={scope}
+            path={path}
+            originalContent={baseline.content}
+            newContent={content}
+            sha={baseline.sha}
+            currentBranch={baseline.branch}
+            onSaved={saved}
+          />
+        )}
+        <Modal
+          opened={blocker.state === 'blocked'}
+          onClose={() => blocker.state === 'blocked' && blocker.reset()}
+          title="Niet-opgeslagen wijzigingen"
+        >
+          <Stack>
+            <Text>
+              Je wijzigingen zijn nog niet op de server opgeslagen.
+              {!storageError &&
+                ' Een herstelkopie blijft in deze browser beschikbaar.'}
+            </Text>
+            <Group>
+              <Button
+                variant="default"
+                onClick={() => blocker.state === 'blocked' && blocker.reset()}
+              >
+                Verder bewerken
+              </Button>
+              <Button
+                color="orange"
+                disabled={uploading}
+                onClick={() => blocker.state === 'blocked' && blocker.proceed()}
+              >
+                Pagina verlaten
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+      </Stack>
+    </InsertTargetContext.Provider>
   );
 }

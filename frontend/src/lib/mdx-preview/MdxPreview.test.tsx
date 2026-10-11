@@ -1,4 +1,5 @@
 import { MantineProvider } from '@mantine/core';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderLesson } from './MdxPreview';
@@ -40,8 +41,24 @@ it('renders callout titles, details and branch-aware static assets', () => {
 
 it('retains the page scope when rendering the preview component',async()=>{
  const {MdxPreview}=await import('./MdxPreview');
- const html=renderToStaticMarkup(<MantineProvider><MdxPreview body="![diagram](./figure.png)" site="python" scope="pages" path="contact.mdx" branch="lesson"/></MantineProvider>);
+ const client=new QueryClient();
+ const html=renderToStaticMarkup(<QueryClientProvider client={client}><MantineProvider><MdxPreview body="![diagram](./figure.png)" site="python" scope="pages" path="contact.mdx" branch="lesson"/></MantineProvider></QueryClientProvider>);
  expect(html).toContain('scope=pages');
- const home=renderToStaticMarkup(<MantineProvider><MdxPreview body="![diagram](/managed/figure.png)" site="python" scope="homepage" path="homepage.mdx" branch="lesson"/></MantineProvider>);
+ const home=renderToStaticMarkup(<QueryClientProvider client={client}><MantineProvider><MdxPreview body="![diagram](/managed/figure.png)" site="python" scope="homepage" path="homepage.mdx" branch="lesson"/></MantineProvider></QueryClientProvider>);
  expect(home).toContain('scope=homepage');expect(home).toContain('path=figure.png');
+});
+it('shows where site: links go and flags missing targets', () => {
+  const html = renderToStaticMarkup(
+    renderLesson('Zie [lussen](site:python/docs/lussen#weg) en [html](site:web/docs/html).', {
+      site: 'python',
+      describeLink: (url) =>
+        url.includes('#weg')
+          ? { label: 'Python · Lussen', status: 'missing-anchor' }
+          : { label: 'Web · HTML', status: 'ok' },
+    }),
+  );
+  expect(html).toContain('data-status="missing-anchor"');
+  expect(html).toContain('Deze kop staat niet op die pagina.');
+  expect(html).toContain('↗ web');
+  expect(html).not.toContain('↗ python');
 });

@@ -76,6 +76,15 @@
   color: var(--mantine-color-blue-text);
   text-decoration: underline;
 }
+.preview-link-target {
+  color: var(--mantine-color-dimmed);
+}
+.preview-link-site[data-status='missing-page'],
+.preview-link-site[data-status='missing-anchor'],
+.preview-link-site[data-status='unknown-site'] {
+  color: var(--mantine-color-orange-text);
+  text-decoration-style: wavy;
+}
 .admonition,
 .preview-component {
   padding: 12px 16px;
