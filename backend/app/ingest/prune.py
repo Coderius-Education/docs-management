@@ -37,10 +37,16 @@ async def prune_branch_excess(db: AsyncSession, site_slug: str, slug: str) -> No
             .order_by(Build.created_at.desc())
         )
     ).all()
+    # Meerdere runs op dezelfde commit delen één <sha12>-map; een oude rij mag
+    # die niet weghalen zolang een bewaarde (of vastgehouden) build hem gebruikt.
+    kept_paths = {
+        b.path for i, b in enumerate(site_builds) if i < keep or b.id in pinned
+    }
     for build in site_builds[keep:]:
         if build.id in pinned:
             continue
-        _remove_dir(build.path)
+        if build.path not in kept_paths:
+            _remove_dir(build.path)
         await db.execute(
             update(Build).where(Build.id == build.id).values(status=BuildStatus.pruned)
         )
