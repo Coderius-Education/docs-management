@@ -198,7 +198,6 @@ async def ingest_events(
 
 
 def _event_value(raw: object) -> float | None:
-    """Een eindig getal uit JSON; bool, NaN, Infinity en te grote ints niet."""
     if isinstance(raw, bool) or not isinstance(raw, int | float):
         return None
     try:
@@ -209,7 +208,6 @@ def _event_value(raw: object) -> float | None:
 
 
 def _event_ts(raw: object) -> datetime | None:
-    """Milliseconden sinds epoch; buiten wat datetime aankan valt terug op nu."""
     millis = _event_value(raw)
     if millis is None:
         return None

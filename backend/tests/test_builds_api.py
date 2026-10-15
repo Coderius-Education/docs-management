@@ -1,5 +1,3 @@
-"""Builds- en preview-overzichten, opnieuw ophalen en handmatig verwijderen."""
-
 from datetime import timedelta
 
 import pytest
@@ -28,9 +26,6 @@ async def _add_pr(number: int, branch: str, state: str, title: str = "Een concep
             )
         )
         await db.commit()
-
-
-# --- GET /api/builds --------------------------------------------------------
 
 
 async def test_list_builds_newest_first_with_filters(api_client, builds_dir, csrf):
@@ -65,9 +60,6 @@ async def test_list_builds_limit_is_clamped(api_client, builds_dir, csrf, limit,
     assert len(resp.json()) == expected
 
 
-# --- GET /api/previews ------------------------------------------------------
-
-
 async def test_previews_newest_ready_per_branch_and_site(api_client, builds_dir, csrf):
     now = utcnow()
     await add_build(builds_dir, "python", "main", "a" * 12)
@@ -85,7 +77,6 @@ async def test_previews_newest_ready_per_branch_and_site(api_client, builds_dir,
     ]
     python = next(p for p in previews if p["site"] == "python")
     assert "feat--informatica" in python["url"]
-    # De nieuwste van de twee python/feat-builds.
     assert python["created_at"].startswith(now.replace(tzinfo=None).isoformat())
 
 
@@ -105,9 +96,6 @@ async def test_previews_show_only_open_pr(api_client, builds_dir, csrf):
     assert previews["dicht-concept"]["pr_title"] is None
 
 
-# --- POST /api/builds/{id}/retry -------------------------------------------
-
-
 async def test_retry_queues_the_run_again(api_client, builds_dir, csrf, monkeypatch):
     queued = []
     monkeypatch.setattr("app.api.builds.enqueue", queued.append)
@@ -124,9 +112,6 @@ async def test_retry_queues_the_run_again(api_client, builds_dir, csrf, monkeypa
 async def test_retry_unknown_build_404(api_client, csrf):
     resp = await api_client.post("/api/builds/999/retry", headers=csrf)
     assert resp.status_code == 404
-
-
-# --- DELETE /api/builds/{id} -----------------------------------------------
 
 
 async def test_delete_build_removes_dir(api_client, builds_dir, csrf):
@@ -155,7 +140,6 @@ async def test_delete_main_build_refused(api_client, builds_dir, csrf):
 
 
 async def test_delete_build_of_running_experiment_refused(api_client, builds_dir, csrf):
-    """Zonder variant-map krijgt groep B stilletjes de controle, maar telt als B."""
     build_id = await add_build(builds_dir, "python", "exp/b", "a" * 12)
     await pin_build(build_id)
 
@@ -167,7 +151,6 @@ async def test_delete_build_of_running_experiment_refused(api_client, builds_dir
 
 
 async def test_delete_build_keeps_dir_shared_with_other_run(api_client, builds_dir, csrf):
-    """Een nieuwe run op dezelfde commit deelt de map; die moet blijven."""
     oud = await add_build(builds_dir, "python", "feat", "a" * 12, run_id=1)
     nieuw = await add_build(builds_dir, "python", "feat", "a" * 12, run_id=2)
 

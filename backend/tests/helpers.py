@@ -33,7 +33,6 @@ async def add_build(
     created_at=None,
     run_id: int | None = None,
 ) -> int:
-    """Build op disk (onder <site>/<branch-slug>/<sha12>) en in de DB; geeft het id."""
     from sqlalchemy import select
 
     from app.db.models import Build, BuildStatus, Site
@@ -72,7 +71,6 @@ async def build_status(build_id: int):
 
 
 async def pin_build(build_id: int, status=None) -> int:
-    """Een experiment dat de build als variant vasthoudt (standaard: lopend)."""
     from app.db.models import Build, Experiment, ExperimentStatus
 
     async with get_sessionmaker()() as db:

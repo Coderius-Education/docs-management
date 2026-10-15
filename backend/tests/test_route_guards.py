@@ -1,9 +1,3 @@
-"""Elke API-route is afgeschermd: inloggen verplicht, en CSRF op alles wat muteert.
-
-De lijst komt uit de app zelf, dus een nieuw endpoint zonder `CurrentUser` of
-`require_csrf` laat deze test falen in plaats van ongemerkt open te staan.
-"""
-
 import re
 
 import pytest
@@ -14,7 +8,6 @@ from app.auth.deps import get_current_session, require_csrf
 from app.main_api import create_app
 from tests.helpers import make_logged_in_user
 
-# Zonder sessie bereikbaar, met de reden.
 PUBLIEK = {
     ("GET", "/api/health"),  # monitoring
     ("GET", "/api/auth/login"),  # start van de OAuth-flow
@@ -22,14 +15,13 @@ PUBLIEK = {
     ("POST", "/api/webhooks/github"),  # beschermd met de HMAC-signature
 }
 
-# Muterend, maar zonder CSRF-token: uitloggen namens iemand anders kost niets.
+# Uitloggen namens iemand anders kost niets.
 ZONDER_CSRF = {
     ("POST", "/api/auth/logout"),
 }
 
 MUTEREND = {"POST", "PUT", "PATCH", "DELETE"}
 
-# Plausibele waarden voor padparameters, zodat de request de dependencies bereikt.
 PAD_WAARDEN = {"site": "python", "vak": "informatica", "name": "x.png"}
 
 
@@ -60,7 +52,6 @@ MET_CSRF = [(m, p) for m, p in BESCHERMD if m in MUTEREND and (m, p) not in ZOND
 
 
 def test_uitzonderingen_bestaan_nog():
-    """Een verouderde uitzondering zou stilletjes een nieuw endpoint kunnen dekken."""
     bestaand = {(m, p) for m, p, _ in ROUTES}
     assert PUBLIEK <= bestaand
     assert ZONDER_CSRF <= bestaand

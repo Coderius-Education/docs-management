@@ -232,7 +232,6 @@ async def _stored_events() -> list[Event]:
 
 
 async def test_events_survive_bad_timestamps(api_client, delivery_client, builds_dir):
-    """Rommel in `ts` is publiek in te sturen en mag nooit tot een 500 leiden."""
     make_build(builds_dir, "python", "main", "mainsha12345")
     bad = ["1e20", "-1e20", "1e400", "NaN", "Infinity", "true", '"gisteren"', "null"]
     raw = ", ".join(f'{{"type": "pageview", "path": "/python/", "ts": {ts}}}' for ts in bad)
@@ -243,7 +242,6 @@ async def test_events_survive_bad_timestamps(api_client, delivery_client, builds
     assert resp.json()["accepted"] == len(bad)
     stored = await _stored_events()
     assert len(stored) == len(bad)
-    # Valt terug op het ontvangstmoment.
     now = datetime.now(UTC)
     assert all(abs(e.ts.replace(tzinfo=UTC) - now) < timedelta(minutes=1) for e in stored)
 
@@ -274,11 +272,7 @@ async def test_events_drop_non_finite_values(api_client, delivery_client, builds
 
 
 async def test_events_ignore_unknown_or_foreign_experiment(api_client, delivery_client, builds_dir):
-    """Een experiment-id van niets of van een andere site wordt niet gekoppeld.
-
-    Op Postgres zou een onbekend id de foreign key breken en de hele batch
-    weggooien; SQLite controleert die niet, dus hier kijken we naar de opslag.
-    """
+    # SQLite controleert foreign keys niet; op Postgres gaf een onbekend id een 500.
     exp_id = await create_running_experiment(api_client, builds_dir)
     async with get_sessionmaker()() as db:
         web = await db.scalar(select(Site).where(Site.slug == "web"))

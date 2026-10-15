@@ -1,5 +1,3 @@
-"""Opruimen van builds: via webhooks (PR dicht, branch weg) en per branch na ingest."""
-
 import json
 from datetime import timedelta
 
@@ -32,9 +30,6 @@ def pr_closed(branch: str, number: int = 7) -> dict:
             "head": {"ref": branch, "sha": "f" * 40},
         },
     }
-
-
-# --- Webhooks ---------------------------------------------------------------
 
 
 async def test_closed_pr_prunes_its_branch_only(api_client, builds_dir):
@@ -134,9 +129,6 @@ async def test_workflow_run_of_other_workflow_is_ignored(api_client, monkeypatch
     assert queued == []
 
 
-# --- Experimenten houden builds vast ----------------------------------------
-
-
 async def test_prune_branch_keeps_build_of_running_experiment(api_client, builds_dir):
     variant = await add_build(builds_dir, "python", "exp/b", "aaaa1111aaaa")
     await pin_build(variant)
@@ -159,11 +151,7 @@ async def test_prune_branch_ignores_finished_experiment(api_client, builds_dir):
     assert not (builds_dir / "python" / "exp-b").exists()
 
 
-# --- Per branch de nieuwste N bewaren ---------------------------------------
-
-
 async def _builds_on_branch(builds_dir, count: int, *, shared_sha: bool = False) -> list[int]:
-    """`count` builds op python/feat, oudste eerst."""
     start = utcnow() - timedelta(hours=count)
     return [
         await add_build(
@@ -202,7 +190,6 @@ async def test_excess_keeps_newest_builds(api_client, builds_dir, keep):
 
 
 async def test_excess_keeps_dir_shared_with_newer_build(api_client, builds_dir, keep):
-    """Meerdere runs op één commit delen één <sha12>-map."""
     keep(1)
     old, new = await _builds_on_branch(builds_dir, 2, shared_sha=True)
 
@@ -227,9 +214,6 @@ async def test_excess_keeps_pinned_build(api_client, builds_dir, keep):
     assert await build_status(middle) == BuildStatus.pruned
     assert not (builds_dir / "python" / "feat" / "000000000001").exists()
     assert await build_status(newest) == BuildStatus.ready
-
-
-# --- Nooit buiten het builds-volume -----------------------------------------
 
 
 def test_remove_dir_stays_inside_builds_dir(builds_dir, tmp_path_factory):
