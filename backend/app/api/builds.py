@@ -28,7 +28,7 @@ async def list_builds(
         select(Build, Site.slug)
         .join(Site, Site.id == Build.site_id)
         .order_by(Build.created_at.desc())
-        .limit(min(limit, 200))
+        .limit(max(1, min(limit, 200)))
     )
     if site:
         query = query.where(Site.slug == site)
@@ -120,7 +120,18 @@ async def delete_build(
         raise HTTPException(status_code=404, detail="Build onbekend")
     if build.branch_slug == "main":
         raise HTTPException(status_code=400, detail="Main-builds verwijder je niet handmatig")
-    prune._remove_dir(build.path)
+    if build.id in await prune._pinned_build_ids(db):
+        raise HTTPException(
+            status_code=409, detail="Een lopend of gepauzeerd experiment gebruikt deze build"
+        )
+    # Meerdere runs op dezelfde commit delen één map: alleen weg als niemand anders hem gebruikt.
+    shared = await db.scalar(
+        select(Build.id).where(
+            Build.id != build.id, Build.path == build.path, Build.status == BuildStatus.ready
+        )
+    )
+    if shared is None:
+        prune._remove_dir(build.path)
     build.status = BuildStatus.pruned
     await db.commit()
     return {"status": "pruned"}
