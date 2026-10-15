@@ -6,6 +6,7 @@ de bezoeker een sticky cookie (A of B); met cookie B wordt de héle site uit de
 variant-build geserveerd zodat SPA-navigatie consistent blijft.
 """
 
+import math
 import random
 import time
 from dataclasses import dataclass
@@ -160,6 +161,13 @@ async def ingest_events(
     if not isinstance(events, list):
         return {"status": "ignored"}
 
+    # Alleen experimenten van deze site: een onbekend id zou de foreign key
+    # breken en daarmee de hele batch (500), een id van een andere site
+    # vervuilt diens resultaten.
+    site_experiments = set(
+        (await db.scalars(select(Experiment.id).where(Experiment.site_id == site.id))).all()
+    )
+
     accepted = 0
     for item in events[:MAX_EVENTS_PER_CALL]:
         if not isinstance(item, dict):
@@ -167,24 +175,48 @@ async def ingest_events(
         event_type = item.get("type")
         if event_type not in ALLOWED_EVENT_TYPES:
             continue
-        value = item.get("value")
         exp_id = item.get("exp")
         variant = item.get("variant")
         kwargs: dict = {}
-        if isinstance(item.get("ts"), int | float):
-            kwargs["ts"] = datetime.fromtimestamp(item["ts"] / 1000, tz=UTC)
+        ts = _event_ts(item.get("ts"))
+        if ts is not None:
+            kwargs["ts"] = ts
         db.add(
             Event(
                 site_id=site.id,
-                experiment_id=exp_id if isinstance(exp_id, int) else None,
+                experiment_id=exp_id
+                if isinstance(exp_id, int) and exp_id in site_experiments
+                else None,
                 variant=variant if variant in ("A", "B") else None,
                 anon_id=anon,
                 path=str(item.get("path", ""))[:500],
                 event_type=event_type,
-                value=float(value) if isinstance(value, int | float) else None,
+                value=_event_value(item.get("value")),
                 **kwargs,
             )
         )
         accepted += 1
     await db.commit()
     return {"status": "ok", "accepted": accepted}
+
+
+def _event_value(raw: object) -> float | None:
+    """Een eindig getal uit JSON; bool, NaN, Infinity en te grote ints niet."""
+    if isinstance(raw, bool) or not isinstance(raw, int | float):
+        return None
+    try:
+        number = float(raw)
+    except OverflowError:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _event_ts(raw: object) -> datetime | None:
+    """Milliseconden sinds epoch; buiten wat datetime aankan valt terug op nu."""
+    millis = _event_value(raw)
+    if millis is None:
+        return None
+    try:
+        return datetime.fromtimestamp(millis / 1000, tz=UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
