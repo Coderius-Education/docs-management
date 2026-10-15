@@ -124,7 +124,6 @@ async def delete_build(
         raise HTTPException(
             status_code=409, detail="Een lopend of gepauzeerd experiment gebruikt deze build"
         )
-    # Meerdere runs op dezelfde commit delen één map: alleen weg als niemand anders hem gebruikt.
     shared = await db.scalar(
         select(Build.id).where(
             Build.id != build.id, Build.path == build.path, Build.status == BuildStatus.ready

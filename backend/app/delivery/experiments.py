@@ -161,9 +161,6 @@ async def ingest_events(
     if not isinstance(events, list):
         return {"status": "ignored"}
 
-    # Alleen experimenten van deze site: een onbekend id zou de foreign key
-    # breken en daarmee de hele batch (500), een id van een andere site
-    # vervuilt diens resultaten.
     site_experiments = set(
         (await db.scalars(select(Experiment.id).where(Experiment.site_id == site.id))).all()
     )
