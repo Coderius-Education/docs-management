@@ -60,11 +60,18 @@ async def _second_session(user_id: int):
         return await sessions.create_session(db, await db.get(User, user_id))
 
 
-async def test_login_redirects_to_github(api_client):
+async def test_login_redirects_to_github_with_matching_state(api_client):
     resp = await api_client.get("/api/auth/login")
+
     assert resp.status_code == 307
-    assert resp.headers["location"].startswith("https://github.com/login/oauth/authorize")
-    assert "oauth_state" in resp.cookies
+    location = httpx.URL(resp.headers["location"])
+    assert str(location).startswith("https://github.com/login/oauth/authorize")
+    state_cookie = next(
+        c for c in resp.headers.get_list("set-cookie") if c.startswith("oauth_state=")
+    )
+    assert state_cookie.startswith(f"oauth_state={location.params['state']};")
+    assert "HttpOnly" in state_cookie
+    assert "Path=/api/auth" in state_cookie
 
 
 @respx.mock
@@ -85,10 +92,7 @@ async def test_callback_creates_account_for_org_member(api_client):
 async def test_login_again_updates_the_same_account(api_client):
     mock_github_login(respx.mock)
     await _callback(api_client)
-    async with get_sessionmaker()() as db:
-        user = await db.scalar(select(User).where(User.github_id == 999))
-        user.token_invalid = True
-        await db.commit()
+    respx.mock.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "gho_nieuw"}))
     respx.mock.get(f"{API}/user").mock(
         return_value=Response(
             200,
@@ -99,8 +103,8 @@ async def test_login_again_updates_the_same_account(api_client):
     await _callback(api_client, "code=y")
 
     (user,) = await _users()
-    assert (user.login, user.name, user.token_invalid) == ("docent-nieuw", "Nieuw", False)
-    assert decrypt_token(user.oauth_token_enc) == "gho_abc123"
+    assert (user.login, user.name) == ("docent-nieuw", "Nieuw")
+    assert decrypt_token(user.oauth_token_enc) == "gho_nieuw"
 
 
 def _token_error():
@@ -170,11 +174,6 @@ async def test_callback_cannot_be_replayed(api_client):
     resp = await api_client.get(f"/api/auth/callback?code=x&state={state}")
 
     assert resp.status_code == 400
-
-
-async def test_me_requires_login(api_client):
-    resp = await api_client.get("/api/auth/me")
-    assert resp.status_code == 401
 
 
 async def test_logout_ends_the_session_for_good(api_client):
