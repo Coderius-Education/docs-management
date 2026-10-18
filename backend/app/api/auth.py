@@ -3,6 +3,7 @@
 import secrets
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -39,23 +40,32 @@ async def login() -> RedirectResponse:
 @router.get("/callback")
 async def callback(
     request: Request,
-    code: str,
     state: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    code: str | None = None,
 ) -> RedirectResponse:
     expected_state = request.cookies.get(STATE_COOKIE)
     if not expected_state or not secrets.compare_digest(expected_state, state):
         raise HTTPException(status_code=400, detail="OAuth state klopt niet")
 
-    token = await oauth.exchange_code(code)
+    # GitHub stuurt geen code als de gebruiker annuleert, en een ververste callback
+    # wisselt een al gebruikte code in.
+    if code is None:
+        return _login_failed("inloggen-mislukt")
+    try:
+        token = await oauth.exchange_code(code)
+        member = await oauth.is_org_member(token)
+    except (oauth.OAuthError, httpx.HTTPError):
+        return _login_failed("inloggen-mislukt")
 
-    if not await oauth.is_org_member(token):
+    if not member:
         # Geen lid van de organisatie: geen account, geen sessie.
-        response = RedirectResponse("/login?error=geen-org-lid")
-        response.delete_cookie(STATE_COOKIE, path="/api/auth")
-        return response
+        return _login_failed("geen-org-lid")
 
-    gh_user = await oauth.fetch_github_user(token)
+    try:
+        gh_user = await oauth.fetch_github_user(token)
+    except httpx.HTTPError:
+        return _login_failed("inloggen-mislukt")
 
     user = await db.scalar(select(User).where(User.github_id == gh_user["id"]))
     if user is None:
@@ -73,6 +83,12 @@ async def callback(
     session = await sessions.create_session(db, user)
     response = RedirectResponse("/")
     sessions.set_session_cookie(response, session)
+    response.delete_cookie(STATE_COOKIE, path="/api/auth")
+    return response
+
+
+def _login_failed(error: str) -> RedirectResponse:
+    response = RedirectResponse(f"/login?error={error}")
     response.delete_cookie(STATE_COOKIE, path="/api/auth")
     return response
 

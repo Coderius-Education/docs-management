@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mockConcepts } from './studio-mock';
 import YAML from 'yaml';
 
@@ -67,8 +67,14 @@ async function save(page: Page) {
     .click();
 }
 async function choose(page: Page, label: string, option: string) {
-  await page.getByRole('textbox', { name: label, exact: true }).click();
-  await page.getByRole('option', { name: option, exact: true }).click();
+  const field = page.getByRole('textbox', { name: label, exact: true });
+  const item = page.getByRole('option', { name: option, exact: true });
+  // Onder belasting sluit de Mantine-keuzelijst soms voordat de klik op de optie landt.
+  await expect(async () => {
+    if (!(await item.isVisible())) await field.click();
+    await item.click({ timeout: 2000 });
+    await expect(field).toHaveValue(option, { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
 }
 function properties(source: string): Record<string, unknown> {
   return YAML.parse(source.match(/^---\n([\s\S]*?)\n---/)![1]);
@@ -424,6 +430,20 @@ test('full screen hides the app shell and keeps the toolbar on top', async ({
   await expect(header).toBeVisible();
 });
 
+// Een vaste klikpositie hangt af van het lettertype van de machine.
+async function dblclickWord(paragraph: Locator, word: string) {
+  const box = await paragraph.evaluate((el, w) => {
+    const text = el.firstChild as Text;
+    const start = text.data.indexOf(w);
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + w.length);
+    const r = range.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }, word);
+  await paragraph.page().mouse.dblclick(box.x, box.y);
+}
+
 test('Link naar pagina wraps the selection in a site: link to a page and heading', async ({
   page,
 }) => {
@@ -471,9 +491,8 @@ test('Link naar pagina wraps the selection in a site: link to a page and heading
     }),
   );
   await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
-  await page.locator('.milkdown .ProseMirror p').getByText('Herhaal eerst lussen hier.').dblclick({
-    position: { x: 100, y: 5 },
-  });
+  const paragraph = page.locator('.milkdown .ProseMirror p').getByText('Herhaal eerst lussen hier.');
+  await dblclickWord(paragraph, 'lussen');
   await page.getByRole('img', { name: 'Link naar pagina' }).click();
   const dialog = page.getByRole('dialog', { name: 'Link naar pagina' });
   await expect(dialog.getByLabel('Zoek een pagina')).toHaveValue('lussen');

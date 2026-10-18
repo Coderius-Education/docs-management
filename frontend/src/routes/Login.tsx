@@ -16,6 +16,11 @@ export function Login() {
               Je GitHub-account is geen lid van de Coderius-Education organisatie.
             </Alert>
           )}
+          {error === 'inloggen-mislukt' && (
+            <Alert icon={<IconAlertCircle size={16} />} color="red">
+              Inloggen is niet gelukt. Probeer het opnieuw.
+            </Alert>
+          )}
           <Text c="dimmed" size="sm">
             Log in met je GitHub-account. Alleen leden van de Coderius-Education organisatie
             krijgen toegang.
