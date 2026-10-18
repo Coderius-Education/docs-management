@@ -67,8 +67,14 @@ async function save(page: Page) {
     .click();
 }
 async function choose(page: Page, label: string, option: string) {
-  await page.getByRole('textbox', { name: label, exact: true }).click();
-  await page.getByRole('option', { name: option, exact: true }).click();
+  const field = page.getByRole('textbox', { name: label, exact: true });
+  const item = page.getByRole('option', { name: option, exact: true });
+  // Onder belasting sluit de Mantine-keuzelijst soms voordat de klik op de optie landt.
+  await expect(async () => {
+    if (!(await item.isVisible())) await field.click();
+    await item.click({ timeout: 2000 });
+    await expect(field).toHaveValue(option, { timeout: 1000 });
+  }).toPass();
 }
 function properties(source: string): Record<string, unknown> {
   return YAML.parse(source.match(/^---\n([\s\S]*?)\n---/)![1]);
