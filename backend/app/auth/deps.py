@@ -3,6 +3,7 @@
 import secrets
 from typing import Annotated
 
+from cryptography.fernet import InvalidToken
 from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,9 +46,12 @@ async def require_csrf(
 
 def user_github_token(user: User) -> str:
     """Het ontsleutelde OAuth-token van de gebruiker, voor GitHub-calls namens hen."""
-    if user.token_invalid or not user.oauth_token_enc:
-        raise HTTPException(status_code=401, detail="GitHub-token ongeldig; log opnieuw in")
-    return decrypt_token(user.oauth_token_enc)
+    if not user.token_invalid and user.oauth_token_enc:
+        try:
+            return decrypt_token(user.oauth_token_enc)
+        except InvalidToken:
+            pass
+    raise HTTPException(status_code=401, detail="GitHub-token ongeldig; log opnieuw in")
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]

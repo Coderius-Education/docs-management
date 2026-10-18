@@ -3,11 +3,13 @@ from datetime import timedelta
 
 import pytest
 import respx
+from cryptography.fernet import Fernet
 from httpx import Response
 from sqlalchemy import delete, select
 
 from app.auth import sessions
 from app.auth.crypto import decrypt_token, encrypt_token
+from app.config import get_settings
 from app.db.models import Session, User, utcnow
 from app.db.session import get_sessionmaker
 from tests.helpers import make_logged_in_user
@@ -213,3 +215,100 @@ async def test_callback_with_used_code_redirects_to_login(api_client):
     assert resp.status_code == 307
     assert resp.headers["location"] == "/login?error=inloggen-mislukt"
     assert (await api_client.get("/api/auth/me")).status_code == 401
+
+
+async def test_token_from_rotated_encryption_key_401(api_client, monkeypatch):
+    await make_logged_in_user(api_client)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    get_settings.cache_clear()
+
+    resp = await api_client.get("/api/branches")
+
+    assert resp.status_code == 401
+    assert "log opnieuw in" in resp.json()["detail"]
+
+
+@respx.mock
+async def test_callback_when_github_profile_fails_redirects_to_login(api_client):
+    mock_github_login(respx.mock)
+    respx.mock.get(f"{API}/user").mock(return_value=Response(502))
+
+    resp = await api_client.get(f"/api/auth/callback?code=x&state={await _start_login(api_client)}")
+
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "/login?error=inloggen-mislukt"
+
+
+@respx.mock
+async def test_callback_rejects_pending_org_invitation(api_client):
+    mock_github_login(respx.mock, org_state="pending")
+
+    resp = await api_client.get(f"/api/auth/callback?code=x&state={await _start_login(api_client)}")
+
+    assert "geen-org-lid" in resp.headers["location"]
+    async with get_sessionmaker()() as db:
+        assert (await db.scalars(select(User))).all() == []
+
+
+@respx.mock
+async def test_callback_cannot_be_replayed(api_client):
+    mock_github_login(respx.mock)
+    state = await _start_login(api_client)
+    await api_client.get(f"/api/auth/callback?code=x&state={state}")
+
+    resp = await api_client.get(f"/api/auth/callback?code=x&state={state}")
+
+    assert resp.status_code == 400
+
+
+async def test_callback_without_state_cookie_400(api_client):
+    state = await _start_login(api_client)
+    api_client.cookies.clear()
+
+    resp = await api_client.get(f"/api/auth/callback?code=x&state={state}")
+
+    assert resp.status_code == 400
+
+
+async def _second_session(user_id: int):
+    async with get_sessionmaker()() as db:
+        return await sessions.create_session(db, await db.get(User, user_id))
+
+
+async def test_csrf_token_is_bound_to_its_session(api_client):
+    auth = await make_logged_in_user(api_client)
+    other = await _second_session(auth["user_id"])
+    api_client.cookies.set(sessions.cookie_name(), str(other.id))
+
+    resp = await api_client.post("/api/klassen", headers={"X-CSRF-Token": auth["csrf"]})
+
+    assert resp.status_code == 403
+
+
+async def test_logout_ends_only_that_session(api_client):
+    auth = await make_logged_in_user(api_client)
+    other = await _second_session(auth["user_id"])
+
+    await api_client.post("/api/auth/logout")
+    api_client.cookies.set(sessions.cookie_name(), str(other.id))
+
+    assert (await api_client.get("/api/auth/me")).status_code == 200
+
+
+@respx.mock
+async def test_secure_cookies_in_production(api_client, monkeypatch):
+    monkeypatch.setenv("SECURE_COOKIES", "true")
+    get_settings.cache_clear()
+    mock_github_login(respx.mock)
+    state = await _start_login(api_client)
+    # Een Secure-cookie stuurt httpx niet terug over http://testserver.
+    api_client.cookies.set("oauth_state", state)
+
+    resp = await api_client.get(f"/api/auth/callback?code=x&state={state}")
+
+    cookies = resp.headers.get_list("set-cookie")
+    session_cookie = next(c for c in cookies if c.startswith("__Host-session="))
+    assert "Secure" in session_cookie
+    assert "Path=/" in session_cookie
+    max_age = get_settings().session_max_age_days * 86400
+    assert f"Max-Age={max_age}" in session_cookie

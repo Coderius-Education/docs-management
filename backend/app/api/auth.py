@@ -61,7 +61,10 @@ async def callback(
         # Geen lid van de organisatie: geen account, geen sessie.
         return _login_failed("geen-org-lid")
 
-    gh_user = await oauth.fetch_github_user(token)
+    try:
+        gh_user = await oauth.fetch_github_user(token)
+    except httpx.HTTPError:
+        return _login_failed("inloggen-mislukt")
 
     user = await db.scalar(select(User).where(User.github_id == gh_user["id"]))
     if user is None:
