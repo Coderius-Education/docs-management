@@ -74,7 +74,7 @@ async function choose(page: Page, label: string, option: string) {
     if (!(await item.isVisible())) await field.click();
     await item.click({ timeout: 2000 });
     await expect(field).toHaveValue(option, { timeout: 1000 });
-  }).toPass();
+  }).toPass({ timeout: 10_000 });
 }
 function properties(source: string): Record<string, unknown> {
   return YAML.parse(source.match(/^---\n([\s\S]*?)\n---/)![1]);

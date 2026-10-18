@@ -54,10 +54,11 @@ async def callback(
         return _login_failed("inloggen-mislukt")
     try:
         token = await oauth.exchange_code(code)
+        member = await oauth.is_org_member(token)
     except (oauth.OAuthError, httpx.HTTPError):
         return _login_failed("inloggen-mislukt")
 
-    if not await oauth.is_org_member(token):
+    if not member:
         # Geen lid van de organisatie: geen account, geen sessie.
         return _login_failed("geen-org-lid")
 

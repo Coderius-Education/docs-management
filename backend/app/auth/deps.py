@@ -1,5 +1,6 @@
 """FastAPI-dependencies: ingelogde gebruiker, CSRF-check, GitHub-token."""
 
+import logging
 import secrets
 from typing import Annotated
 
@@ -11,6 +12,8 @@ from app.auth import sessions
 from app.auth.crypto import decrypt_token
 from app.db.models import Session, User
 from app.db.session import get_db
+
+log = logging.getLogger(__name__)
 
 
 async def get_current_session(
@@ -50,7 +53,9 @@ def user_github_token(user: User) -> str:
         try:
             return decrypt_token(user.oauth_token_enc)
         except InvalidToken:
-            pass
+            log.warning(
+                "GitHub-token van %s niet te ontsleutelen; andere TOKEN_ENCRYPTION_KEY?", user.login
+            )
     raise HTTPException(status_code=401, detail="GitHub-token ongeldig; log opnieuw in")
 
 

@@ -1,6 +1,7 @@
 import uuid
 from datetime import timedelta
 
+import httpx
 import pytest
 import respx
 from cryptography.fernet import Fernet
@@ -217,7 +218,7 @@ async def test_callback_with_used_code_redirects_to_login(api_client):
     assert (await api_client.get("/api/auth/me")).status_code == 401
 
 
-async def test_token_from_rotated_encryption_key_401(api_client, monkeypatch):
+async def test_token_from_rotated_encryption_key_401(api_client, monkeypatch, caplog):
     await make_logged_in_user(api_client)
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
     get_settings.cache_clear()
@@ -226,6 +227,7 @@ async def test_token_from_rotated_encryption_key_401(api_client, monkeypatch):
 
     assert resp.status_code == 401
     assert "log opnieuw in" in resp.json()["detail"]
+    assert "TOKEN_ENCRYPTION_KEY" in caplog.text
 
 
 @respx.mock
@@ -312,3 +314,16 @@ async def test_secure_cookies_in_production(api_client, monkeypatch):
     assert "Path=/" in session_cookie
     max_age = get_settings().session_max_age_days * 86400
     assert f"Max-Age={max_age}" in session_cookie
+
+
+@respx.mock
+async def test_callback_when_org_check_fails_redirects_to_login(api_client):
+    mock_github_login(respx.mock)
+    respx.mock.get(f"{API}/user/memberships/orgs/Coderius-Education").mock(
+        side_effect=httpx.ConnectError("verbinding verbroken")
+    )
+
+    resp = await api_client.get(f"/api/auth/callback?code=x&state={await _start_login(api_client)}")
+
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "/login?error=inloggen-mislukt"
