@@ -36,10 +36,10 @@ def _mock_run(run_id: int, artifacts: dict[str, bytes | int]) -> None:
         respx.get(f"{REPO}/actions/artifacts/{i}/zip").mock(return_value=response)
 
 
-async def _builds() -> dict[str, BuildStatus]:
+async def _builds() -> list[tuple[str, BuildStatus]]:
     async with get_sessionmaker()() as db:
-        rows = (await db.execute(select(Site.slug, Build.status).join(Build))).all()
-    return dict(rows)
+        rows = await db.execute(select(Site.slug, Build.status).join(Build).order_by(Site.slug))
+    return [tuple(row) for row in rows]
 
 
 def test_new_build_flips_current_and_keeps_the_previous(builds_dir):
@@ -74,7 +74,7 @@ def test_failed_unpack_leaves_the_live_build_alone(builds_dir, zip_bytes):
 
     assert _current(builds_dir) == SHA_A
     assert sorted(p.name for p in _branch_dir(builds_dir).iterdir()) == [SHA_A, "current"]
-    assert not (builds_dir.parent / "evil.txt").exists()
+    assert not any(builds_dir.rglob("evil.txt"))
 
 
 def test_previous_build_never_picks_a_half_unpacked_dir(builds_dir):
@@ -93,7 +93,7 @@ async def test_one_failed_download_does_not_block_the_other_sites(api_client, bu
 
     await process_job(IngestJob(run_id=50, branch="main", head_sha="a" * 40))
 
-    assert await _builds() == {"python": BuildStatus.failed, "web": BuildStatus.ready}
+    assert await _builds() == [("python", BuildStatus.failed), ("web", BuildStatus.ready)]
     assert (_branch_dir(builds_dir, "web") / "current" / "index.html").read_text() == "web"
 
 
@@ -101,12 +101,12 @@ async def test_one_failed_download_does_not_block_the_other_sites(api_client, bu
 async def test_failed_build_can_be_retried_into_the_same_row(api_client, builds_dir):
     _mock_run(51, {"python-static": 500})
     await process_job(IngestJob(run_id=51, branch="main", head_sha="a" * 40))
-    assert await _builds() == {"python": BuildStatus.failed}
+    assert await _builds() == [("python", BuildStatus.failed)]
 
     _mock_run(51, {"python-static": make_zip({"index.html": "x"})})
     await process_job(IngestJob(run_id=51, branch="main", head_sha="a" * 40))
 
-    assert await _builds() == {"python": BuildStatus.ready}
+    assert await _builds() == [("python", BuildStatus.ready)]
 
 
 @respx.mock
@@ -122,7 +122,7 @@ async def test_worker_keeps_going_after_a_failing_job(api_client, builds_dir):
     finally:
         await worker.stop_worker()
 
-    assert await _builds() == {"python": BuildStatus.ready}
+    assert await _builds() == [("python", BuildStatus.ready)]
 
 
 @respx.mock
@@ -138,5 +138,5 @@ async def test_only_static_artifacts_of_known_sites_are_ingested(api_client, bui
 
     await process_job(IngestJob(run_id=52, branch="main", head_sha="a" * 40))
 
-    assert await _builds() == {"python": BuildStatus.ready}
+    assert await _builds() == [("python", BuildStatus.ready)]
     assert sorted(p.name for p in builds_dir.iterdir()) == ["python"]

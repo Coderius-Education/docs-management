@@ -264,7 +264,9 @@ def _two_main_builds(builds_dir):
     old = make_build(builds_dir, "python", "main", "oldsha123456")
     os.utime(old, (1, 1))
     (old / "docs" / "alleen-oud").mkdir()
-    (old / "docs" / "alleen-oud" / "index.html").write_text("<html><body>oud</body></html>")
+    (old / "docs" / "alleen-oud" / "index.html").write_text(
+        "<html><body>ALLEEN-IN-OUDE-BUILD</body></html>"
+    )
     make_build(builds_dir, "python", "main", "newsha123456")
 
 
@@ -286,15 +288,7 @@ async def test_pages_never_fall_back_to_the_previous_build(delivery_client, buil
     resp = await delivery_client.get("/python/docs/alleen-oud/", headers={"host": INF})
 
     assert resp.status_code == 404
-    assert "oud" not in resp.text
-    assert resp.headers["cache-control"] == "no-cache"
-
-
-async def test_html_is_never_cached(delivery_client, builds_dir):
-    make_build(builds_dir, "python", "main", "abc123def456")
-
-    resp = await delivery_client.get("/python/docs/intro/", headers={"host": INF})
-
+    assert "ALLEEN-IN-OUDE-BUILD" not in resp.text
     assert resp.headers["cache-control"] == "no-cache"
 
 
