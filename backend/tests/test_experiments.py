@@ -1,38 +1,17 @@
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 from sqlalchemy import select
 
-from app.db.models import Build, BuildStatus, Event, Experiment, Site
+from app.db.models import Event, Experiment, Site
 from app.db.session import get_sessionmaker
-from tests.helpers import make_logged_in_user
+from tests.helpers import add_build, make_logged_in_user
 from tests.test_delivery import make_build
-
-
-async def seed_build(builds_dir: Path, site_slug: str, branch: str, slug: str, sha: str) -> int:
-    """Maakt een build op disk + in de DB; retourneert build-id."""
-    path = make_build(builds_dir, site_slug, slug, sha[:12])
-    async with get_sessionmaker()() as db:
-        site = await db.scalar(select(Site).where(Site.slug == site_slug))
-        build = Build(
-            site_id=site.id,
-            branch=branch,
-            branch_slug=slug,
-            head_sha=sha,
-            run_id=hash((site_slug, slug, sha)) % 10**9,
-            status=BuildStatus.ready,
-            path=str(path),
-            size_bytes=1000,
-        )
-        db.add(build)
-        await db.commit()
-        return build.id
 
 
 async def create_running_experiment(api_client, builds_dir, split_pct: int = 50) -> int:
     auth = await make_logged_in_user(api_client)
     make_build(builds_dir, "python", "main", "mainsha12345")
-    await seed_build(builds_dir, "python", "exp/variant-b", "exp-variant-b", "b" * 40)
+    await add_build(builds_dir, "python", "exp/variant-b", "b" * 40)
 
     created = await api_client.post(
         "/api/experiments",
