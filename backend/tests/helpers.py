@@ -1,5 +1,7 @@
 """Testhulpjes: ingelogde gebruiker + sessie aanmaken."""
 
+import itertools
+
 from app.auth import sessions as session_mod
 from app.auth.crypto import encrypt_token
 from app.db.models import User
@@ -21,6 +23,9 @@ async def make_logged_in_user(client, token: str = "gho_testtoken") -> dict:
         session = await session_mod.create_session(db, user)
     client.cookies.set(session_mod.cookie_name(), str(session.id))
     return {"user_id": user.id, "csrf": session.csrf_token, "session_id": str(session.id)}
+
+
+_run_ids = itertools.count(1_000_000)
 
 
 async def add_build(
@@ -50,7 +55,7 @@ async def add_build(
             branch=branch,
             branch_slug=slug,
             head_sha=sha.ljust(40, "0"),
-            run_id=run_id if run_id is not None else abs(hash((site, branch, sha))) % 10**9,
+            run_id=run_id if run_id is not None else next(_run_ids),
             status=status or BuildStatus.ready,
             path=str(path),
             size_bytes=1000,

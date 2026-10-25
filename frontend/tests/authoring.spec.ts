@@ -1,6 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { mockConcepts } from './studio-mock';
 import { expect, test, type Page } from '@playwright/test';
+// Onder belasting kan CodeMirror net opnieuw renderen tussen "alles selecteren"
+// en invoegen; dan komt de tekst achter de oude inhoud.
+async function fillSource(page: Page, text: string) {
+  const editor = page.locator('.cm-content');
+  await expect(async () => {
+    await editor.fill(text);
+    await expect(editor).toHaveText(text, { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
+}
+
 async function mockPortal(page: Page, initial = '# Les\n\nEen gewone les.\n') {
   let content = initial;
   let sha = 'sha-1';
@@ -240,7 +250,7 @@ test('saving from main starts a titled concept and adopts it', async ({
     page.getByRole('button', { name: 'Opslaan…', exact: true }),
   ).toBeDisabled();
   await page.getByText('Broncode', { exact: true }).click();
-  await page.locator('.cm-content').fill('# Changed');
+  await fillSource(page, '# Changed');
   await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
   // A title is required before a new concept can be saved.
   await expect(
@@ -259,7 +269,7 @@ test('saving from main starts a titled concept and adopts it', async ({
     .getByRole('button', { name: 'Verder bewerken', exact: true })
     .click();
   await expect(page.getByText('Concept: Nieuwe les')).toBeVisible();
-  await page.locator('.cm-content').fill('# Again');
+  await fillSource(page, '# Again');
   await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
@@ -292,7 +302,7 @@ test('a save conflict keeps the local text and offers retry', async ({
   );
   await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
   await page.getByText('Broncode', { exact: true }).click();
-  await page.locator('.cm-content').fill('# My draft');
+  await fillSource(page, '# My draft');
   await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
@@ -343,7 +353,7 @@ test('prevents publishing temporary image URLs pasted into source', async ({
   await mockPortal(page);
   await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
   await page.getByText('Broncode', { exact: true }).click();
-  await page.locator('.cm-content').fill('![Local](blob:browser-only)');
+  await fillSource(page, '![Local](blob:browser-only)');
   await expect(page.getByRole('alert')).toContainText(
     'tijdelijke of ongeldige URL',
   );
@@ -409,14 +419,14 @@ test('loads a different document when the route changes and retains in-flight ed
   );
   await page.goto('/sites/python/edit?path=les.mdx&ref=lesson');
   await page.getByText('Broncode', { exact: true }).click();
-  await page.locator('.cm-content').fill('# First change');
+  await fillSource(page, '# First change');
   await page.getByRole('button', { name: 'Opslaan…', exact: true }).click();
   await page
     .getByRole('button', { name: 'Concept opslaan', exact: true })
     .click();
   await expect.poll(() => !!release).toBe(true);
   // Model a late input transaction while the save request is outstanding.
-  await page.locator('.cm-content').fill('# Newer local change');
+  await fillSource(page, '# Newer local change');
   release!();
   await expect(page.getByText('het voorbeeld wordt gebouwd')).toBeVisible();
   await page
@@ -426,7 +436,7 @@ test('loads a different document when the route changes and retains in-flight ed
   await expect(
     page.getByRole('button', { name: 'Opslaan…', exact: true }),
   ).toBeEnabled();
-  await page.locator('.cm-content').fill('# First change');
+  await fillSource(page, '# First change');
   await expect(
     page.getByRole('button', { name: 'Opslaan…', exact: true }),
   ).toBeDisabled();

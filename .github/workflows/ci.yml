@@ -39,6 +39,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run: { working-directory: frontend }
     steps:
@@ -52,7 +53,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      # Zonder --with-deps: de runner heeft de systeembibliotheken voor Chromium al,
+      # en apt haalde de extra lettertypes soms met 70 kB/s binnen (6+ minuten).
+      - run: pnpm exec playwright install chromium
       - run: pnpm test:e2e
 
   docker:
