@@ -81,7 +81,11 @@ async def process_job(job: IngestJob) -> None:
             site = sites.get(site_slug)
             if site is None:
                 continue
-            await _ingest_artifact(db, client, job, site, slug, sha12, artifact)
+            try:
+                await _ingest_artifact(db, client, job, site, slug, sha12, artifact)
+            except Exception:
+                log.exception("Artifact %s van run %s mislukt", name, job.run_id)
+                continue
             await prune.prune_branch_excess(db, site_slug, slug)
 
 

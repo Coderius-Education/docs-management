@@ -23,15 +23,11 @@ def unpack_artifact(zip_bytes: bytes, site: str, branch_slug: str, sha12: str) -
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
 
-    size = 0
-    with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
-        for info in zf.infolist():
-            # Zip-slip-bescherming: paden moeten binnen de doelmap blijven.
-            dest = (tmp / info.filename).resolve()
-            if not dest.is_relative_to(tmp.resolve()):
-                raise ValueError(f"Onveilig pad in artifact: {info.filename}")
-            size += info.file_size
-        zf.extractall(tmp)
+    try:
+        size = _extract(zip_bytes, tmp)
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
 
     if target.exists():
         shutil.rmtree(target)
@@ -43,6 +39,19 @@ def unpack_artifact(zip_bytes: bytes, site: str, branch_slug: str, sha12: str) -
     tmp_link.symlink_to(target.name)
     tmp_link.rename(current)  # atomisch flippen
     return target, size
+
+
+def _extract(zip_bytes: bytes, tmp: Path) -> int:
+    size = 0
+    with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+        for info in zf.infolist():
+            # Zip-slip-bescherming: paden moeten binnen de doelmap blijven.
+            dest = (tmp / info.filename).resolve()
+            if not dest.is_relative_to(tmp.resolve()):
+                raise ValueError(f"Onveilig pad in artifact: {info.filename}")
+            size += info.file_size
+        zf.extractall(tmp)
+    return size
 
 
 def resolve_current(site: str, branch_slug: str) -> Path | None:
@@ -62,7 +71,10 @@ def previous_build(site: str, branch_slug: str) -> Path | None:
         (
             p
             for p in branch_dir.iterdir()
-            if p.is_dir() and not p.name.startswith(".") and p.name != "current"
+            if p.is_dir()
+            and not p.name.startswith(".")
+            and not p.name.endswith(".tmp")
+            and p.name != "current"
         ),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
