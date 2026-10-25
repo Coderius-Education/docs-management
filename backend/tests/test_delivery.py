@@ -1,4 +1,8 @@
+import os
+import shutil
 from pathlib import Path
+
+import pytest
 
 
 def make_build(builds_dir: Path, site: str, branch: str, sha: str, html: str = "") -> Path:
@@ -256,18 +260,77 @@ async def test_spa_404_fallback(delivery_client, builds_dir):
     assert "404" in resp.text
 
 
-async def test_asset_fallback_previous_build(delivery_client, builds_dir):
-    import time
+def _two_main_builds(builds_dir):
+    old = make_build(builds_dir, "python", "main", "oldsha123456")
+    os.utime(old, (1, 1))
+    (old / "docs" / "alleen-oud").mkdir()
+    (old / "docs" / "alleen-oud" / "index.html").write_text("<html><body>oud</body></html>")
+    make_build(builds_dir, "python", "main", "newsha123456")
 
-    old = make_build(builds_dir, "python", "main", "oldsha1234567")
-    time.sleep(0.01)
-    make_build(builds_dir, "python", "main", "newsha1234567")
-    # huidige build heeft het oude asset niet, vorige wel
-    assert (old / "assets/js/main.oldsha1234567.js").is_file()
+
+async def test_asset_fallback_previous_build(delivery_client, builds_dir):
+    _two_main_builds(builds_dir)
+
     resp = await delivery_client.get(
-        "/python/assets/js/main.oldsha1234567.js", headers={"host": INF}
+        "/python/assets/js/main.oldsha123456.js", headers={"host": INF}
     )
+
     assert resp.status_code == 200
+    assert resp.text == "//js"
+    assert resp.headers["cache-control"] == "public, max-age=31536000, immutable"
+
+
+async def test_pages_never_fall_back_to_the_previous_build(delivery_client, builds_dir):
+    _two_main_builds(builds_dir)
+
+    resp = await delivery_client.get("/python/docs/alleen-oud/", headers={"host": INF})
+
+    assert resp.status_code == 404
+    assert "oud" not in resp.text
+    assert resp.headers["cache-control"] == "no-cache"
+
+
+async def test_html_is_never_cached(delivery_client, builds_dir):
+    make_build(builds_dir, "python", "main", "abc123def456")
+
+    resp = await delivery_client.get("/python/docs/intro/", headers={"host": INF})
+
+    assert resp.headers["cache-control"] == "no-cache"
+
+
+PREVIEW = "concept-python-1--informatica.preview.coderius.nl"
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/python/", "/python/assets/js/main.fff111222333.js", "/python/bestaat/niet"],
+    ids=["pagina", "asset", "404"],
+)
+async def test_previews_are_never_indexed(delivery_client, builds_dir, path):
+    make_build(builds_dir, "python", "concept-python-1", "fff111222333")
+
+    resp = await delivery_client.get(path, headers={"host": PREVIEW})
+
+    assert resp.headers["x-robots-tag"] == "noindex, nofollow"
+
+
+async def test_preview_with_dangling_current_falls_back_to_main(delivery_client, builds_dir):
+    branch = make_build(builds_dir, "python", "concept-python-1", "fff111222333")
+    make_build(builds_dir, "python", "main", "abc123def456")
+    shutil.rmtree(branch)
+
+    resp = await delivery_client.get("/python/", headers={"host": PREVIEW})
+
+    assert resp.status_code == 200
+    assert "abc123def456" in resp.text
+
+
+async def test_live_site_with_dangling_current_is_503(delivery_client, builds_dir):
+    shutil.rmtree(make_build(builds_dir, "python", "main", "abc123def456"))
+
+    resp = await delivery_client.get("/python/", headers={"host": INF})
+
+    assert resp.status_code == 503
 
 
 async def test_path_traversal_blocked(delivery_client, builds_dir):
