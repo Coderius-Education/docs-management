@@ -1,37 +1,17 @@
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from app.db.models import Build, BuildStatus, Site
+from app.db.models import Event, Experiment, Site
 from app.db.session import get_sessionmaker
-from tests.helpers import make_logged_in_user
+from tests.helpers import add_build, make_logged_in_user
 from tests.test_delivery import make_build
-
-
-async def seed_build(builds_dir: Path, site_slug: str, branch: str, slug: str, sha: str) -> int:
-    """Maakt een build op disk + in de DB; retourneert build-id."""
-    path = make_build(builds_dir, site_slug, slug, sha[:12])
-    async with get_sessionmaker()() as db:
-        site = await db.scalar(select(Site).where(Site.slug == site_slug))
-        build = Build(
-            site_id=site.id,
-            branch=branch,
-            branch_slug=slug,
-            head_sha=sha,
-            run_id=hash((site_slug, slug, sha)) % 10**9,
-            status=BuildStatus.ready,
-            path=str(path),
-            size_bytes=1000,
-        )
-        db.add(build)
-        await db.commit()
-        return build.id
 
 
 async def create_running_experiment(api_client, builds_dir, split_pct: int = 50) -> int:
     auth = await make_logged_in_user(api_client)
     make_build(builds_dir, "python", "main", "mainsha12345")
-    await seed_build(builds_dir, "python", "exp/variant-b", "exp-variant-b", "b" * 40)
+    await add_build(builds_dir, "python", "exp/variant-b", "b" * 40)
 
     created = await api_client.post(
         "/api/experiments",
@@ -215,3 +195,92 @@ async def test_split_ratio_about_50_50(api_client, delivery_client, builds_dir):
         delivery_client.cookies.clear()
     # binomiaal: 3 sigma rond 100 is ±21
     assert 70 <= assigned_b <= 130
+
+
+async def _post_raw_events(delivery_client, raw_events: str):
+    return await delivery_client.post(
+        "/_cdx/events",
+        content='{"anon": "x", "events": ' + raw_events + "}",
+        headers={"host": "informatica.coderius.nl", "content-type": "application/json"},
+    )
+
+
+async def _stored_events() -> list[Event]:
+    async with get_sessionmaker()() as db:
+        return list((await db.scalars(select(Event).order_by(Event.id))).all())
+
+
+async def test_events_survive_bad_timestamps(api_client, delivery_client, builds_dir):
+    make_build(builds_dir, "python", "main", "mainsha12345")
+    bad = ["1e20", "-1e20", "1e400", "NaN", "Infinity", "true", '"gisteren"', "null"]
+    raw = ", ".join(f'{{"type": "pageview", "path": "/python/", "ts": {ts}}}' for ts in bad)
+
+    resp = await _post_raw_events(delivery_client, f"[{raw}]")
+
+    assert resp.status_code == 200
+    assert resp.json()["accepted"] == len(bad)
+    stored = await _stored_events()
+    assert len(stored) == len(bad)
+    now = datetime.now(UTC)
+    assert all(abs(e.ts.replace(tzinfo=UTC) - now) < timedelta(minutes=1) for e in stored)
+
+
+async def test_events_keep_valid_timestamp(api_client, delivery_client, builds_dir):
+    make_build(builds_dir, "python", "main", "mainsha12345")
+    resp = await _post_raw_events(
+        delivery_client, '[{"type": "pageview", "path": "/python/", "ts": 1750000000000}]'
+    )
+    assert resp.json()["accepted"] == 1
+    (stored,) = await _stored_events()
+    assert stored.ts.replace(tzinfo=UTC) == datetime.fromtimestamp(1750000000, tz=UTC)
+
+
+async def test_events_drop_non_finite_values(api_client, delivery_client, builds_dir):
+    make_build(builds_dir, "python", "main", "mainsha12345")
+    bad = ["NaN", "Infinity", "-Infinity", "1" + "0" * 400, "true"]
+    raw = ", ".join(f'{{"type": "heartbeat", "path": "/python/", "value": {v}}}' for v in bad)
+    valid = '{"type": "scroll", "path": "/python/", "value": 80}'
+
+    resp = await _post_raw_events(delivery_client, f"[{raw}, {valid}]")
+
+    assert resp.status_code == 200
+    assert resp.json()["accepted"] == len(bad) + 1
+    values = [e.value for e in await _stored_events()]
+    assert values[:-1] == [None] * len(bad)
+    assert float(values[-1]) == 80
+
+
+async def test_events_ignore_unknown_or_foreign_experiment(api_client, delivery_client, builds_dir):
+    # SQLite controleert foreign keys niet; op Postgres gaf een onbekend id een 500.
+    exp_id = await create_running_experiment(api_client, builds_dir)
+    async with get_sessionmaker()() as db:
+        web = await db.scalar(select(Site).where(Site.slug == "web"))
+        python_exp = await db.get(Experiment, exp_id)
+        foreign = Experiment(
+            site_id=web.id,
+            name="Ander vak",
+            page_path="/",
+            variant_branch="x",
+            variant_build_id=python_exp.variant_build_id,
+            created_by=python_exp.created_by,
+        )
+        db.add(foreign)
+        await db.commit()
+        foreign_id = foreign.id
+
+    events = [
+        {"type": "exposure", "path": "/python/docs/intro/", "exp": exp_id, "variant": "A"},
+        {"type": "exposure", "path": "/python/docs/intro/", "exp": 999999, "variant": "A"},
+        {"type": "exposure", "path": "/python/docs/intro/", "exp": foreign_id, "variant": "A"},
+        {"type": "exposure", "path": "/python/docs/intro/", "exp": str(exp_id), "variant": "A"},
+        {"type": "exposure", "path": "/python/docs/intro/", "exp": [exp_id], "variant": "A"},
+        {"type": "exposure", "path": "/python/docs/intro/", "exp": {"id": 1}, "variant": "A"},
+    ]
+    resp = await delivery_client.post(
+        "/_cdx/events",
+        json={"anon": "x", "events": events},
+        headers={"host": "informatica.coderius.nl"},
+    )
+
+    assert resp.json()["accepted"] == 6
+    assert [e.experiment_id for e in await _stored_events()] == [exp_id] + [None] * 5
