@@ -183,6 +183,7 @@ def test_home_concepts_preview_every_vak():
     assert [link["url"] for link in links] == [
         "https://concept-home-1--informatica.preview.coderius.nl/",
         "https://concept-home-1--wo.preview.coderius.nl/",
+        "https://concept-home-1--techniek.preview.coderius.nl/",
     ]
     assert links[0]["label"] == "Vakpagina Informatica"
     assert preview_links("b", "python")[0]["url"].endswith(

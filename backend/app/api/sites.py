@@ -23,7 +23,7 @@ from app.config import SUBJECTS, get_settings, register_site_subject, site_dir_f
 from app.db.models import Site
 from app.db.session import get_db
 from app.github.assets import MAX_IMAGE_BYTES, read_image, write_image
-from app.github.client import GitHubClient
+from app.github.client import GitHubClient, repo_path
 from app.github.commits import multi_file_commit
 from app.github.contents import (
     ContentScope,
@@ -36,11 +36,17 @@ from app.github.contents import (
 from app.github.merge import hunks, merge_text
 from app.github.pulls import create_branch, create_pr
 from app.scaffold.site_template import (
+    CURRICULUM_TS,
+    HUISSTIJL_JS,
+    add_course_to_curriculum,
+    add_course_to_huisstijl,
     add_site_to_registry,
     add_site_to_sites_js,
+    add_subject_themes,
     add_subject_to_registry,
     add_subject_to_sites_js,
     scaffold_files,
+    subject_themes,
 )
 
 router = APIRouter(prefix="/sites", tags=["sites"])
@@ -219,43 +225,74 @@ async def create_site(
     branch = f"nieuwe-site-{slug}"
     description = tagline or f"Leermateriaal: {title}"
     origin = f"https://{subject_domain}"
-
-    # 1) docs-repo: scaffold + registry-entry in één PR.
-    await create_branch(client, branch)
-    sites_js = await get_file_text(client, SITES_JS, branch)
-    if new_subject:
-        sites_js = add_subject_to_sites_js(sites_js, subject, subject_domain, subject_name)
-    docs_files = scaffold_files(slug, title, tagline, description, subject=subject)
-    docs_files[SITES_JS] = add_site_to_sites_js(
-        sites_js, slug, subject, path, display_name, description
-    ).encode("utf-8")
-    await multi_file_commit(client, branch, f"Nieuwe site '{slug}' toevoegen", add=docs_files)
-    docs_pr = await create_pr(
-        client,
-        branch,
-        f"Nieuwe site: {display_name}",
-        _docs_pr_body(slug, subject, path, display_name, subject_domain),
-    )
-
-    # 2) beheer-repo: registratie in sites.json.
     mgmt = settings.management_repo_full
-    await create_branch(client, branch, repo=mgmt)
-    sites_json = await get_file_text(client, "backend/app/sites.json", branch, repo=mgmt)
-    if new_subject:
-        sites_json = add_subject_to_registry(sites_json, subject, subject_domain, subject_name)
-    mgmt_files = {
-        "backend/app/sites.json": add_site_to_registry(
-            sites_json, slug, subject, path, display_name
-        ).encode("utf-8"),
-    }
+
+    # 0) Eerst alles lezen en uitrekenen, nog zonder iets te schrijven: een
+    #    register dat anders is opgebouwd faalt hier, niet halverwege.
+    sites_js = await get_file_text(client, SITES_JS, "main")
+    huisstijl_js = await get_file_text(client, HUISSTIJL_JS, "main")
+    curriculum_ts = await get_file_text(client, CURRICULUM_TS, "main")
+    sites_json = await get_file_text(client, SITES_JSON, "main", repo=mgmt)
+    try:
+        if new_subject:
+            sites_js = add_subject_to_sites_js(sites_js, subject, subject_domain, subject_name)
+            sites_json = add_subject_to_registry(sites_json, subject, subject_domain, subject_name)
+        themes = subject_themes(curriculum_ts, subject)
+        if not themes:
+            vak_name = subject_name if new_subject else SUBJECTS[subject]["display_name"]
+            curriculum_ts = add_subject_themes(curriculum_ts, subject, vak_name)
+            themes = [vak_name]
+        docs_files = scaffold_files(slug, title, tagline, description, subject=subject)
+        docs_files[SITES_JS] = add_site_to_sites_js(
+            sites_js, slug, subject, path, display_name, description
+        ).encode("utf-8")
+        docs_files[HUISSTIJL_JS] = add_course_to_huisstijl(huisstijl_js, slug, display_name).encode(
+            "utf-8"
+        )
+        docs_files[CURRICULUM_TS] = add_course_to_curriculum(curriculum_ts, slug, themes[0]).encode(
+            "utf-8"
+        )
+        mgmt_files = {
+            SITES_JSON: add_site_to_registry(sites_json, slug, subject, path, display_name).encode(
+                "utf-8"
+            ),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    # 1) beheer-repo: registratie in sites.json. Eerst, want zonder die
+    #    registratie staat de site nergens (DB-seed, routing). Hartjespuzzel
+    #    kreeg het docs-voorstel wel en deze niet.
+    await _ensure_branch(client, branch, repo=mgmt)
     await multi_file_commit(client, branch, f"Site '{slug}' registreren", add=mgmt_files, repo=mgmt)
-    mgmt_pr = await create_pr(
+    mgmt_pr = await _ensure_pr(
         client,
         branch,
         f"Site registreren: {display_name}",
         _mgmt_pr_body(slug, subject, path, subject_domain),
         repo=mgmt,
     )
+
+    # 2) docs-repo: scaffold + registers in één voorstel. De workflow
+    #    nieuwe-site.yml maakt er de lockfile, de huisstijl en de opmaak bij.
+    try:
+        await _ensure_branch(client, branch)
+        await multi_file_commit(client, branch, f"Nieuwe site '{slug}' toevoegen", add=docs_files)
+        docs_pr = await _ensure_pr(
+            client,
+            branch,
+            f"Nieuwe site: {display_name}",
+            _docs_pr_body(slug, subject, path, display_name, subject_domain),
+        )
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=(
+                f"De registratie staat klaar ({mgmt_pr.get('html_url')}), maar het "
+                f"docs-voorstel lukte niet: {exc.detail}. Probeer het opnieuw; wat er "
+                "al staat wordt hergebruikt."
+            ),
+        ) from exc
 
     # 3) DB-rij zodat de site meteen zichtbaar/bewerkbaar is in de UI.
     db.add(
@@ -272,11 +309,12 @@ async def create_site(
     register_site_subject(slug, subject)
 
     steps = [
-        f"Keur beide voorstellen goed: {docs_pr.get('html_url')} en {mgmt_pr.get('html_url')}.",
-        "Trek het docs-voorstel lokaal binnen, draai `pnpm install` om "
-        "pnpm-lock.yaml bij te werken en push (anders faalt de controle op "
-        "--frozen-lockfile).",
+        "Wacht tot de workflow 'Nieuwe site afmaken' het docs-voorstel heeft "
+        "aangevuld (lockfile, huisstijl) en 'Build sites' groen is.",
+        f"Publiceer beide voorstellen: {docs_pr.get('html_url')} en {mgmt_pr.get('html_url')}.",
         "Redeploy de docs-management-stack zodat sites.json actief wordt.",
+        f"Zet niveau, klas en thema van de kaart goed in {CURRICULUM_TS}, en kies "
+        f"eventueel een eigen glyph in {HUISSTIJL_JS}.",
     ]
     if new_subject:
         steps.insert(
@@ -293,16 +331,41 @@ async def create_site(
     }
 
 
+async def _ensure_branch(client: GitHubClient, branch: str, repo: str | None = None) -> None:
+    """Maakt de branch, of hergebruikt hem bij een nieuwe poging."""
+    try:
+        await client.get(repo_path(f"/git/ref/heads/{branch}", repo))
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        await create_branch(client, branch, repo=repo)
+
+
+async def _ensure_pr(
+    client: GitHubClient, branch: str, title: str, body: str, repo: str | None = None
+) -> dict:
+    """Opent de PR, of geeft de open PR van deze branch terug bij een nieuwe poging."""
+    org = (repo or get_settings().repo_full).split("/")[0]
+    open_prs = await client.get(
+        repo_path("/pulls", repo), params={"head": f"{org}:{branch}", "state": "open"}
+    )
+    if open_prs:
+        return {"html_url": open_prs[0].get("html_url"), "number": open_prs[0].get("number")}
+    return await create_pr(client, branch, title, body, repo=repo)
+
+
 SITES_JS = "packages/shared/sites.js"
+SITES_JSON = "backend/app/sites.json"
 
 
 def _docs_pr_body(slug: str, subject: str, path: str, display_name: str, domain: str) -> str:
     return (
         f"Scaffold voor de nieuwe site **{display_name}** (`{site_dir_for(subject, slug)}`), "
         f"bedoeld voor https://{domain}/{path}/.\n\n"
-        "Bevat de minimale Docusaurus-bestanden en een entry in `packages/shared/sites.js`.\n\n"
-        "> Draai na het binnenhalen `pnpm install` om `pnpm-lock.yaml` bij te "
-        "werken; de CI gebruikt `--frozen-lockfile`."
+        "Bevat de minimale Docusaurus-bestanden, de docentenhandleiding, en een "
+        "entry in `packages/shared/sites.js`, de huisstijl en de homepagekaart.\n\n"
+        "> De workflow *Nieuwe site afmaken* zet er de regel in `pnpm-lock.yaml` en "
+        "de gegenereerde huisstijl bij, en start daarna *Build sites*."
     )
 
 

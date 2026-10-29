@@ -2,7 +2,8 @@
   "apex": "coderius.nl",
   "subjects": [
     { "slug": "informatica", "domain": "informatica.coderius.nl", "display_name": "Informatica" },
-    { "slug": "wo", "domain": "wo.coderius.nl", "display_name": "Wetenschapsoriëntatie" }
+    { "slug": "wo", "domain": "wo.coderius.nl", "display_name": "Wetenschapsoriëntatie" },
+    { "slug": "techniek", "domain": "techniek.coderius.nl", "display_name": "Techniek" }
   ],
   "sites": [
     { "slug": "python", "subject": "informatica", "path": "python", "display_name": "Python", "legacy_domains": ["python.coderius.nl"] },
@@ -19,6 +20,7 @@
     { "slug": "ide", "subject": "informatica", "path": "ide", "display_name": "IDE", "legacy_domains": ["ide.coderius.nl"], "legacy_paths": ["oud/"], "legacy_live_until": "2027-07-31" },
     { "slug": "didactiek", "subject": "informatica", "path": "didactiek", "display_name": "Didactiek", "legacy_domains": ["didactiek.coderius.nl"] },
     { "slug": "onderzoek", "subject": "wo", "path": "onderzoek", "display_name": "Onderzoek", "legacy_domains": [] },
+    { "slug": "hartjespuzzel", "subject": "techniek", "path": "hartjespuzzel", "display_name": "Hartjespuzzel", "legacy_domains": [] },
     { "slug": "home", "subject": null, "path": "", "display_name": "Home", "legacy_domains": [] }
   ]
 }

@@ -25,9 +25,10 @@ def test_new_course_scaffolds_managed_homepage_and_runtime_settings():
 def test_scaffold_config_uses_site_id_and_repo_edit_url():
     files = scaffold_files("algo", "Algo", "", "D")
     config = files["sites/informatica/algo/docusaurus.config.ts"].decode()
-    assert 'siteId: "algo"' in config
-    assert 'editUrl: repoEditUrl("algo")' in config
-    assert "import {repoEditUrl} from '@coderius/shared/sites';" in config
+    # Enkele quotes en `{ x }`: de opmaak van Biome in het docs-repo.
+    assert "siteId: 'algo'" in config
+    assert "editUrl: repoEditUrl('algo')" in config
+    assert "import { repoEditUrl } from '@coderius/shared/sites';" in config
     # url/baseUrl leidt createConfig af uit het register.
     assert "url:" not in config and "baseUrl" not in config
     assert (
