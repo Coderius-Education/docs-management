@@ -52,6 +52,7 @@ class _Tables:
     subjects: dict[str, str]  # host -> vak-slug
     subject_hosts: dict[str, str]  # vak-slug -> host
     paths: dict[tuple[str, str], str]  # (vak, path) -> site-slug
+    renamed_paths: dict[tuple[str, str], str]  # (vak, oud pad) -> nieuw pad
     legacy: dict[str, str]  # host -> site-slug
     legacy_paths: dict[str, tuple[str, ...]]  # site-slug -> padvoorvoegsels die niet 301'en
     legacy_live_until: dict[str, datetime.date]  # site-slug -> laatste dag live op oud subdomein
@@ -64,6 +65,7 @@ def _tables() -> _Tables:
     s = get_settings()
     subject_hosts = {slug: host.lower() for slug, host in s.subject_domains().items()}
     paths: dict[tuple[str, str], str] = {}
+    renamed_paths: dict[tuple[str, str], str] = {}
     legacy: dict[str, str] = {}
     legacy_paths: dict[str, tuple[str, ...]] = {}
     legacy_live_until: dict[str, datetime.date] = {}
@@ -74,6 +76,8 @@ def _tables() -> _Tables:
         site_paths[slug] = (subject, path)
         if subject and path:
             paths[(subject, path)] = slug
+            for old in entry.get("renamed_from", []):
+                renamed_paths[(subject, old["path"])] = path
         for domain in entry.get("legacy_domains", []):
             legacy[s.localize(domain).lower()] = slug
         legacy_paths[slug] = tuple(_legacy_prefix(p) for p in entry.get("legacy_paths", []))
@@ -85,6 +89,7 @@ def _tables() -> _Tables:
         subjects={host: slug for slug, host in subject_hosts.items()},
         subject_hosts=subject_hosts,
         paths=paths,
+        renamed_paths=renamed_paths,
         legacy=legacy,
         legacy_paths=legacy_paths,
         legacy_live_until=legacy_live_until,
@@ -151,6 +156,10 @@ def _match_site_path(subject: str, path: str, query: str) -> Redirect | tuple[st
     first, sep, rest = clean.partition("/")
     site = _tables().paths.get((subject, first)) if first else None
     if site is None:
+        renamed = _tables().renamed_paths.get((subject, first)) if first else None
+        if renamed:
+            # De oude inhoud bestaat niet meer onder het nieuwe pad: naar de start.
+            return Redirect(_with_query(f"/{renamed}/", query))
         return HOME, clean
     if not sep:
         # /python zonder slash: Docusaurus' baseUrl verwacht /python/. Zelfde

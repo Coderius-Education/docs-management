@@ -89,3 +89,29 @@ async def test_page_path_traversal_blocked(api_client):
 async def test_unknown_site_404(api_client):
     await make_logged_in_user(api_client)
     assert (await api_client.get("/api/sites/bestaatniet/tree")).status_code == 404
+
+
+async def test_renamed_site_replaces_its_old_row(api_client):
+    from sqlalchemy import select
+
+    from app.db import session as db_session
+    from app.db.models import Site
+    from app.db.session import get_sessionmaker
+
+    async with get_sessionmaker()() as db:
+        db.add(
+            Site(slug="dvwa", display_name="DVWA", domain="x", subject="informatica", path="dvwa")
+        )
+        await db.commit()
+
+    await db_session.init_db()
+    auth = await make_logged_in_user(api_client)
+    slugs = {
+        s["slug"]
+        for s in (await api_client.get("/api/sites", headers={"X-CSRF-Token": auth["csrf"]})).json()
+    }
+
+    assert "linux" in slugs
+    assert "dvwa" not in slugs
+    async with get_sessionmaker()() as db:
+        assert (await db.scalar(select(Site).where(Site.slug == "dvwa"))).enabled is False
