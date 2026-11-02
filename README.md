@@ -56,6 +56,8 @@ Previews lokaal: `*.localtest.me` wijst naar 127.0.0.1. `compose.dev.yml` zet `D
 
 `backend/app/sites.json` is het register: `subjects` (slug, domein, naam) en `sites` (slug, vak, pad, naam, oude domeinen). In het docs-repo staat een site in `sites/<vak>/<slug>` (`home` in `sites/home`). Een nieuwe site of een nieuw vak vraagt geen Traefik-wijziging: één wildcard-router stuurt alles naar de delivery-app, die host en pad zelf toewijst. Een nieuw vak heeft alleen een DNS-record nodig (of het `*.coderius.nl`-wildcardrecord).
 
+Een hernoemde site krijgt `renamed_from` (oude slug en pad): het oude pad stuurt met een 301 door naar de start van de nieuwe site, en de oude rij in de database gaat uit. Zo werd `dvwa` in november 2026 `linux`.
+
 `LEGACY_REDIRECTS=false` laat oude subdomeinen de site nog zelf serveren in plaats van te 301'en; gebruik dat zolang de docs-builds nog met `baseUrl: '/'` gebouwd zijn.
 
 ## Deploy (Portainer)

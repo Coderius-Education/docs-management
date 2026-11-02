@@ -462,3 +462,39 @@ async def test_ide_live_serves_build_over_http(delivery_client, builds_dir, monk
     resp = await delivery_client.get("/", headers={"host": "ide.coderius.nl"})
     assert resp.status_code == 302
     assert resp.headers["location"] == "/ide/"
+
+
+@pytest.mark.parametrize(
+    ("path", "query", "location"),
+    [
+        ("dvwa", "", "/linux/"),
+        ("dvwa/", "", "/linux/"),
+        ("dvwa/docs/dvwa_tutorial", "", "/linux/"),
+        ("dvwa/docs/", "x=1", "/linux/?x=1"),
+    ],
+)
+def test_renamed_site_path_redirects_to_its_new_start(path, query, location):
+    from app.delivery.router import Redirect, reset_caches, resolve_host
+
+    reset_caches()
+    assert resolve_host(INF, path, query) == Redirect(location)
+
+
+async def test_renamed_site_serves_under_its_new_path(delivery_client, builds_dir):
+    make_build(builds_dir, "linux", "main", "abc123def456")
+
+    resp = await delivery_client.get("/linux/", headers={"host": INF})
+    old = await delivery_client.get("/dvwa/docs/", headers={"host": INF})
+
+    assert resp.status_code == 200
+    assert "abc123def456" in resp.text
+    assert (old.status_code, old.headers["location"]) == (301, "/linux/")
+
+
+async def test_old_subdomain_of_renamed_site_goes_to_new_path(delivery_client, builds_dir):
+    resp = await delivery_client.get(
+        "/docs/x", headers={"host": "dvwa.coderius.nl", "x-forwarded-proto": "https"}
+    )
+
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "https://informatica.coderius.nl/linux/docs/x"
