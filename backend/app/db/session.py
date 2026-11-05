@@ -73,6 +73,11 @@ async def sync_sites() -> None:
                 for key, value in fields.items():
                     if getattr(site, key) != value:
                         setattr(site, key, value)
+        for entry in registry.sites.values():
+            for old in entry.get("renamed_from", []):
+                renamed = existing.get(old["slug"])
+                if renamed is not None:
+                    renamed.enabled = False
         # Sites die alleen in de DB staan (net via de UI aangemaakt) kennen hun
         # vak uit de DB-rij; site_dir() heeft dat nodig.
         for slug, site in existing.items():

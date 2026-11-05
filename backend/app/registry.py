@@ -8,7 +8,7 @@ dus een nieuwe site of een nieuw vak vraagt geen redeploy.
 Hier staat de vertaling naar de vorm die de rest van de code gebruikt:
   subjects: vak-slug -> {slug, domain, display_name}
   sites:    site-slug -> {slug, subject, path, display_name, legacy_domains,
-                          legacy_paths, legacy_live_until}
+                          legacy_paths, legacy_live_until, renamed_from}
 `home` hoort bij geen vak en heeft een leeg pad.
 """
 
@@ -74,6 +74,9 @@ def from_export(data: dict) -> Registry:
                 "legacy_domains": [_host(s["legacyUrl"])] if s.get("legacyUrl") else [],
                 "legacy_paths": list(s.get("legacyPaths", [])),
                 "legacy_live_until": s.get("legacyLiveUntil"),
+                "renamed_from": [
+                    {"slug": old["id"], "path": old["path"]} for old in s.get("renamedFrom", [])
+                ],
             }
         home = data["home"]
         sites[home["id"]] = {
@@ -84,6 +87,7 @@ def from_export(data: dict) -> Registry:
             "legacy_domains": [],
             "legacy_paths": [],
             "legacy_live_until": None,
+            "renamed_from": [],
         }
         apex = _host(home["url"])
     except (KeyError, TypeError) as exc:
