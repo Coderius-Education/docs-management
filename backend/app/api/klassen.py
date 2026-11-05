@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.sites import valid_site
 from app.auth.deps import CurrentUser, require_csrf, user_github_token
-from app.config import SUBJECTS, get_settings
+from app.config import get_registry, get_settings
 from app.db.models import Klas, KlasDocent, Site, User, utcnow
 from app.db.session import get_db
 from app.klassen import service
@@ -70,7 +70,7 @@ def _alleen_eigenaar(klas: Klas, user: User) -> None:
 
 
 def _vak(vak: str) -> str:
-    if vak not in SUBJECTS:
+    if vak not in get_registry().subjects:
         raise HTTPException(status_code=422, detail="Onbekend vak")
     return vak
 

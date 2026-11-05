@@ -1,55 +1,24 @@
 """Centrale configuratie via environment-variabelen (pydantic-settings)."""
 
-import json
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Het site-register is de bron van waarheid: het voedt de DB-seed (init_db) en
-# de live-routing (resolve_host). Het staat in een data-bestand zodat een nieuwe
-# site via een PR kan worden toegevoegd zonder Python-broncode te herschrijven.
-#
-# Vorm: {apex, subjects:[{slug,domain,display_name}],
-#        sites:[{slug,subject,path,display_name,legacy_domains,legacy_paths?,legacy_live_until?}]}.
-# Een site woont op https://<vak-domein>/<path>/ (bv. informatica.coderius.nl/python/).
-# Let op: slug en path verschillen soms (algorithms -> /algoritmes/).
-# `home` heeft geen vak: die build draait op de apex en op de root van elk vak.
-SITES_REGISTRY_PATH = Path(__file__).resolve().parent / "sites.json"
+from app import registry as _registry
+from app.registry import Registry
+
+# Het site-register komt uit het docs-repo (zie app/registry.py). Een site
+# woont op https://<vak-domein>/<path>/ (bv. informatica.coderius.nl/python/);
+# slug en path verschillen soms (algorithms -> /algoritmes/).
 REGISTRY_ROOT = "coderius.nl"
 
 
-def _load_registry() -> dict:
-    with SITES_REGISTRY_PATH.open(encoding="utf-8") as fh:
-        return json.load(fh)
+def get_registry() -> Registry:
+    return _registry.load(get_settings().registry_path)
 
 
-_REGISTRY = _load_registry()
-
-APEX_DOMAIN: str = _REGISTRY["apex"]
-# vak-slug -> {slug, domain, display_name}
-SUBJECTS: dict[str, dict] = {s["slug"]: s for s in _REGISTRY["subjects"]}
-# site-slug -> {slug, subject, path, display_name, legacy_domains}
-SITE_REGISTRY: dict[str, dict] = {s["slug"]: s for s in _REGISTRY["sites"]}
-# legacy-host -> site-slug (oude subdomeinen die nu 301'en)
-LEGACY: dict[str, str] = {
-    domain: s["slug"] for s in _REGISTRY["sites"] for domain in s.get("legacy_domains", [])
-}
-
-
-def _public_host(site: dict) -> str:
-    subject = SUBJECTS.get(site.get("subject") or "")
-    return subject["domain"] if subject else APEX_DOMAIN
-
-
-# slug -> host waarop de site draait, en slug -> weergavenaam. Afgeleid uit het
-# register zodat de rest van de code (die deze dicts importeert) blijft werken.
-SITES: dict[str, str] = {slug: _public_host(s) for slug, s in SITE_REGISTRY.items()}
-SITE_DISPLAY_NAMES: dict[str, str] = {
-    slug: s["display_name"] for slug, s in SITE_REGISTRY.items()
-}
-
-# Vak per site voor sites die (nog) niet in sites.json staan maar wel in de
+# Vak per site voor sites die (nog) niet in het register staan maar wel in de
 # DB (net aangemaakt via de UI). init_db en create_site vullen dit aan.
 _RUNTIME_SUBJECTS: dict[str, str | None] = {}
 
@@ -59,8 +28,9 @@ def register_site_subject(slug: str, subject: str | None) -> None:
 
 
 def site_subject(slug: str) -> str | None:
-    if slug in SITE_REGISTRY:
-        return SITE_REGISTRY[slug].get("subject")
+    sites = get_registry().sites
+    if slug in sites:
+        return sites[slug].get("subject")
     return _RUNTIME_SUBJECTS.get(slug)
 
 
@@ -99,9 +69,6 @@ class Settings(BaseSettings):
     # GitHub
     github_org: str = "Coderius-Education"
     github_repo: str = "docs"
-    # Repo met deze beheer-app zelf; nieuwe sites worden hier (sites.json +
-    # compose.yml) geregistreerd via een tweede PR.
-    github_management_repo: str = "docs-management"
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
     github_webhook_secret: str = ""
@@ -118,14 +85,18 @@ class Settings(BaseSettings):
     # Delivery
     builds_dir: str = "/data/builds"
     builds_keep_per_branch: int = 3
+    # Leeg: het register staat op het builds-volume, dat de delivery-app ook ziet.
+    registry_file: str = ""
+
+    @property
+    def registry_path(self) -> Path:
+        if self.registry_file:
+            return Path(self.registry_file)
+        return Path(self.builds_dir) / "_registry" / _registry.ARTIFACT_FILE
 
     @property
     def repo_full(self) -> str:
         return f"{self.github_org}/{self.github_repo}"
-
-    @property
-    def management_repo_full(self) -> str:
-        return f"{self.github_org}/{self.github_management_repo}"
 
     def localize(self, domain: str) -> str:
         """Register-domein -> domein in deze omgeving (zie domain_root)."""
@@ -140,11 +111,12 @@ class Settings(BaseSettings):
 
     def site_domains(self) -> dict[str, str]:
         """slug -> host waarop de site draait (vak-domein of apex), gelokaliseerd."""
-        return {slug: self.localize(host) for slug, host in SITES.items()}
+        registry = get_registry()
+        return {slug: self.localize(registry.host(slug)) for slug in registry.sites}
 
     def subject_domains(self) -> dict[str, str]:
         """vak-slug -> gelokaliseerd vak-domein."""
-        return {slug: self.localize(s["domain"]) for slug, s in SUBJECTS.items()}
+        return {slug: self.localize(s["domain"]) for slug, s in get_registry().subjects.items()}
 
 
 @lru_cache

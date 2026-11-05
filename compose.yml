@@ -47,7 +47,7 @@ services:
 
       # Eén router voor de apex, elk vak-domein (informatica., wo., …) en de oude
       # cursus-subdomeinen (python., web., … → 301 naar <vak>/<path>/). Welke
-      # site bij welke host/pad hoort bepaalt de delivery-app uit sites.json, dus
+      # site bij welke host/pad hoort bepaalt de delivery-app uit het register, dus
       # een nieuwe site of een nieuw vak vraagt geen wijziging hier.
       # Eén wildcard-cert (coderius.nl + *.coderius.nl) via DNS-01 (lednsresolver).
       # beheer.coderius.nl valt ook onder de regex, maar de docsadmin-router heeft

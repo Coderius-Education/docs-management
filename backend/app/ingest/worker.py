@@ -11,12 +11,13 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import registry as site_registry
 from app.config import get_settings
 from app.db.models import Build, BuildStatus, Site
 from app.db.session import get_sessionmaker
 from app.github.client import server_client
 from app.github.pulls import branch_slug as to_slug
-from app.ingest import prune, unpack
+from app.ingest import prune, registry, unpack
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +70,17 @@ async def process_job(job: IngestJob) -> None:
     )
     slug = to_slug(job.branch)
     sha12 = job.head_sha[:12]
+
+    # Eerst het register: een nieuwe site staat pas daarna in de DB, en zijn
+    # build uit dezelfde run wordt anders overgeslagen. Alleen main telt; een
+    # branch mag het register van de live-sites niet veranderen.
+    if job.branch == "main":
+        for artifact in artifacts.get("artifacts", []):
+            if artifact["name"] == site_registry.ARTIFACT_NAME:
+                try:
+                    await registry.ingest(client, artifact, job.run_id)
+                except Exception:
+                    log.exception("Register uit run %s mislukt", job.run_id)
 
     async with get_sessionmaker()() as db:
         sites = {s.slug: s for s in (await db.scalars(select(Site))).all()}

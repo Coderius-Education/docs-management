@@ -51,7 +51,6 @@ export interface CreateSiteResult {
   slug: string;
   url: string;
   docs_pr: string | null;
-  management_pr: string | null;
   manual_steps: string[];
 }
 

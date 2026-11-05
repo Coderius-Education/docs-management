@@ -125,18 +125,13 @@ export function NewSiteModal({ opened, onClose }: { opened: boolean; onClose: ()
       {result ? (
         <Stack>
           <Text size="sm">
-            De site staat klaar in twee voorstellen op GitHub. Rond daarna de handmatige
+            De site staat klaar in een voorstel op GitHub. Rond daarna de handmatige
             stappen af. Daarna staat de site op <Code>{result.url}</Code>.
           </Text>
           <Group>
             {result.docs_pr && (
               <Anchor href={result.docs_pr} target="_blank">
                 Voorstel in docs openen
-              </Anchor>
-            )}
-            {result.management_pr && (
-              <Anchor href={result.management_pr} target="_blank">
-                Voorstel in docs-management openen
               </Anchor>
             )}
           </Group>

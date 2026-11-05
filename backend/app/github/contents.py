@@ -84,10 +84,10 @@ async def get_branch_head(client: GitHubClient, branch: str) -> str:
     return ref["object"]["sha"]
 
 
-async def get_file_text(client: GitHubClient, path: str, ref: str, repo: str | None = None) -> str:
-    """Leest een willekeurig tekstbestand uit een repo (UTF-8). Voor het muteren
-    van bestaande bestanden zoals build.yml/compose.yml/sites.json."""
-    data = await client.get(repo_path(f"/contents/{path}", repo), params={"ref": ref})
+async def get_file_text(client: GitHubClient, path: str, ref: str) -> str:
+    """Leest een willekeurig tekstbestand uit het docs-repo (UTF-8). Voor het
+    muteren van bestaande bestanden zoals sites.js en de huisstijl."""
+    data = await client.get(repo_path(f"/contents/{path}"), params={"ref": ref})
     if isinstance(data, list) or data.get("type") != "file":
         raise HTTPException(status_code=404, detail=f"Bestand niet gevonden: {path}")
     return base64.b64decode(data["content"]).decode("utf-8")

@@ -1,11 +1,11 @@
-"""Async engine + sessionmaker; seed van de sites-tabel bij opstarten."""
+"""Async engine + sessionmaker; de sites-tabel volgt het register uit het docs-repo."""
 
 from collections.abc import AsyncIterator
 
 from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.config import SITE_DISPLAY_NAMES, SITE_REGISTRY, get_settings, register_site_subject
+from app.config import get_registry, get_settings, register_site_subject
 from app.db.models import Base, Site
 
 _engine = None
@@ -43,18 +43,24 @@ def _ensure_site_columns(conn) -> None:
 
 
 async def init_db() -> None:
-    """Maak het schema aan (idempotent) en seed de sites-tabel uit de config."""
+    """Maak het schema aan (idempotent) en seed de sites-tabel uit het register."""
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_site_columns)
+    await sync_sites()
 
+
+async def sync_sites() -> None:
+    """Zet elke site uit het register in de DB, of werkt host, vak en pad bij.
+    Draait bij het opstarten en zodra er een nieuw register binnenkomt."""
+    registry = get_registry()
     settings = get_settings()
-    domains = settings.site_domains()
+    domains = {slug: settings.localize(registry.host(slug)) for slug in registry.sites}
     async with get_sessionmaker()() as session:
         existing = {s.slug: s for s in (await session.scalars(select(Site))).all()}
         for slug, domain in domains.items():
-            entry = SITE_REGISTRY[slug]
+            entry = registry.sites[slug]
             fields = {
                 "domain": domain,
                 "subject": entry.get("subject"),
@@ -62,18 +68,12 @@ async def init_db() -> None:
             }
             site = existing.get(slug)
             if site is None:
-                session.add(
-                    Site(
-                        slug=slug,
-                        display_name=SITE_DISPLAY_NAMES.get(slug, slug.title()),
-                        **fields,
-                    )
-                )
+                session.add(Site(slug=slug, display_name=entry["display_name"], **fields))
             else:
                 for key, value in fields.items():
                     if getattr(site, key) != value:
                         setattr(site, key, value)
-        for entry in SITE_REGISTRY.values():
+        for entry in registry.sites.values():
             for old in entry.get("renamed_from", []):
                 renamed = existing.get(old["slug"])
                 if renamed is not None:

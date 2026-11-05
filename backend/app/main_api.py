@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.db.session import dispose_db, init_db
+from app.ingest import registry
 from app.ingest.worker import start_worker, stop_worker
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
@@ -16,6 +17,7 @@ FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await registry.bootstrap()
     start_worker()
     yield
     await stop_worker()

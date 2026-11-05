@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import CurrentUser, require_csrf, user_github_token
-from app.config import SITES
+from app.config import get_registry
 from app.db.models import Build, BuildStatus, PrCache, Site, utcnow
 from app.db.session import get_db
 from app.github import merge, pulls
@@ -133,7 +133,8 @@ async def get_concept(
         link for _, site_slug in builds for link in pulls.preview_links(slug, site_slug)
     ]
     # Nog geen builds binnen? Toon alvast de verwachte URL's zodra CI klaar is.
-    expected = [pr["site"]] if pr.get("site") in SITES else list(SITES)
+    sites = get_registry().sites
+    expected = [pr["site"]] if pr.get("site") in sites else list(sites)
     pr["expected_previews"] = [
         link for site_slug in expected for link in pulls.preview_links(slug, site_slug)
     ]

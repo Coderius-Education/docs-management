@@ -1,0 +1,239 @@
+{
+  "subjects": [
+    {
+      "id": "informatica",
+      "label": "Informatica",
+      "url": "https://informatica.coderius.nl"
+    },
+    {
+      "id": "wo",
+      "label": "Wetenschapsoriëntatie",
+      "url": "https://wo.coderius.nl"
+    },
+    {
+      "id": "techniek",
+      "label": "Techniek",
+      "url": "https://techniek.coderius.nl"
+    }
+  ],
+  "sites": [
+    {
+      "id": "editor",
+      "label": "VS Code & Git",
+      "subject": "informatica",
+      "path": "editor",
+      "legacyUrl": "https://editor.coderius.nl",
+      "description": "Programmeren in de editor VS Code, en je code bewaren en delen met Git en GitHub.",
+      "requires": [],
+      "url": "https://informatica.coderius.nl/editor/",
+      "dir": "sites/informatica/editor",
+      "docenten": false
+    },
+    {
+      "id": "python",
+      "label": "Python",
+      "subject": "informatica",
+      "path": "python",
+      "legacyUrl": "https://python.coderius.nl",
+      "description": "Leer stap voor stap programmeren in Python.",
+      "requires": [],
+      "url": "https://informatica.coderius.nl/python/",
+      "dir": "sites/informatica/python",
+      "docenten": false
+    },
+    {
+      "id": "web",
+      "label": "Webontwikkeling",
+      "subject": "informatica",
+      "path": "web",
+      "legacyUrl": "https://web.coderius.nl",
+      "legacyPaths": [
+        "oud/"
+      ],
+      "description": "Maak je eerste website met HTML, CSS en JavaScript.",
+      "requires": [],
+      "url": "https://informatica.coderius.nl/web/",
+      "dir": "sites/informatica/web",
+      "docenten": false
+    },
+    {
+      "id": "play",
+      "label": "Coderius Play",
+      "subject": "informatica",
+      "path": "play",
+      "legacyUrl": "https://play.coderius.nl",
+      "description": "Maak games met Python en pygame.",
+      "requires": [
+        "python"
+      ],
+      "url": "https://informatica.coderius.nl/play/",
+      "dir": "sites/informatica/play",
+      "docenten": false
+    },
+    {
+      "id": "algorithms",
+      "label": "Algoritmes",
+      "subject": "informatica",
+      "path": "algoritmes",
+      "legacyUrl": "https://algoritmes.coderius.nl",
+      "description": "Leer algoritmes door ze zelf uit te voeren.",
+      "requires": [
+        "python"
+      ],
+      "url": "https://informatica.coderius.nl/algoritmes/",
+      "dir": "sites/informatica/algorithms",
+      "docenten": false
+    },
+    {
+      "id": "fullstack",
+      "label": "Fullstack (FastAPI)",
+      "subject": "informatica",
+      "path": "fullstack",
+      "legacyUrl": "https://fullstack.coderius.nl",
+      "description": "Voeg een Python back-end toe aan je website met FastAPI.",
+      "requires": [
+        "python",
+        "web"
+      ],
+      "url": "https://informatica.coderius.nl/fullstack/",
+      "dir": "sites/informatica/fullstack",
+      "docenten": false
+    },
+    {
+      "id": "robotica",
+      "label": "Robotica",
+      "subject": "informatica",
+      "path": "robotica",
+      "legacyUrl": "https://robotica.coderius.nl",
+      "legacyPaths": [
+        "oud/"
+      ],
+      "description": "Stuur sensoren en motoren aan met MicroPython.",
+      "requires": [
+        "python"
+      ],
+      "url": "https://informatica.coderius.nl/robotica/",
+      "dir": "sites/informatica/robotica",
+      "docenten": false
+    },
+    {
+      "id": "embedded",
+      "label": "Embedded",
+      "subject": "informatica",
+      "path": "embedded",
+      "legacyUrl": "https://embedded.coderius.nl",
+      "description": "Programmeer microcontrollers: van Arduino tot STM32.",
+      "requires": [],
+      "url": "https://informatica.coderius.nl/embedded/",
+      "dir": "sites/informatica/embedded",
+      "docenten": false
+    },
+    {
+      "id": "godot",
+      "label": "Godot",
+      "subject": "informatica",
+      "path": "godot",
+      "legacyUrl": "https://godot.coderius.nl",
+      "description": "Bouw je eerste 2D game in Godot 4.",
+      "requires": [
+        "python"
+      ],
+      "url": "https://informatica.coderius.nl/godot/",
+      "dir": "sites/informatica/godot",
+      "docenten": false
+    },
+    {
+      "id": "ctf",
+      "label": "Capture The Flag",
+      "subject": "informatica",
+      "path": "ctf",
+      "legacyUrl": "https://ctf.coderius.nl",
+      "legacyPaths": [
+        "oud/"
+      ],
+      "description": "Leer cybersecurity door CTF-challenges op te lossen.",
+      "requires": [
+        "python",
+        "web"
+      ],
+      "url": "https://informatica.coderius.nl/ctf/",
+      "dir": "sites/informatica/ctf",
+      "docenten": false
+    },
+    {
+      "id": "linux",
+      "label": "Linux",
+      "subject": "informatica",
+      "path": "linux",
+      "legacyUrl": "https://dvwa.coderius.nl",
+      "renamedFrom": [
+        {
+          "id": "dvwa",
+          "path": "dvwa"
+        }
+      ],
+      "description": "Werk in de terminal van Linux, en zet Linux op je eigen computer met WSL.",
+      "requires": [],
+      "url": "https://informatica.coderius.nl/linux/",
+      "dir": "sites/informatica/linux",
+      "docenten": false
+    },
+    {
+      "id": "ide",
+      "label": "Online Editor",
+      "subject": "informatica",
+      "path": "ide",
+      "legacyUrl": "https://ide.coderius.nl",
+      "legacyPaths": [
+        "oud/"
+      ],
+      "legacyLiveUntil": "2027-07-31",
+      "description": "Schrijf en draai code direct in je browser.",
+      "requires": [],
+      "url": "https://informatica.coderius.nl/ide/",
+      "dir": "sites/informatica/ide",
+      "docenten": false
+    },
+    {
+      "id": "onderzoek",
+      "label": "Onderzoek",
+      "subject": "wo",
+      "path": "onderzoek",
+      "description": "Leer onderzoek doen, van een scherpe vraag tot een eerlijke conclusie.",
+      "requires": [],
+      "url": "https://wo.coderius.nl/onderzoek/",
+      "dir": "sites/wo/onderzoek",
+      "docenten": false
+    },
+    {
+      "id": "hartjespuzzel",
+      "label": "Hartjespuzzel",
+      "subject": "techniek",
+      "path": "hartjespuzzel",
+      "description": "Leermateriaal: Opdracht hartjespuzzel",
+      "requires": [],
+      "url": "https://techniek.coderius.nl/hartjespuzzel/",
+      "dir": "sites/techniek/hartjespuzzel",
+      "docenten": false
+    },
+    {
+      "id": "didactiek",
+      "label": "Didactiek",
+      "subject": "informatica",
+      "path": "didactiek",
+      "legacyUrl": "https://didactiek.coderius.nl",
+      "description": "Didactische tips en achtergrond voor docenten.",
+      "requires": [],
+      "url": "https://informatica.coderius.nl/didactiek/",
+      "dir": "sites/informatica/didactiek",
+      "docenten": true
+    }
+  ],
+  "home": {
+    "id": "home",
+    "label": "Coderius",
+    "url": "https://coderius.nl",
+    "description": "Alle cursussen op één plek.",
+    "dir": "sites/home"
+  }
+}

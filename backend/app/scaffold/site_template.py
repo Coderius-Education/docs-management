@@ -3,8 +3,8 @@
 Levert de minimale, bouwbare bestandenset (gemodelleerd naar
 sites/informatica/web, dat ook zonder babel.config.js of eigen custom.css bouwt;
 @coderius/shared/config verzorgt brand-CSS en -assets). Plus pure tekstmutaties
-voor de registers die een nieuwe site (en eventueel een nieuw vak) bekendmaken:
-packages/shared/sites.js in het docs-repo en sites.json in het beheer-repo.
+voor de registers in het docs-repo die een nieuwe site (en eventueel een nieuw
+vak) bekendmaken; het beheer leest packages/shared/sites.js daarna als artifact.
 
 Geen CI-matrix en geen Traefik-router meer: de CI-matrix wordt gegenereerd uit
 de gewijzigde packages, en één wildcard-router dekt elk vak-domein.
@@ -259,57 +259,6 @@ def scaffold_files(
 
 
 # --- registers ---------------------------------------------------------------
-
-
-def _dump_registry(registry: dict) -> str:
-    """sites.json in de vaste stijl: één regel per vak en per site (diff-vriendelijk)."""
-
-    def line(item: dict) -> str:
-        # `{ "slug": … }`, met spaties binnen de accolades: de opmaak van het bestand.
-        return "{ " + json.dumps(item, ensure_ascii=False)[1:-1] + " }"
-
-    def block(items: list[dict]) -> str:
-        return ",\n".join(f"    {line(item)}" for item in items)
-
-    return (
-        "{\n"
-        f'  "apex": {json.dumps(registry["apex"])},\n'
-        f'  "subjects": [\n{block(registry["subjects"])}\n  ],\n'
-        f'  "sites": [\n{block(registry["sites"])}\n  ]\n'
-        "}\n"
-    )
-
-
-def add_subject_to_registry(sites_json: str, subject: str, domain: str, display_name: str) -> str:
-    registry = json.loads(sites_json)
-    if any(s["slug"] == subject for s in registry["subjects"]):
-        raise ValueError(f"Vak '{subject}' staat al in sites.json")
-    registry["subjects"].append({"slug": subject, "domain": domain, "display_name": display_name})
-    return _dump_registry(registry)
-
-
-def add_site_to_registry(
-    sites_json: str, slug: str, subject: str, path: str, display_name: str
-) -> str:
-    """Voegt een site toe aan sites.json, vóór `home` (die blijft de laatste)."""
-    registry = json.loads(sites_json)
-    if any(s["slug"] == slug for s in registry["sites"]):
-        raise ValueError(f"Site '{slug}' staat al in sites.json")
-    if not any(s["slug"] == subject for s in registry["subjects"]):
-        raise ValueError(f"Onbekend vak '{subject}' in sites.json")
-    if any(s.get("subject") == subject and s.get("path") == path for s in registry["sites"]):
-        raise ValueError(f"Pad '/{path}/' is al in gebruik binnen '{subject}'")
-    entry = {
-        "slug": slug,
-        "subject": subject,
-        "path": path,
-        "display_name": display_name,
-        "legacy_domains": [],
-    }
-    sites = registry["sites"]
-    home = next((i for i, s in enumerate(sites) if s["slug"] == "home"), len(sites))
-    sites.insert(home, entry)
-    return _dump_registry(registry)
 
 
 def _js_str(value: str) -> str:
