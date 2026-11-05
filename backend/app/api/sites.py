@@ -19,7 +19,7 @@ from app.authoring.vakpagina import (
     save_vakpagina,
     write_vak_image,
 )
-from app.config import SUBJECTS, get_settings, register_site_subject, site_dir_for
+from app.config import get_registry, get_settings, register_site_subject, site_dir_for
 from app.db.models import Site
 from app.db.session import get_db
 from app.github.assets import MAX_IMAGE_BYTES, read_image, write_image
@@ -40,10 +40,8 @@ from app.scaffold.site_template import (
     HUISSTIJL_JS,
     add_course_to_curriculum,
     add_course_to_huisstijl,
-    add_site_to_registry,
     add_site_to_sites_js,
     add_subject_themes,
-    add_subject_to_registry,
     add_subject_to_sites_js,
     scaffold_files,
     subject_themes,
@@ -92,10 +90,10 @@ subjects_router = APIRouter(prefix="/subjects", tags=["sites"])
 
 @subjects_router.get("")
 async def list_subjects(user: CurrentUser) -> list[dict]:
-    domains = get_settings().subject_domains()
+    settings = get_settings()
     return [
-        {"slug": slug, "display_name": s["display_name"], "domain": domains[slug]}
-        for slug, s in SUBJECTS.items()
+        {"slug": slug, "display_name": s["display_name"], "domain": settings.localize(s["domain"])}
+        for slug, s in get_registry().subjects.items()
     ]
 
 
@@ -176,13 +174,13 @@ async def create_site(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Maakt een nieuwe docs-site aan via twee PR's: één in het docs-repo met de
-    gescaffolde Docusaurus-site + registry-entry (packages/shared/sites.js), en
-    één in het beheer-repo met de registratie in sites.json. Plus een DB-rij
-    zodat de site meteen in de UI verschijnt voor content-bewerking.
+    """Maakt een nieuwe docs-site aan via een PR in het docs-repo met de
+    gescaffolde Docusaurus-site en de registry-entry (packages/shared/sites.js),
+    plus een DB-rij zodat de site meteen in de UI verschijnt voor content-bewerking.
 
-    Geen CI-matrix- of Traefik-wijziging meer: de matrix volgt uit de gewijzigde
-    packages en één wildcard-router dekt elk vak-domein."""
+    Na de merge brengt de CI het register als artifact mee en neemt de
+    ingest-worker het over: geen redeploy, en één wildcard-router dekt elk
+    vak-domein."""
     slug = payload.slug.strip().lower()
     path = (payload.path or slug).strip().lower().strip("/")
     title = payload.title.strip()
@@ -200,17 +198,18 @@ async def create_site(
         raise HTTPException(status_code=400, detail="Titel en weergavenaam zijn verplicht")
     if not SLUG_RE.match(subject):
         raise HTTPException(status_code=400, detail="Kies een vak")
+    subjects = get_registry().subjects
     if new_subject:
-        if subject in SUBJECTS:
+        if subject in subjects:
             raise HTTPException(status_code=409, detail=f"Vak '{subject}' bestaat al")
         subject_domain = new_subject.domain.strip().lower()
         subject_name = new_subject.display_name.strip()
         if "." not in subject_domain or not subject_name:
             raise HTTPException(status_code=400, detail="Geef het nieuwe vak een naam en domein")
-    elif subject not in SUBJECTS:
+    elif subject not in subjects:
         raise HTTPException(status_code=400, detail=f"Onbekend vak '{subject}'")
     else:
-        subject_domain = SUBJECTS[subject]["domain"]
+        subject_domain = subjects[subject]["domain"]
 
     existing = (await db.scalars(select(Site))).all()
     if any(s.slug == slug for s in existing):
@@ -225,21 +224,18 @@ async def create_site(
     branch = f"nieuwe-site-{slug}"
     description = tagline or f"Leermateriaal: {title}"
     origin = f"https://{subject_domain}"
-    mgmt = settings.management_repo_full
 
     # 0) Eerst alles lezen en uitrekenen, nog zonder iets te schrijven: een
     #    register dat anders is opgebouwd faalt hier, niet halverwege.
     sites_js = await get_file_text(client, SITES_JS, "main")
     huisstijl_js = await get_file_text(client, HUISSTIJL_JS, "main")
     curriculum_ts = await get_file_text(client, CURRICULUM_TS, "main")
-    sites_json = await get_file_text(client, SITES_JSON, "main", repo=mgmt)
     try:
         if new_subject:
             sites_js = add_subject_to_sites_js(sites_js, subject, subject_domain, subject_name)
-            sites_json = add_subject_to_registry(sites_json, subject, subject_domain, subject_name)
         themes = subject_themes(curriculum_ts, subject)
         if not themes:
-            vak_name = subject_name if new_subject else SUBJECTS[subject]["display_name"]
+            vak_name = subject_name if new_subject else subjects[subject]["display_name"]
             curriculum_ts = add_subject_themes(curriculum_ts, subject, vak_name)
             themes = [vak_name]
         docs_files = scaffold_files(slug, title, tagline, description, subject=subject)
@@ -252,49 +248,21 @@ async def create_site(
         docs_files[CURRICULUM_TS] = add_course_to_curriculum(curriculum_ts, slug, themes[0]).encode(
             "utf-8"
         )
-        mgmt_files = {
-            SITES_JSON: add_site_to_registry(sites_json, slug, subject, path, display_name).encode(
-                "utf-8"
-            ),
-        }
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    # 1) beheer-repo: registratie in sites.json. Eerst, want zonder die
-    #    registratie staat de site nergens (DB-seed, routing). Hartjespuzzel
-    #    kreeg het docs-voorstel wel en deze niet.
-    await _ensure_branch(client, branch, repo=mgmt)
-    await multi_file_commit(client, branch, f"Site '{slug}' registreren", add=mgmt_files, repo=mgmt)
-    mgmt_pr = await _ensure_pr(
+    # 1) docs-repo: scaffold + registers in één voorstel. De workflow
+    #    nieuwe-site.yml maakt er de lockfile, de huisstijl en de opmaak bij.
+    await _ensure_branch(client, branch)
+    await multi_file_commit(client, branch, f"Nieuwe site '{slug}' toevoegen", add=docs_files)
+    docs_pr = await _ensure_pr(
         client,
         branch,
-        f"Site registreren: {display_name}",
-        _mgmt_pr_body(slug, subject, path, subject_domain),
-        repo=mgmt,
+        f"Nieuwe site: {display_name}",
+        _docs_pr_body(slug, subject, path, display_name, subject_domain),
     )
 
-    # 2) docs-repo: scaffold + registers in één voorstel. De workflow
-    #    nieuwe-site.yml maakt er de lockfile, de huisstijl en de opmaak bij.
-    try:
-        await _ensure_branch(client, branch)
-        await multi_file_commit(client, branch, f"Nieuwe site '{slug}' toevoegen", add=docs_files)
-        docs_pr = await _ensure_pr(
-            client,
-            branch,
-            f"Nieuwe site: {display_name}",
-            _docs_pr_body(slug, subject, path, display_name, subject_domain),
-        )
-    except HTTPException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=(
-                f"De registratie staat klaar ({mgmt_pr.get('html_url')}), maar het "
-                f"docs-voorstel lukte niet: {exc.detail}. Probeer het opnieuw; wat er "
-                "al staat wordt hergebruikt."
-            ),
-        ) from exc
-
-    # 3) DB-rij zodat de site meteen zichtbaar/bewerkbaar is in de UI.
+    # 2) DB-rij zodat de site meteen zichtbaar/bewerkbaar is in de UI.
     db.add(
         Site(
             slug=slug,
@@ -311,8 +279,8 @@ async def create_site(
     steps = [
         "Wacht tot de workflow 'Nieuwe site afmaken' het docs-voorstel heeft "
         "aangevuld (lockfile, huisstijl) en 'Build sites' groen is.",
-        f"Publiceer beide voorstellen: {docs_pr.get('html_url')} en {mgmt_pr.get('html_url')}.",
-        "Redeploy de docs-management-stack zodat sites.json actief wordt.",
+        f"Publiceer het voorstel: {docs_pr.get('html_url')}. Na de build op main "
+        "neemt het beheer het register vanzelf over.",
         f"Zet niveau, klas en thema van de kaart goed in {CURRICULUM_TS}, en kies "
         f"eventueel een eigen glyph in {HUISSTIJL_JS}.",
     ]
@@ -326,36 +294,32 @@ async def create_site(
         "slug": slug,
         "url": f"{origin}/{path}/",
         "docs_pr": docs_pr.get("html_url"),
-        "management_pr": mgmt_pr.get("html_url"),
         "manual_steps": steps,
     }
 
 
-async def _ensure_branch(client: GitHubClient, branch: str, repo: str | None = None) -> None:
+async def _ensure_branch(client: GitHubClient, branch: str) -> None:
     """Maakt de branch, of hergebruikt hem bij een nieuwe poging."""
     try:
-        await client.get(repo_path(f"/git/ref/heads/{branch}", repo))
+        await client.get(repo_path(f"/git/ref/heads/{branch}"))
     except HTTPException as exc:
         if exc.status_code != 404:
             raise
-        await create_branch(client, branch, repo=repo)
+        await create_branch(client, branch)
 
 
-async def _ensure_pr(
-    client: GitHubClient, branch: str, title: str, body: str, repo: str | None = None
-) -> dict:
+async def _ensure_pr(client: GitHubClient, branch: str, title: str, body: str) -> dict:
     """Opent de PR, of geeft de open PR van deze branch terug bij een nieuwe poging."""
-    org = (repo or get_settings().repo_full).split("/")[0]
+    org = get_settings().github_org
     open_prs = await client.get(
-        repo_path("/pulls", repo), params={"head": f"{org}:{branch}", "state": "open"}
+        repo_path("/pulls"), params={"head": f"{org}:{branch}", "state": "open"}
     )
     if open_prs:
         return {"html_url": open_prs[0].get("html_url"), "number": open_prs[0].get("number")}
-    return await create_pr(client, branch, title, body, repo=repo)
+    return await create_pr(client, branch, title, body)
 
 
 SITES_JS = "packages/shared/sites.js"
-SITES_JSON = "backend/app/sites.json"
 
 
 def _docs_pr_body(slug: str, subject: str, path: str, display_name: str, domain: str) -> str:
@@ -366,15 +330,6 @@ def _docs_pr_body(slug: str, subject: str, path: str, display_name: str, domain:
         "entry in `packages/shared/sites.js`, de huisstijl en de homepagekaart.\n\n"
         "> De workflow *Nieuwe site afmaken* zet er de regel in `pnpm-lock.yaml` en "
         "de gegenereerde huisstijl bij, en start daarna *Build sites*."
-    )
-
-
-def _mgmt_pr_body(slug: str, subject: str, path: str, domain: str) -> str:
-    return (
-        f"Registreert site `{slug}` op https://{domain}/{path}/ (vak `{subject}`) in "
-        "`backend/app/sites.json`, het register voor DB-seed en routing.\n\n"
-        "> Vereist een redeploy. Geen Traefik-wijziging nodig: de wildcard-router dekt elk "
-        "vak-domein."
     )
 
 

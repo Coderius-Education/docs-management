@@ -19,14 +19,17 @@
 """
 
 import datetime
+import logging
 import posixpath
 import re
 from dataclasses import dataclass
-from functools import lru_cache
 
-from app.config import SITE_REGISTRY, get_settings
+from app.config import get_registry, get_settings
+from app.registry import Registry
 
 HOME = "home"
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -59,16 +62,36 @@ class _Tables:
     preview_re: re.Pattern
 
 
-@lru_cache
+# Per register één keer opgebouwd; een nieuw register (andere identiteit) bouwt opnieuw.
+_cache: tuple[Registry, _Tables] | None = None
+
+
 def _tables() -> _Tables:
+    global _cache
+    registry = get_registry()
+    if _cache is None or _cache[0] is not registry:
+        try:
+            tables = _build_tables(registry)
+        except ValueError:
+            if _cache is None:
+                raise
+            log.exception("Register onbruikbaar voor de routing; de vorige routing blijft")
+            tables = _cache[1]
+        _cache = (registry, tables)
+    return _cache[1]
+
+
+def _build_tables(registry: Registry) -> _Tables:
     s = get_settings()
-    subject_hosts = {slug: host.lower() for slug, host in s.subject_domains().items()}
+    subject_hosts = {
+        slug: s.localize(subject["domain"]).lower() for slug, subject in registry.subjects.items()
+    }
     paths: dict[tuple[str, str], str] = {}
     legacy: dict[str, str] = {}
     legacy_paths: dict[str, tuple[str, ...]] = {}
     legacy_live_until: dict[str, datetime.date] = {}
     site_paths: dict[str, tuple[str | None, str]] = {}
-    for slug, entry in SITE_REGISTRY.items():
+    for slug, entry in registry.sites.items():
         subject = entry.get("subject")
         path = entry.get("path", "")
         site_paths[slug] = (subject, path)
@@ -81,7 +104,7 @@ def _tables() -> _Tables:
             legacy_live_until[slug] = datetime.date.fromisoformat(entry["legacy_live_until"])
     suffix = re.escape(s.preview_domain_suffix.lower())
     return _Tables(
-        apex=s.localize("coderius.nl").lower(),
+        apex=s.localize(registry.apex).lower(),
         subjects={host: slug for slug, host in subject_hosts.items()},
         subject_hosts=subject_hosts,
         paths=paths,
@@ -268,4 +291,5 @@ def preview_host(branch_slug: str, site: str) -> str:
 
 def reset_caches() -> None:
     """Voor tests: settings kunnen per test wisselen."""
-    _tables.cache_clear()
+    global _cache
+    _cache = None

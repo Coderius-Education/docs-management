@@ -23,7 +23,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.authoring.settings import read_json
-from app.config import SUBJECTS
+from app.config import get_registry
 from app.github.assets import image_type
 from app.github.client import GitHubClient
 from app.github.commits import multi_file_commit
@@ -230,7 +230,7 @@ def validate_vakpagina(vak: str, data: object) -> dict:
 
 
 def _bestaand_vak(vak: str) -> str:
-    if vak not in SUBJECTS:
+    if vak not in get_registry().subjects:
         raise HTTPException(status_code=404, detail="Onbekend vak")
     return vak
 

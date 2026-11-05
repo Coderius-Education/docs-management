@@ -1,4 +1,4 @@
-"""Tests voor het aanmaken van een nieuwe site (twee PR's + DB-rij)."""
+"""Tests voor het aanmaken van een nieuwe site (PR in het docs-repo + DB-rij)."""
 
 import base64
 import json
@@ -9,14 +9,12 @@ import pytest
 import respx
 from httpx import Response
 
-from app.config import LEGACY, SITE_DISPLAY_NAMES, SITE_REGISTRY, SITES, SUBJECTS, site_dir
+from app.config import get_registry, get_settings, site_dir
 from app.scaffold.site_template import (
     add_course_to_curriculum,
     add_course_to_huisstijl,
-    add_site_to_registry,
     add_site_to_sites_js,
     add_subject_themes,
-    add_subject_to_registry,
     add_subject_to_sites_js,
     free_tint,
     scaffold_files,
@@ -26,7 +24,6 @@ from tests.helpers import make_logged_in_user
 
 API = "https://api.github.com"
 REPO = f"{API}/repos/Coderius-Education/docs"
-MGMT = f"{API}/repos/Coderius-Education/docs-management"
 
 BRANCH = "nieuwe-site-demo"
 
@@ -37,30 +34,6 @@ SITES_JS = (FIXTURES / "sites.js").read_text(encoding="utf-8")
 # Kopieën van packages/shared/huisstijl/index.js en sites/home/src/lib/Curriculum.ts.
 HUISSTIJL_JS = (FIXTURES / "huisstijl.js").read_text(encoding="utf-8")
 CURRICULUM_TS = (FIXTURES / "Curriculum.ts").read_text(encoding="utf-8")
-SITES_JSON = json.dumps(
-    {
-        "apex": "coderius.nl",
-        "subjects": [
-            {"slug": "informatica", "domain": "informatica.coderius.nl", "display_name": "Inf"}
-        ],
-        "sites": [
-            {
-                "slug": "python",
-                "subject": "informatica",
-                "path": "python",
-                "display_name": "Python",
-                "legacy_domains": [],
-            },
-            {
-                "slug": "home",
-                "subject": None,
-                "path": "",
-                "display_name": "Home",
-                "legacy_domains": [],
-            },
-        ],
-    }
-)
 
 
 def _b64_file(text: str) -> dict:
@@ -128,9 +101,6 @@ def _mock_sources() -> None:
     respx.get(f"{REPO}/contents/sites/home/src/lib/Curriculum.ts").mock(
         return_value=Response(200, json=_b64_file(CURRICULUM_TS))
     )
-    respx.get(f"{MGMT}/contents/backend/app/sites.json").mock(
-        return_value=Response(200, json=_b64_file(SITES_JSON))
-    )
 
 
 def _sent_blobs() -> list[str]:
@@ -142,11 +112,10 @@ def _sent_blobs() -> list[str]:
 
 
 @respx.mock
-async def test_create_site_opens_two_prs_and_db_row(api_client):
+async def test_create_site_opens_docs_pr_and_db_row(api_client):
     auth = await make_logged_in_user(api_client)
 
     _mock_repo_write(REPO, 1, "https://github.com/Coderius-Education/docs/pull/1")
-    _mock_repo_write(MGMT, 2, "https://github.com/Coderius-Education/docs-management/pull/2")
     _mock_sources()
 
     resp = await api_client.post(
@@ -155,7 +124,7 @@ async def test_create_site_opens_two_prs_and_db_row(api_client):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["docs_pr"].endswith("/docs/pull/1")
-    assert body["management_pr"].endswith("/docs-management/pull/2")
+    assert "management_pr" not in body
     # De lockfile maakt de workflow nieuwe-site.yml; geen handwerk met pnpm meer.
     assert not any("pnpm install" in step for step in body["manual_steps"])
     assert body["url"] == "https://informatica.coderius.nl/demo/"
@@ -165,11 +134,13 @@ async def test_create_site_opens_two_prs_and_db_row(api_client):
     assert any(
         "    id: 'demo',\n    label: 'Demo',\n    subject: 'informatica'," in c for c in contents
     )
-    assert any('"slug": "demo", "subject": "informatica"' in c for c in contents)
     assert any("siteId: 'demo'" in c for c in contents)
     # Huisstijl en homepagekaart gaan mee in het docs-voorstel.
     assert any("{ id: 'demo', label: 'Demo', tint: " in c for c in contents)
     assert any("    id: 'demo',\n    labels: [],\n" in c for c in contents)
+
+    # Alleen het docs-repo: het beheer leest het register daar als artifact.
+    assert not [c for c in respx.calls if "docs-management" in str(c.request.url)]
 
     # De nieuwe site verschijnt meteen in de lijst (DB-rij).
     listing = await api_client.get("/api/sites")
@@ -211,15 +182,18 @@ async def test_create_site_rejects_taken_path(api_client):
 
 
 def test_registry_loads_all_sites():
-    assert len(SITES) == 16
-    assert SITES["algorithms"] == "informatica.coderius.nl"
-    assert SITE_REGISTRY["algorithms"]["path"] == "algoritmes"
-    assert SITES["home"] == "coderius.nl"
-    assert SITES["onderzoek"] == "wo.coderius.nl"
-    assert SITE_DISPLAY_NAMES["web"] == "Webdesign"
-    assert LEGACY["python.coderius.nl"] == "python"
-    assert set(SUBJECTS) == {"informatica", "wo", "techniek"}
-    assert SITES["hartjespuzzel"] == "techniek.coderius.nl"
+    registry = get_registry()
+    domains = get_settings().site_domains()
+    assert len(domains) == 16
+    assert domains["algorithms"] == "informatica.coderius.nl"
+    assert registry.sites["algorithms"]["path"] == "algoritmes"
+    assert domains["home"] == "coderius.nl"
+    assert domains["onderzoek"] == "wo.coderius.nl"
+    assert domains["didactiek"] == "informatica.coderius.nl"
+    assert registry.sites["web"]["display_name"] == "Webontwikkeling"
+    assert registry.legacy["python.coderius.nl"] == "python"
+    assert set(registry.subjects) == {"informatica", "wo", "techniek"}
+    assert domains["hartjespuzzel"] == "techniek.coderius.nl"
 
 
 def test_site_dir():
@@ -228,14 +202,7 @@ def test_site_dir():
     assert site_dir("home") == "sites/home"
 
 
-def test_registry_mutations_keep_one_line_per_entry():
-    out = add_subject_to_registry(SITES_JSON, "techniek", "techniek.coderius.nl", "Techniek")
-    out = add_site_to_registry(out, "lego", "techniek", "lego", "Lego")
-    data = json.loads(out)
-    assert [s["slug"] for s in data["sites"]] == ["python", "lego", "home"]
-    # Zelfde opmaak als het bestand: `{ "slug": … }`, anders herschrijft elke
-    # registratie alle regels.
-    assert '    { "slug": "lego", "subject": "techniek", "path": "lego"' in out
+def test_sites_js_mutations():
     js = add_subject_to_sites_js(SITES_JS, "techniek", "techniek.coderius.nl", "Techniek")
     js = add_site_to_sites_js(js, "lego", "techniek", "lego", "Lego", "Bouw 'm zelf")
     subjects = js[js.index("const SUBJECTS = [") : js.index("\n];")]
@@ -259,12 +226,8 @@ def test_sites_js_without_anchor_fails_in_dutch():
 
 
 @respx.mock
-async def test_create_site_registers_before_the_docs_proposal(api_client):
-    # Hartjespuzzel kreeg het docs-voorstel en geen registratie, en stond daarom
-    # nergens. Nu eerst de registratie; faalt daarna het docs-voorstel, dan zegt
-    # de melding waar de registratie staat en komt er geen half DB-record.
+async def test_failed_docs_proposal_leaves_no_db_row(api_client):
     auth = await make_logged_in_user(api_client)
-    _mock_repo_write(MGMT, 2, "https://github.com/Coderius-Education/docs-management/pull/2")
     _mock_sources()
     respx.get(f"{REPO}/git/ref/heads/{BRANCH}").mock(return_value=Response(404, json={}))
     respx.get(f"{REPO}/git/ref/heads/main").mock(return_value=Response(403, json={}))
@@ -273,7 +236,6 @@ async def test_create_site_registers_before_the_docs_proposal(api_client):
         "/api/sites", json=_payload(), headers={"X-CSRF-Token": auth["csrf"]}
     )
     assert resp.status_code == 403
-    assert "docs-management/pull/2" in resp.json()["detail"]
     listing = await api_client.get("/api/sites")
     assert "demo" not in [s["slug"] for s in listing.json()]
 
@@ -282,9 +244,6 @@ async def test_create_site_registers_before_the_docs_proposal(api_client):
 async def test_create_site_retry_reuses_branches_and_prs(api_client):
     auth = await make_logged_in_user(api_client)
     _mock_repo_write(REPO, 1, "https://github.com/x/docs/pull/1", branch_exists=True, open_pr=True)
-    _mock_repo_write(
-        MGMT, 2, "https://github.com/x/docs-management/pull/2", branch_exists=True, open_pr=True
-    )
     _mock_sources()
 
     resp = await api_client.post(
@@ -300,7 +259,6 @@ async def test_create_site_retry_reuses_branches_and_prs(api_client):
 async def test_create_site_with_new_subject_gives_it_a_theme(api_client):
     auth = await make_logged_in_user(api_client)
     _mock_repo_write(REPO, 1, "https://github.com/x/docs/pull/1")
-    _mock_repo_write(MGMT, 2, "https://github.com/x/docs-management/pull/2")
     _mock_sources()
     payload = _payload() | {
         "subject": "",

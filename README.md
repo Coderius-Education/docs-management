@@ -54,7 +54,7 @@ Previews lokaal: `*.localtest.me` wijst naar 127.0.0.1. `compose.dev.yml` zet `D
 
 ### Vakken en sites
 
-`backend/app/sites.json` is het register: `subjects` (slug, domein, naam) en `sites` (slug, vak, pad, naam, oude domeinen). In het docs-repo staat een site in `sites/<vak>/<slug>` (`home` in `sites/home`). Een nieuwe site of een nieuw vak vraagt geen Traefik-wijziging: één wildcard-router stuurt alles naar de delivery-app, die host en pad zelf toewijst. Een nieuw vak heeft alleen een DNS-record nodig (of het `*.coderius.nl`-wildcardrecord).
+Het register komt uit het docs-repo: `packages/shared/sites.js` (vakken, sites, paden, oude subdomeinen, `legacyPaths`, `legacyLiveUntil`). De CI uploadt het bij elke run als artifact `registry` (uitvoer van `scripts/sites-json.mjs`); de ingest-worker neemt dat van `main` over naar `<BUILDS_DIR>/_registry/sites.json` en werkt de sites-tabel bij. Admin- en delivery-app lezen het daar opnieuw zodra het verandert, dus een nieuwe site of een nieuw vak vraagt geen redeploy. Een verse installatie haalt bij het opstarten het nieuwste register-artifact van `main` op. In het docs-repo staat een site in `sites/<vak>/<slug>` (`home` in `sites/home`). Een nieuwe site of een nieuw vak vraagt geen Traefik-wijziging: één wildcard-router stuurt alles naar de delivery-app, die host en pad zelf toewijst. Een nieuw vak heeft alleen een DNS-record nodig (of het `*.coderius.nl`-wildcardrecord).
 
 `LEGACY_REDIRECTS=false` laat oude subdomeinen de site nog zelf serveren in plaats van te 301'en; gebruik dat zolang de docs-builds nog met `baseUrl: '/'` gebouwd zijn.
 

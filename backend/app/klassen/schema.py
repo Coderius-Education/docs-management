@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from app.config import SITE_REGISTRY, site_subject
+from app.config import get_registry, site_subject
 
 MAX_GROEPEN = 20
 MAX_ITEMS_PER_GROEP = 50
@@ -100,7 +100,7 @@ def lege_inhoud() -> dict:
 
 
 def _site_pad(site: str) -> str:
-    return SITE_REGISTRY.get(site, {}).get("path") or site
+    return get_registry().sites.get(site, {}).get("path") or site
 
 
 def _fout(melding: str) -> HTTPException:

@@ -10,16 +10,34 @@ os.environ.setdefault("TOKEN_ENCRYPTION_KEY", "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM
 os.environ.setdefault("GITHUB_WEBHOOK_SECRET", "test-webhook-secret")
 os.environ.setdefault("GITHUB_SERVER_TOKEN", "ghp_servertoken")
 
+import shutil
+from pathlib import Path
+
 import httpx
 import pytest
 
 import app.db.session as db_session
 from app.config import get_settings
 from app.db.models import Base
+from app.registry import reset_cache
+
+REGISTRY_FIXTURE = Path(__file__).parent / "fixtures" / "registry.json"
 
 
 @pytest.fixture(autouse=True)
-async def _fresh_db():
+def registry_file(tmp_path_factory, monkeypatch):
+    """Het register zoals scripts/sites-json.mjs het levert, per test een eigen kopie."""
+    path = tmp_path_factory.mktemp("registry") / "sites.json"
+    shutil.copy(REGISTRY_FIXTURE, path)
+    monkeypatch.setenv("REGISTRY_FILE", str(path))
+    get_settings.cache_clear()
+    reset_cache()
+    yield path
+    reset_cache()
+
+
+@pytest.fixture(autouse=True)
+async def _fresh_db(registry_file):
     """Schone database per test; één engine per test zodat :memory: gedeeld blijft."""
     get_settings.cache_clear()
     await db_session.dispose_db()

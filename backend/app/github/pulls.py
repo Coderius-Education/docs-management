@@ -12,7 +12,7 @@ import time
 
 from fastapi import HTTPException
 
-from app.config import SUBJECTS, get_settings
+from app.config import get_registry, get_settings
 from app.github.client import GitHubClient, repo_path
 
 CONCEPT_PREFIX = "concept/"
@@ -26,13 +26,11 @@ async def list_branches(client: GitHubClient) -> list[dict]:
     return [{"name": b["name"], "sha": b["commit"]["sha"]} for b in branches]
 
 
-async def create_branch(
-    client: GitHubClient, name: str, from_branch: str = "main", repo: str | None = None
-) -> dict:
-    ref = await client.get(repo_path(f"/git/ref/heads/{from_branch}", repo))
+async def create_branch(client: GitHubClient, name: str, from_branch: str = "main") -> dict:
+    ref = await client.get(repo_path(f"/git/ref/heads/{from_branch}"))
     base_sha = ref["object"]["sha"]
     created = await client.post(
-        repo_path("/git/refs", repo),
+        repo_path("/git/refs"),
         json={"ref": f"refs/heads/{name}", "sha": base_sha},
         expect=(201,),
     )
@@ -145,11 +143,9 @@ async def list_pr_commits(client: GitHubClient, number: int) -> list[dict]:
     ]
 
 
-async def create_pr(
-    client: GitHubClient, branch: str, title: str, body: str = "", repo: str | None = None
-) -> dict:
+async def create_pr(client: GitHubClient, branch: str, title: str, body: str = "") -> dict:
     pr = await client.post(
-        repo_path("/pulls", repo),
+        repo_path("/pulls"),
         json={"title": title, "head": branch, "base": "main", "body": body, "draft": False},
         expect=(201,),
     )
@@ -349,5 +345,5 @@ def preview_links(slug: str, site_slug: str) -> list[dict]:
             "label": f"Vakpagina {subject['display_name']}",
             "url": f"https://{slug}--{vak}.{suffix}/",
         }
-        for vak, subject in SUBJECTS.items()
+        for vak, subject in get_registry().subjects.items()
     ]
