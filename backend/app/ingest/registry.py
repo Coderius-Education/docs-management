@@ -1,5 +1,6 @@
 """Het `registry`-artifact van de docs-CI ophalen en op het builds-volume zetten."""
 
+import asyncio
 import logging
 import zipfile
 from io import BytesIO
@@ -73,3 +74,16 @@ async def bootstrap() -> None:
         await ingest(client, artifact, artifact["workflow_run"]["id"])
     except Exception:
         log.exception("Register ophalen bij het opstarten mislukt")
+
+
+async def bootstrap_until_present(interval: float = 60) -> None:
+    """Blijf het register ophalen tot het er staat.
+
+    Zonder register kent de delivery-app geen enkele host; wachten op de
+    volgende CI-run laat alle sites tot dan op 404 staan.
+    """
+    while not get_settings().registry_path.exists():
+        await bootstrap()
+        if get_settings().registry_path.exists():
+            return
+        await asyncio.sleep(interval)
