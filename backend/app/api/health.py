@@ -1,4 +1,4 @@
-"""Healthcheck: database, builds-volume en (later) PAT-geldigheid."""
+"""Healthcheck: database, builds-volume, register en (later) PAT-geldigheid."""
 
 from pathlib import Path
 
@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import get_registry, get_settings
 from app.db.session import get_db
 
 router = APIRouter(tags=["health"])
@@ -25,6 +25,7 @@ async def health(db: AsyncSession = Depends(get_db)):
 
     checks["builds_volume"] = Path(settings.builds_dir).is_dir()
     checks["server_token_configured"] = bool(settings.github_server_token)
+    checks["registry_sites"] = len(get_registry().sites)
 
-    ok = checks["database"] is True
+    ok = checks["database"] is True and checks["registry_sites"] > 0
     return {"status": "ok" if ok else "degraded", "checks": checks}
