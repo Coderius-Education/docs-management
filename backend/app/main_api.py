@@ -1,5 +1,6 @@
 """Admin-app: beheer-API + (in productie) de gebouwde frontend als statische site."""
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -18,8 +19,10 @@ FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 async def lifespan(app: FastAPI):
     await init_db()
     await registry.bootstrap()
+    retry = asyncio.create_task(registry.bootstrap_until_present())
     start_worker()
     yield
+    retry.cancel()
     await stop_worker()
     await dispose_db()
 
